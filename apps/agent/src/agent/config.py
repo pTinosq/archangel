@@ -1,9 +1,12 @@
 import os
 
+from agent.channels.login import GitHub
+
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 DEFAULT_VISION_MODEL = "typesafe/jev-1.14"
 DEFAULT_FALLBACK_VISION_MODEL = "openai/gpt-6-luna"
 DEFAULT_RELAY_URL = "http://localhost:8080"
+DEFAULT_PORT = 8765
 
 
 def model() -> str:
@@ -25,6 +28,18 @@ def relay_url() -> str:
 def device() -> str | None:
     """None: whichever phone is connected, if only one is."""
     return os.environ.get("ARCHANGEL_DEVICE") or None
+
+
+def github() -> GitHub | None:
+    """GitHub sign-in for the panel, which makes it public. None: the panel stays local."""
+    if not (client_id := os.environ.get("GITHUB_CLIENT_ID")):
+        return None
+    return GitHub(client_id, _required("GITHUB_CLIENT_SECRET"), _required("ARCHANGEL_OWNER"))
+
+
+def port() -> int:
+    """The panel's port; hosts like Railway choose it."""
+    return int(os.environ.get("PORT", DEFAULT_PORT))
 
 
 def openrouter_api_key() -> str:

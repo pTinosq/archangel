@@ -15,7 +15,7 @@ channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilot ──▶ 
 | `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, phone pilot. |
 | `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
 | `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
-| `apps/panel/` | Control panel, React + Vite + plain CSS. Polls the agent's local API every second; the Cockpit tab draws the live activity stream with React Flow, laid out by dagre from who calls whom. |
+| `apps/panel/` | Control panel, React + Vite + plain CSS. Polls the agent's API every second; the Cockpit tab draws the live activity stream with React Flow, laid out by dagre from who calls whom. |
 | `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
 | `docs/roadmap.md` | Milestones. Tick them off as they land. |
 | `justfile` | All dev tasks. `just` lists them. |
@@ -48,7 +48,7 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `messages.py` | `Address(channel, id)`, `Message(address, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
 | `models.py` | The model-library seam: `openrouter(name)`, `content(image)`, `prompt(parts)`, `Instructions` (string, or a callable read each run). |
 | `events.py` | `Event`: `prompt()`, `reply_to`, `from_owner`, `attachments()`, `fallback(error)`. `OwnerMessage`, `TaskUpdate`. A new trigger (schedule, incoming call) is a new subclass. |
-| `channels/` | `Channel`: `name`, `owner` (the owner's address there), `start(deliver)`, `send(message)`. Channels only move messages. `cli.py`: terminal, `/image <path> [text]`. `panel.py`: control panel channel plus its local API (transcript, tasks, steps, images, prompts, and `/api/activity`, a server-sent event stream of live activity); 127.0.0.1 only, Host-checked, routes async (SQLite). Its buttons send owner messages. |
+| `channels/` | `Channel`: `name`, `owner` (the owner's address there), `start(deliver)`, `send(message)`. Channels only move messages. `cli.py`: terminal, `/image <path> [text]`; only when there is one. `panel.py`: control panel channel plus its local API (transcript, tasks, steps, images, prompts, and `/api/activity`, a server-sent event stream of live activity); routes async (SQLite). Its buttons send owner messages. Local (127.0.0.1, Host-checked) unless GitHub sign-in is set; then public on `$PORT`, serving the built panel too. `login.py`: sign in with GitHub, the owner only; a signed session cookie. |
 | `gateway.py` | Both ways: owner messages → `OwnerMessage` events, handled concurrently; outgoing messages → the channel in their address. Records the transcript. A failing channel is logged, not raised. |
 | `orchestrator.py` | The agent the owner talks to; never touches the phone. `handle(event)`, one at a time. Tools: `start_task(goal, report_via?)`, `answer_task`, `cancel_task`, `send(channel, text)`. Sees the channels and task list every turn. Replies go to `event.reply_to`; approvals only count when `event.from_owner`. |
 | `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. Records each step; sends a `TaskUpdate` when a task finishes or needs the owner. |
@@ -73,6 +73,7 @@ The pilot never handles coordinates: it describes what to tap, vision finds the 
 | `ARCHANGEL_FALLBACK_VISION_MODEL` | `openai/gpt-6-luna` (when vision misses, and the investigator). Must see images. |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | unset: the one phone connected to the relay. Set it only to choose between several. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ARCHANGEL_OWNER` | unset: the panel is local. Set (a GitHub OAuth App, and your GitHub username): public, sign-in required. |
 
 Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, via `event.fallback(error)`. Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by Pydantic AI's OpenRouter client (it uses the `openai` package as its HTTP client; every call goes to OpenRouter).
 

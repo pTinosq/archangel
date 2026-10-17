@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import sys
 
 import httpx
 import pydantic_ai
@@ -42,7 +43,10 @@ def main() -> None:
     )
     tasks = Tasks(store, Pilot(model, kit, prompts.live("pilot")))
 
-    gateway = Gateway([CliChannel(), PanelChannel(store, prompts)], store)
+    channels = [PanelChannel(store, prompts, config.github(), config.port())]
+    if sys.stdin.isatty():  # not when deployed
+        channels.insert(0, CliChannel())
+    gateway = Gateway(channels, store)
     orchestrator = Orchestrator(model, store, tasks, gateway, prompts.live("orchestrator"))
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(gateway.run(orchestrator.handle))

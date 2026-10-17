@@ -6,6 +6,7 @@ from fakes import FakePilot
 
 from agent import activity
 from agent.channels import panel
+from agent.channels.login import GitHub
 from agent.channels.panel import PanelChannel
 from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
@@ -14,10 +15,10 @@ from agent.tasks import Tasks
 
 
 class Panel:
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, github: GitHub | None = None):
         self.store = store
         self.prompts = Prompts(store)
-        self.channel = PanelChannel(store, self.prompts)
+        self.channel = PanelChannel(store, self.prompts, github)
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -87,6 +88,19 @@ def test_prompts_edit_and_reset(store):
 def test_refuses_other_hosts(store):
     # A page on evil.example resolving to 127.0.0.1 still sends its own Host.
     assert Panel(store).call("GET", "/api/tasks", host="evil.example").status_code == 400
+
+
+def test_public_only_behind_sign_in(store):
+    public = Panel(store, GitHub("id", "secret", "owner"))
+    assert public.call("GET", "/api/tasks", host="archangel.up.railway.app").status_code == 401
+    assert public.call("GET", "/health", host="archangel.up.railway.app").status_code == 200
+
+
+def test_serves_the_built_app(store, tmp_path, monkeypatch):
+    (tmp_path / "index.html").write_text("<h1>panel</h1>")
+    monkeypatch.setattr(panel, "DIST", tmp_path)
+    assert Panel(store).call("GET", "/").text == "<h1>panel</h1>"
+    assert Panel(store).call("GET", "/api/tasks").json() == []
 
 
 def test_activity_streams_as_server_sent_events():
