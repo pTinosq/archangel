@@ -1,8 +1,11 @@
 import asyncio
+import json
 
 import httpx
 from fakes import FakePilot
 
+from agent import activity
+from agent.channels import panel
 from agent.channels.panel import PanelChannel
 from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
@@ -84,3 +87,18 @@ def test_prompts_edit_and_reset(store):
 def test_refuses_other_hosts(store):
     # A page on evil.example resolving to 127.0.0.1 still sends its own Host.
     assert Panel(store).call("GET", "/api/tasks", host="evil.example").status_code == 400
+
+
+def test_activity_streams_as_server_sent_events():
+    activity.hop("gateway", "message", "hi", source="cli")
+
+    async def first():
+        events = panel._events(PanelChannel(None, None))
+        line = await anext(events)
+        await events.aclose()
+        return line
+
+    line = asyncio.run(first())
+    assert line.startswith("data: ") and line.endswith("\n\n")
+    notice = json.loads(line.removeprefix("data: "))
+    assert (notice["source"], notice["target"], notice["text"]) == ("cli", "gateway", "hi")

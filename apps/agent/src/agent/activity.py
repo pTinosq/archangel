@@ -95,15 +95,23 @@ def in_task(id: int, actor: str) -> contextvars.Context:
     return _context(actor, _task, id)
 
 
-async def listen() -> AsyncIterator[Notice]:
-    """The recent notices, then each new one as it happens. Falling behind loses notices, never holds anyone up."""
+async def listen(idle: float | None = None) -> AsyncIterator[Notice | None]:
+    """The recent notices, then each new one as it happens. Falling behind loses notices, never holds anyone up.
+
+    With `idle`, yields None after that many seconds without a notice, so the listener can check on itself.
+    """
     queue: asyncio.Queue[Notice] = asyncio.Queue(QUEUED_PER_LISTENER)
     for notice in _recent:
         queue.put_nowait(notice)
     _listeners.add(queue)
     try:
         while True:
-            yield await queue.get()
+            try:
+                async with asyncio.timeout(idle):
+                    notice = await queue.get()
+            except TimeoutError:
+                notice = None
+            yield notice
     finally:
         _listeners.discard(queue)
 
