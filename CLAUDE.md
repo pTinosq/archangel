@@ -57,6 +57,7 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | Orchestrator prompt. |
 | `logs.py` | `logs/<time>/agent.log` at DEBUG (`logs/latest` → newest, last 20 kept). `logs.run(agent, …)` logs each tool call, result and invalid call. |
+| `activity.py` | Live activity for the cockpit, announced like logging: `hop(target, kind, text)`, `call(...)` for a request and its reply. Request, task and actor ids ride in context variables, so nothing passes them along. Never waits or raises; a slow listener misses notices; nothing is stored. |
 | `phone/pilot.py` | Sub-agent for one task: act → screenshot → decide. `Pilot(model, Kit(phone, locator, guard, investigator))`. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) as `needs_approval` or `needs_answer`. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion, at most 2 per run. |
 | `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval. Fails closed. |
 | `phone/investigator.py` | The fallback model reads the last 3 screens and recent steps of a task going nowhere: what's in the way, how past it. Also explains stuck reports. |
