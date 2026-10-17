@@ -1,6 +1,7 @@
 import os
 
 from agent.channels.login import GitHub
+from agent.channels.twilio import Account
 
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 DEFAULT_VISION_MODEL = "typesafe/jev-1.14"
@@ -35,6 +36,20 @@ def github() -> GitHub | None:
     if not (client_id := os.environ.get("GITHUB_CLIENT_ID")):
         return None
     return GitHub(client_id, _required("GITHUB_CLIENT_SECRET"), _required("ARCHANGEL_OWNER"))
+
+
+def twilio() -> Account | None:
+    """Archangel's Twilio number and the owner's mobile. None: no sms or voice."""
+    if not (sid := os.environ.get("TWILIO_ACCOUNT_SID")):
+        return None
+    return Account(sid, _required("TWILIO_AUTH_TOKEN"), _required("TWILIO_NUMBER"), _required("ARCHANGEL_PHONE"))
+
+
+def public_url() -> str | None:
+    """Where Archangel is on the internet, for links and Twilio callbacks. Railway says, unless overridden."""
+    if url := os.environ.get("ARCHANGEL_PUBLIC_URL"):
+        return url.rstrip("/")
+    return f"https://{domain}" if (domain := os.environ.get("RAILWAY_PUBLIC_DOMAIN")) else None
 
 
 def port() -> int:
