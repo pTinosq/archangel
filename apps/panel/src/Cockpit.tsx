@@ -1,7 +1,8 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { type Notice, openCalls, useActivity } from "./activity";
 
-// Fixed places for the parts of Archangel; channels and models are placed as they turn up.
+// Where the usual parts sit. Only layout: what each node is comes from the activity itself, and new parts
+// (channels, models, agents) are placed as they turn up.
 const PLACES: Record<string, [number, number]> = {
   gateway: [230, 300],
   orchestrator: [400, 300],
@@ -12,7 +13,6 @@ const PLACES: Record<string, [number, number]> = {
   locator: [760, 470],
   investigator: [910, 470],
 };
-const AGENTS = new Set(["orchestrator", "pilot", "guard", "locator", "investigator"]);
 const MODEL_GAP = 170;
 const PULSE_SECONDS = 1.2;
 const TICK_MS = 250;
@@ -78,7 +78,8 @@ function Graph({
   inRequest: (n: Notice) => boolean;
   following: boolean;
 }) {
-  const places = layout(notices);
+  const kindsOf = kinds(notices);
+  const places = layout(notices, kindsOf);
   const open = openCalls(notices, now);
   const followed = notices.filter(inRequest);
   const here = following ? followed[followed.length - 1]?.target : undefined;
@@ -119,7 +120,7 @@ function Graph({
         const call = open.get(name);
         const classes = [
           "node",
-          kindOf(name, notices),
+          kindsOf.get(name) ?? "part",
           call && "busy",
           name === here && "here",
           flashing.has(name) && "flash",
@@ -140,14 +141,14 @@ function Graph({
   );
 }
 
-/** Where every node seen so far goes: the fixed parts, channels down the left, models along the top. */
-function layout(notices: Notice[]): Map<string, [number, number]> {
+/** Where every node seen so far goes: the usual parts in place, channels down the left, the rest along the top. */
+function layout(notices: Notice[], kinds: Map<string, string>): Map<string, [number, number]> {
   const channels: string[] = [];
   const others: string[] = [];
   for (const n of notices) {
     for (const name of [n.source, n.target]) {
       if (name in PLACES || channels.includes(name) || others.includes(name)) continue;
-      (kindOf(name, notices) === "channel" ? channels : others).push(name);
+      (kinds.get(name) === "channel" ? channels : others).push(name);
     }
   }
   const places = new Map<string, [number, number]>(Object.entries(PLACES));
@@ -167,11 +168,21 @@ function layout(notices: Notice[]): Map<string, [number, number]> {
   return places;
 }
 
-function kindOf(name: string, notices: Notice[]): string {
-  if (AGENTS.has(name)) return "agent";
-  if (name in PLACES) return name === "phone" ? "device" : "part";
-  const met = notices.find((n) => n.source === name || n.target === name);
-  return met?.kind === "message" ? "channel" : "model";
+/** What each node is, judged by how it's called: whatever asks a model is an agent, and so on. */
+function kinds(notices: Notice[]): Map<string, string> {
+  const kinds = new Map<string, string>();
+  for (const n of notices) {
+    if (n.dir !== "tx") continue;
+    if (n.kind === "model") kinds.set(n.source, "agent").set(n.target, "model");
+    else if (n.kind === "agent") kinds.set(n.target, "agent");
+    else if (n.kind === "phone") kinds.set(n.target, "device");
+  }
+  for (const n of notices) {
+    // A message to or from the gateway whose other end isn't one of the usual parts: a channel.
+    const other = n.source === "gateway" ? n.target : n.target === "gateway" ? n.source : null;
+    if (n.kind === "message" && other && !(other in PLACES) && !kinds.has(other)) kinds.set(other, "channel");
+  }
+  return kinds;
 }
 
 const width = (name: string) => name.length * 7.5 + 32;
