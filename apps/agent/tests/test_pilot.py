@@ -236,3 +236,18 @@ def test_only_recent_screenshots_stay_in_context():
     images = [any(isinstance(item, BinaryContent) for item in m.parts[0].content) for m in trimmed]
     assert images == [False, True, True]
     assert trimmed[0].parts[0].content == ["screen 1", "(earlier screenshot)"]
+
+
+def test_every_step_is_recorded_with_its_screen():
+    steps = []
+    record = lambda text, screen: steps.append((text, screen is not None))  # noqa: E731
+    run(
+        scripted(("tap", {"target": "the WhatsApp button"}), ("tap", {"target": "a unicorn"})),
+        FakePhone(),
+        record=record,
+    )
+    assert steps == [
+        ("Started.", True),
+        ("Tapped the WhatsApp button.", True),
+        ("Couldn't find a unicorn on the screen.", False),
+    ]

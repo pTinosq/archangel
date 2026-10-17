@@ -8,6 +8,7 @@ from one of its tasks.
 import asyncio
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,7 +39,7 @@ class _Turn:
 
 
 class Orchestrator:
-    def __init__(self, model: Model, store: Store, tasks: Tasks):
+    def __init__(self, model: Model, store: Store, tasks: Tasks, instructions: str | Callable[[], str] = INSTRUCTIONS):
         self._store = store
         self._tasks = tasks
         self._locks: defaultdict[Conversation, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -47,7 +48,7 @@ class Orchestrator:
         self._agent = Agent(
             model,
             deps_type=_Turn,
-            instructions=[INSTRUCTIONS, self._task_list],
+            instructions=[instructions, self._task_list],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
         )

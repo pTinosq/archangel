@@ -12,7 +12,7 @@ from typing import Protocol
 import pydantic_ai
 
 from agent.messages import Conversation
-from agent.phone.pilot import Answer, Outcome
+from agent.phone.pilot import Answer, Outcome, Record
 from agent.phone.relay import Screenshot
 from agent.store import Status, Store, Task
 
@@ -31,7 +31,11 @@ _STATUSES = {
 
 class Pilot(Protocol):
     async def run(
-        self, goal: str, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
+        self,
+        goal: str,
+        paused: pydantic_ai.Conversation | None = None,
+        answer: Answer | None = None,
+        record: Record | None = None,
     ) -> Outcome: ...
 
 
@@ -80,6 +84,9 @@ class Tasks:
         while self._running or self._updates:
             await asyncio.gather(*self._running.values(), *self._updates, return_exceptions=True)
 
+    def _recorder(self, task: Task) -> Record:
+        return lambda text, screen: self._store.add_step(task.id, text, screen.jpeg if screen else None)
+
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
         self._running[task.id] = asyncio.create_task(self._run(task, paused, answer))
 
@@ -88,16 +95,18 @@ class Tasks:
             async with self._phone:
                 task.status = Status.RUNNING
                 self._store.save_task(task)
-                outcome = await self._pilot.run(task.goal, paused, answer)
+                outcome = await self._pilot.run(task.goal, paused, answer, self._recorder(task))
         except asyncio.CancelledError:
             log.info("Task #%d cancelled", task.id)
             task.status, task.report = Status.CANCELLED, "Cancelled while running."
             self._store.save_task(task)
+            self._store.add_step(task.id, "Cancelled.")
             return
         finally:
             del self._running[task.id]
         task.status, task.report, task.run = _STATUSES[outcome.status], outcome.report, outcome.run
         self._store.save_task(task)
+        self._store.add_step(task.id, f"{task.status}: {task.report}")
         log.info("Task #%d %s: %s", task.id, task.status, task.report)
         if self.notify:
             # Separate from the pilot's run, so cancelling or answering the task from the update can't cancel the update.

@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "The Archangel brain and the channels you talk to it through."
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.115",
     "httpx>=0.28.1",
     "pydantic-ai-slim[openrouter]>=2.57",
+    "uvicorn>=0.32",
 ]
 
 [dependency-groups]

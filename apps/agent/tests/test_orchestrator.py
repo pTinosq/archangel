@@ -27,7 +27,7 @@ class FakePilot:
         self.outcome = outcome
         self.calls: list[tuple] = []
 
-    async def run(self, goal, paused=None, answer=None) -> Outcome:
+    async def run(self, goal, paused=None, answer=None, record=None) -> Outcome:
         self.calls.append((goal, answer))
         return self.outcome
 

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections import deque
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -75,6 +75,10 @@ class Stuck(Exception):
     pass
 
 
+Record = Callable[[str, Screenshot | None], None]
+"""Hears each step of a run as it happens, with the screen it left, for watching the task live."""
+
+
 @dataclass
 class _Session:
     phone: Phone
@@ -82,6 +86,7 @@ class _Session:
     guard: Guard
     investigator: Investigator
     goal: str
+    record: Record = lambda text, screen: None
     screen: Screenshot | None = None
     failures: list[str] = field(default_factory=list)
     steps: list[str] = field(default_factory=list)
@@ -104,10 +109,12 @@ class _Session:
         self.failures.append(problem)
         self.steps.append(problem)
         if len(self.failures) >= MAX_FAILURES:
+            self.record(problem, None)
             raise Stuck(f"{len(self.failures)} actions in a row failed. The last: {problem}")
         if len(self.failures) >= 2 and self.failures[-1] == self.failures[-2]:
             nudge = "That failed the same way twice. Try something different, ask_owner, or give_up."
-            return f"{problem}\n{nudge}{await self.second_opinion()}"
+            problem = f"{problem}\n{nudge}{await self.second_opinion()}"
+        self.record(problem, None)
         return problem
 
     async def look(self, note: str) -> ToolReturn:
@@ -119,6 +126,7 @@ class _Session:
         self.steps.append(note)
         if self.looping(note):
             note += await self.second_opinion()
+        self.record(note, self.screen)
         return ToolReturn(note, content=[_image(self.screen)])
 
     def looping(self, note: str) -> bool:
@@ -160,14 +168,22 @@ class Pilot:
     Pauses, resumably, when the owner must answer a question or approve a consequential tap.
     """
 
-    def __init__(self, model: Model, phone: Phone, locator: Locator, guard: Guard, investigator: Investigator):
+    def __init__(
+        self,
+        model: Model,
+        phone: Phone,
+        locator: Locator,
+        guard: Guard,
+        investigator: Investigator,
+        instructions: str | Callable[[], str] = INSTRUCTIONS,
+    ):
         self._phone = phone
         self._locator = locator
         self._guard = guard
         self._investigator = investigator
         self._agent = Agent(
             model,
-            instructions=INSTRUCTIONS,
+            instructions=instructions,
             deps_type=_Session,
             output_type=[ToolOutput(done, name="done"), ToolOutput(give_up, name="give_up"), DeferredToolRequests],
             retries=TOOL_RETRIES,
@@ -186,16 +202,23 @@ class Pilot:
         )
 
     async def run(
-        self, goal: str, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
+        self,
+        goal: str,
+        paused: pydantic_ai.Conversation | None = None,
+        answer: Answer | None = None,
+        record: Record | None = None,
     ) -> Outcome:
         """Start `goal`, or continue a `paused` run with the owner's `answer`."""
         log.info("Phone task: %s", goal)
         session = _Session(self._phone, self._locator, self._guard, self._investigator, goal)
+        if record:
+            session.record = record
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             session.screen = await self._phone.screenshot()
             session.screens.append(session.screen)
             log.debug("screenshot %s", logs.save_screenshot(session.screen.jpeg))
+            session.record(f"Continuing. {_answered(answer)}" if paused else "Started.", session.screen)
             if paused:
                 prompt, resume = None, dict(conversation=paused, deferred_tool_results=_results(paused, answer))
             else:
@@ -230,6 +253,12 @@ async def _stuck(session: _Session, report: str) -> Outcome:
     if diagnosis := await session.diagnose():
         report += f"\nWhat seems to be in the way: {diagnosis}"
     return Outcome("stuck", report, screen=session.screen)
+
+
+def _answered(answer: Answer | None) -> str:
+    if not answer:
+        return ""
+    return ("Approved" if answer.approved else "Owner replied") + (f": {answer.text}" if answer.text else ".")
 
 
 def _question(requests: DeferredToolRequests) -> str:

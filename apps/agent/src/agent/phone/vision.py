@@ -2,6 +2,7 @@
 
 import base64
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -17,6 +18,10 @@ log = logging.getLogger(__name__)
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 VISIBLE_THRESHOLD = 0.5
+LOCATOR_INSTRUCTIONS = """\
+You locate UI elements in phone screenshots. Return the tightest box around the described element as fractions \
+(0-1) of the image's width and height, measured from the top-left. If it isn't on the screen, return found=false.\
+"""
 
 
 @dataclass(frozen=True)
@@ -84,16 +89,8 @@ class Located:
 class LlmLocator:
     """Any vision model, asked for a bounding box as structured output."""
 
-    def __init__(self, model: Model):
-        self._agent = Agent(
-            model,
-            output_type=Located,
-            instructions=(
-                "You locate UI elements in phone screenshots. Return the tightest box around the described "
-                "element as fractions (0-1) of the image's width and height, measured from the top-left. "
-                "If it isn't on the screen, return found=false."
-            ),
-        )
+    def __init__(self, model: Model, instructions: str | Callable[[], str] = LOCATOR_INSTRUCTIONS):
+        self._agent = Agent(model, output_type=Located, instructions=instructions)
 
     async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
         image = BinaryContent(data=screenshot.jpeg, media_type="image/jpeg")

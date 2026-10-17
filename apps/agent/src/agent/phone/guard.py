@@ -5,6 +5,7 @@ still can't send, pay or log in on its own.
 """
 
 import logging
+from collections.abc import Callable
 from typing import Protocol
 
 from pydantic import BaseModel, Field
@@ -32,7 +33,7 @@ Judge by what the tap does on this screen, not by the task. When unsure, require
 
 class Verdict(BaseModel):
     needs_approval: bool
-    action: str = Field(description="What the tap would do, a few words for the owner, e.g. \"post the tweet\"")
+    action: str = Field(description='What the tap would do, a few words for the owner, e.g. "post the tweet"')
 
 
 class Guard(Protocol):
@@ -42,8 +43,8 @@ class Guard(Protocol):
 
 
 class ModelGuard:
-    def __init__(self, model: Model):
-        self._agent = Agent(model, instructions=INSTRUCTIONS, output_type=Verdict)
+    def __init__(self, model: Model, instructions: str | Callable[[], str] = INSTRUCTIONS):
+        self._agent = Agent(model, instructions=instructions, output_type=Verdict)
 
     async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
         prompt = [

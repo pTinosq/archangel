@@ -19,7 +19,7 @@ class FakePilot:
         self.hold = hold
         self.calls: list[tuple[str, Answer | None]] = []
 
-    async def run(self, goal, paused=None, answer=None) -> Outcome:
+    async def run(self, goal, paused=None, answer=None, record=None) -> Outcome:
         self.calls.append((goal, answer))
         if self.hold:
             await self.hold.wait()

@@ -5,6 +5,7 @@ It only runs when the pilot repeats itself or is stuck, so everyday steps stay o
 """
 
 import logging
+from collections.abc import Callable
 from typing import Protocol
 
 from pydantic_ai import Agent, BinaryContent
@@ -30,8 +31,8 @@ class Investigator(Protocol):
 
 
 class ModelInvestigator:
-    def __init__(self, model: Model):
-        self._agent = Agent(model, instructions=INSTRUCTIONS)
+    def __init__(self, model: Model, instructions: str | Callable[[], str] = INSTRUCTIONS):
+        self._agent = Agent(model, instructions=instructions)
 
     async def investigate(self, goal: str, steps: list[str], screens: list[Screenshot]) -> str | None:
         prompt = [

@@ -8,6 +8,7 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from agent import config, logs
 from agent.channels.cli import CliChannel
+from agent.channels.panel import PanelChannel
 from agent.gateway import Gateway
 from agent.orchestrator import Orchestrator
 from agent.phone.guard import ModelGuard
@@ -15,6 +16,7 @@ from agent.phone.investigator import ModelInvestigator
 from agent.phone.pilot import Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import FallbackLocator, LlmLocator, create_locator
+from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
 
@@ -31,11 +33,23 @@ def main() -> None:
         headers={"Authorization": f"Bearer {config.relay_token()}"},
         timeout=30,
     )
-    locator = FallbackLocator(create_locator(config.vision_model(), api_key), LlmLocator(fallback))
-    pilot = Pilot(model, Phone(relay, config.device()), locator, ModelGuard(model), ModelInvestigator(fallback))
     store = Store()
     store.interrupt_running()
-    gateway = Gateway([CliChannel()], Orchestrator(model, store, Tasks(store, pilot)))
+    prompts = Prompts(store)
+    locator = FallbackLocator(
+        create_locator(config.vision_model(), api_key), LlmLocator(fallback, prompts.live("locator"))
+    )
+    pilot = Pilot(
+        model,
+        Phone(relay, config.device()),
+        locator,
+        ModelGuard(model, prompts.live("guard")),
+        ModelInvestigator(fallback, prompts.live("investigator")),
+        prompts.live("pilot"),
+    )
+    tasks = Tasks(store, pilot)
+    orchestrator = Orchestrator(model, store, tasks, prompts.live("orchestrator"))
+    gateway = Gateway([CliChannel(), PanelChannel(store, tasks, prompts)], orchestrator)
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(gateway.run())
     print()
