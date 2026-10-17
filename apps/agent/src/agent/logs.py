@@ -1,14 +1,13 @@
 """Per-run logs for investigating what the agent did.
 
-Each run writes logs/<start time>/ (logs/latest points at the newest): agent.log with every message,
-model tool call, tool result and error, plus every screenshot the pilot saw, numbered in order.
+Each run writes logs/<start time>/agent.log (logs/latest points at the newest): every message, model tool call,
+tool result and error. Screenshots are with each task's steps in the store, shown in the control panel.
 The console only shows a one-line summary of phone actions and errors.
 """
 
 import logging
 import shutil
 from datetime import datetime
-from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -19,22 +18,19 @@ KEPT_RUNS = 20
 MAX_LOGGED_CHARS = 2000
 
 log = logging.getLogger("agent")
-_run: Path | None = None
-_screenshots = count(1)
 
 
 def start() -> Path:
     """Start a run's log folder and send all `agent` logging there."""
-    global _run
-    _run = LOGS / datetime.now().strftime("%Y%m%d-%H%M%S")
-    _run.mkdir(parents=True, exist_ok=True)
+    run = LOGS / datetime.now().strftime("%Y%m%d-%H%M%S")
+    run.mkdir(parents=True, exist_ok=True)
     latest = LOGS / "latest"
     latest.unlink(missing_ok=True)
-    latest.symlink_to(_run.name)
+    latest.symlink_to(run.name)
     for old in sorted(p for p in LOGS.iterdir() if p.is_dir() and not p.is_symlink())[:-KEPT_RUNS]:
         shutil.rmtree(old)
 
-    file = logging.FileHandler(_run / "agent.log")
+    file = logging.FileHandler(run / "agent.log")
     file.setLevel(logging.DEBUG)
     file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     console = logging.StreamHandler()
@@ -43,16 +39,7 @@ def start() -> Path:
     log.setLevel(logging.DEBUG)
     log.addHandler(file)
     log.addHandler(console)
-    return _run
-
-
-def save_screenshot(jpeg: bytes) -> str | None:
-    """Keep a screenshot with the run's logs; returns its file name."""
-    if not _run:
-        return None
-    name = f"{next(_screenshots):03d}.jpg"
-    (_run / name).write_bytes(jpeg)
-    return name
+    return run
 
 
 async def run(agent: Agent, prompt: Any, **kwargs: Any) -> AgentRunResult:

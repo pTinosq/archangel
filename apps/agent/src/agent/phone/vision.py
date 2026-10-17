@@ -2,17 +2,16 @@
 
 import base64
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
-from pydantic_ai import Agent, BinaryContent
+from pydantic_ai import Agent
 from pydantic_ai.models import Model
-from pydantic_ai.models.openrouter import OpenRouterModel
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from agent.phone.relay import Screenshot
+from agent import config
+from agent.messages import Image
+from agent.models import Instructions, content, openrouter
 
 log = logging.getLogger(__name__)
 
@@ -37,15 +36,16 @@ class Box:
 
 
 class Locator(Protocol):
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
+    async def locate(self, screen: Image, target: str) -> Box | None:
         """The box around `target`, or None if it isn't on the screen."""
 
 
-def create_locator(model: str, api_key: str) -> Locator:
+def create_locator(model: str, instructions: Instructions = LOCATOR_INSTRUCTIONS) -> Locator:
+    """Jev for TypeSafe models (`instructions` don't apply); any other vision model is asked for a box."""
     if model.startswith("typesafe/"):
-        client = httpx.AsyncClient(headers={"Authorization": f"Bearer {api_key}"}, timeout=30)
-        return JevLocator(client, model)
-    return LlmLocator(OpenRouterModel(model, provider=OpenRouterProvider(api_key=api_key)))
+        key = config.openrouter_api_key()
+        return JevLocator(httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30), model)
+    return LlmLocator(openrouter(model), instructions)
 
 
 class JevLocator:
@@ -55,8 +55,8 @@ class JevLocator:
         self._client = client
         self._model = model
 
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
-        image = "data:image/jpeg;base64," + base64.b64encode(screenshot.jpeg).decode()
+    async def locate(self, screen: Image, target: str) -> Box | None:
+        image = f"data:{screen.media_type};base64," + base64.b64encode(screen.data).decode()
         response = await self._client.post(
             DECISIONS_URL,
             headers={"TypeSafe-Danger-Zone-Images": "true"},
@@ -89,12 +89,11 @@ class Located:
 class LlmLocator:
     """Any vision model, asked for a bounding box as structured output."""
 
-    def __init__(self, model: Model, instructions: str | Callable[[], str] = LOCATOR_INSTRUCTIONS):
+    def __init__(self, model: Model, instructions: Instructions = LOCATOR_INSTRUCTIONS):
         self._agent = Agent(model, output_type=Located, instructions=instructions)
 
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
-        image = BinaryContent(data=screenshot.jpeg, media_type="image/jpeg")
-        located = (await self._agent.run([f"Find: {target}", image])).output
+    async def locate(self, screen: Image, target: str) -> Box | None:
+        located = (await self._agent.run([f"Find: {target}", content(screen)])).output
         return Box(located.left, located.top, located.right, located.bottom) if located.found else None
 
 
@@ -108,13 +107,13 @@ class FallbackLocator:
         self._primary = primary
         self._fallback = fallback
 
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
+    async def locate(self, screen: Image, target: str) -> Box | None:
         try:
-            if box := await self._primary.locate(screenshot, target):
+            if box := await self._primary.locate(screen, target):
                 return box
             log.info("Couldn't find %s; asking the fallback locator", target)
         except Exception as error:
             log.warning("Locator failed (%s); asking the fallback locator", error)
-        box = await self._fallback.locate(screenshot, target)
+        box = await self._fallback.locate(screen, target)
         log.debug("fallback %r: %s", target, box)
         return box

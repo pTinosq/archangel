@@ -18,8 +18,8 @@ def recent(messages: list[ModelMessage]) -> list[ModelMessage]:
     return messages[-1:]
 
 
-def forget_old_screenshots(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Keep only the latest `KEPT_SCREENSHOTS` images in context."""
+def forget_old_screenshots(messages: list[ModelMessage], keep: int = KEPT_SCREENSHOTS) -> list[ModelMessage]:
+    """Keep only the latest `keep` images."""
     kept = 0
     trimmed: list[ModelMessage] = []
     for message in reversed(messages):
@@ -28,7 +28,7 @@ def forget_old_screenshots(messages: list[ModelMessage]) -> list[ModelMessage]:
             for part in message.parts:
                 if isinstance(part, UserPromptPart) and _has_image(part):
                     kept += 1
-                    if kept > KEPT_SCREENSHOTS:
+                    if kept > keep:
                         part = replace(part, content=[_drop_image(item) for item in part.content])
                 parts.append(part)
             message = replace(message, parts=parts)

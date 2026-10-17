@@ -67,7 +67,7 @@ main > section:last-child { border-right: none; }
 
 .status { font-size: 11px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: var(--line); }
 .status.running, .status.queued { color: var(--accent); }
-.status.waiting { color: var(--warn); }
+.status.needs-approval, .status.needs-answer { color: var(--warn); }
 .status.done { color: var(--good); }
 .status.failed, .status.interrupted { color: var(--bad); }
 .status.cancelled { color: var(--quiet); }
@@ -78,8 +78,10 @@ main > section:last-child { border-right: none; }
 .screen p { font-size: 12px; text-align: center; }
 .story h2 { text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--text); }
 .report { white-space: pre-wrap; background: var(--panel); padding: 10px 12px; border-radius: 8px; }
-.answer { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; padding: 12px; border: 1px solid var(--warn); border-radius: 8px; }
-.answer input { flex: 1; min-width: 160px; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.controls.waiting { padding: 12px; border: 1px solid var(--warn); border-radius: 8px; }
+.controls input { flex: 1; min-width: 160px; }
+.controls p { width: 100%; margin: 0; font-size: 12px; }
 .steps { margin-top: 16px; border-left: 2px solid var(--line); }
 .steps li { display: flex; gap: 10px; padding: 5px 0 5px 12px; white-space: pre-wrap; }
 .steps li.has-screen { cursor: pointer; }
@@ -90,6 +92,7 @@ main > section:last-child { border-right: none; }
 .lines { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .line { max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--panel); }
 .line p { margin: 0; white-space: pre-wrap; }
+.line .via { display: block; font-size: 11px; color: var(--quiet); margin-bottom: 2px; }
 .line.owner { align-self: flex-end; background: #233154; }
 .line img { max-width: 100%; max-height: 360px; margin-top: 8px; border-radius: 8px; display: block; }
 .chat form { display: flex; gap: 8px; margin-top: 12px; }

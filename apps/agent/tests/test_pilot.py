@@ -13,10 +13,13 @@ from pydantic_ai import (
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.history import forget_old_screenshots
+from agent.messages import Image
 from agent.phone import pilot as pilot_module
-from agent.phone.pilot import Answer, Outcome, Pilot
-from agent.phone.relay import PhoneError, Screenshot
+from agent.phone.pilot import Answer, Kit, Outcome, Pilot
+from agent.phone.relay import PhoneError
 from agent.phone.vision import Box
+
+SCREEN = Image(b"jpg", "image/jpeg")
 
 
 @pytest.fixture(autouse=True)
@@ -28,8 +31,8 @@ class FakePhone:
     def __init__(self):
         self.actions: list[str] = []
 
-    async def screenshot(self) -> Screenshot:
-        return Screenshot(b"jpg", 540, 1200)
+    async def screenshot(self) -> Image:
+        return SCREEN
 
     async def tap(self, x: float, y: float, hold: bool = False) -> None:
         self.actions.append(f"tap {x:.2f},{y:.2f}")
@@ -48,7 +51,7 @@ class FakePhone:
 
 
 class FakeLocator:
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
+    async def locate(self, screen: Image, target: str) -> Box | None:
         return Box(0.2, 0.4, 0.4, 0.6) if "button" in target else None
 
 
@@ -58,7 +61,7 @@ class FakeGuard:
     def __init__(self):
         self.checked: list[str] = []
 
-    async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
+    async def check(self, screen: Image, target: str, task: str) -> str | None:
         self.checked.append(target)
         return "send the message" if "Send" in target else None
 
@@ -68,7 +71,7 @@ class FakeInvestigator:
         self.advice = advice
         self.asked: list[list[str]] = []
 
-    async def investigate(self, goal: str, steps: list[str], screens: list[Screenshot]) -> str | None:
+    async def investigate(self, goal: str, steps: list[str], screens: list[Image]) -> str | None:
         self.asked.append(steps)
         return self.advice
 
@@ -92,8 +95,9 @@ def scripted(*calls: tuple[str, dict]):
 def run(
     model, phone: FakePhone, guard: FakeGuard | None = None, investigator: FakeInvestigator | None = None, **kwargs
 ) -> Outcome:
-    pilot = Pilot(model, phone, FakeLocator(), guard or FakeGuard(), investigator or FakeInvestigator(None))
-    return asyncio.run(pilot.run("do it", **kwargs))
+    kit = Kit(phone, FakeLocator(), guard or FakeGuard(), investigator or FakeInvestigator(None))
+    record = kwargs.pop("record", lambda text, screen: None)
+    return asyncio.run(Pilot(model, kit).run("do it", record, **kwargs))
 
 
 def test_taps_the_centre_of_the_located_box():
@@ -101,7 +105,7 @@ def test_taps_the_centre_of_the_located_box():
     outcome = run(scripted(("tap", {"target": "the WhatsApp button"})), phone)
 
     assert phone.actions == ["tap 0.30,0.50"]
-    assert outcome == Outcome("done", "Tapped the WhatsApp button.", screen=Screenshot(b"jpg", 540, 1200))
+    assert outcome == Outcome("done", "Tapped the WhatsApp button.", screen=SCREEN)
 
 
 def test_problems_are_reported_back_to_the_model():
@@ -197,7 +201,7 @@ def test_consequential_taps_wait_for_approval_then_tap_once():
     model = scripted(("tap", {"target": "the Send button"}))
 
     waiting = run(model, phone, guard)
-    assert waiting.status == "waiting"
+    assert waiting.status == "needs_approval"
     assert waiting.report == "Approve: send the message?"
     assert phone.actions == []
 
@@ -221,7 +225,7 @@ def test_a_declined_tap_never_happens():
 def test_questions_round_trip_to_the_owner():
     model = scripted(("ask_owner", {"question": "Which Alex?"}))
     waiting = run(model, FakePhone())
-    assert (waiting.status, waiting.report) == ("waiting", "Which Alex?")
+    assert (waiting.status, waiting.report) == ("needs_answer", "Which Alex?")
 
     resumed = run(model, FakePhone(), paused=waiting.run, answer=Answer("Alex Smith"))
     assert resumed.report == "The owner replied: Alex Smith"

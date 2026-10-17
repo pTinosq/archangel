@@ -1,23 +1,17 @@
 import asyncio
 import base64
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+from agent.messages import Image
 
 SCREENSHOT_SCALE = 0.5
 SCREENSHOT_QUALITY = 30  # half the bytes of 80; Jev and Luna locate just as well (tested on Settings)
 OFFLINE_WAIT_SECONDS = 60
 POLL_SECONDS = 2
 READ_ONLY = {"screenshot", "apps", "ui_tree"}
-
-
-@dataclass(frozen=True)
-class Screenshot:
-    jpeg: bytes
-    width: int
-    height: int
 
 
 class PhoneError(Exception):
@@ -32,9 +26,9 @@ class Phone:
         self._device = device
         self._size: tuple[int, int] | None = None
 
-    async def screenshot(self) -> Screenshot:
+    async def screenshot(self) -> Image:
         data = await self._command("screenshot", scale=SCREENSHOT_SCALE, quality=SCREENSHOT_QUALITY)
-        return Screenshot(base64.b64decode(data["jpeg"]), data["width"], data["height"])
+        return Image(base64.b64decode(data["jpeg"]), "image/jpeg")
 
     async def tap(self, x: float, y: float, hold: bool = False) -> None:
         px, py = await self._pixels(x, y)

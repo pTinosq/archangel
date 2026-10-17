@@ -16,42 +16,15 @@ Each milestone ships something usable and proves one idea.
 | M9 | Voice | call your Twilio number | LiveKit SIP as a channel |
 | M10 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
 
-## Next: cleanup (before M6)
+## Cleanup (done, before M6)
 
-The last checkpoint before the project gets big. Refactor freely; remove duplication; make abstractions earn their place.
+- **One conversation:** one history for the owner across every channel. Messages carry an `Address`; the model sees "via cli". The gateway records one transcript, which the panel shows.
+- **Events:** `OwnerMessage` and `TaskUpdate` behind one `Orchestrator.handle(event)`. Each has its own prompt, default reply address, owner authority and failure message.
+- **Routing:** replies go where the message came from, and task updates go where the task was asked for. `start_task(report_via=…)` and `send(channel, text)` override that. The panel's buttons are owner messages.
+- **Screenshots:** JPEG quality 30 from the bridge (half the bytes; Jev rejects WebP). Stored as files deleted after 3 days. Paused runs keep only the latest screen. `logs/` no longer copies them.
+- **Duplication removed:** `models.py` (model building, image conversion, `Instructions`); `Pilot(model, Kit(...))`; one `Pilot` signature; `Screenshot` became `Image`; tasks say `needs approval` / `needs answer` explicitly.
 
-**One owner, one conversation.**
-- A single continuous history, whichever channel a message arrives on. A text in the morning and a WhatsApp voice note in the evening are the same thread.
-- Messages carry an address (`channel`, `id`) for routing only; the orchestrator sees "via telegram".
-- The panel transcript shows the whole conversation, every channel, tagged.
-
-**Polymorphic triggers.**
-- Everything that wakes the orchestrator is an `Event`: owner message, task update, and later schedule or incoming call.
-- Each event type renders its own prompt and says whether it carries the owner's authority (approvals).
-- One `Orchestrator.handle(event)`.
-
-**Routing back out.**
-- Deterministic by default: a reply goes to where the triggering message came from, and a task update goes to where the task was asked for.
-- The orchestrator can override with a tool, e.g. "send the results to my email". It sees the list of reachable channels.
-- Channels are polymorphic outbound too: text, images, and later a voice channel whose `send` places a call back.
-- The gateway routes both ways and records the transcript once, for every channel, instead of each channel keeping its own.
-
-**Screenshots: small and short-lived.**
-- Not in SQLite. Step screenshots become files with short retention: the last few tasks or days.
-- Paused runs keep only the latest image.
-- Smallest format the vision models still read well: try lossy WebP or low-quality JPEG from the bridge (`docs/protocol.md` first). Check Jev and Luna accuracy and Jev's accepted types before switching.
-
-**Known duplication and smells to fix.**
-- Image to model-content conversion is repeated in pilot, guard, investigator, vision and orchestrator.
-- OpenRouter model construction is in two places.
-- `str | Callable[[], str]` instructions are repeated everywhere.
-- Two `Pilot` signatures (pilot and tasks' Protocol) are kept in sync by hand.
-- The `Pilot` constructor takes 6 arguments.
-- `logs` and the steps table both save screenshots.
-- Approval vs question is told apart by report text; make it a field.
-- Panel approvals bypass the orchestrator's history; note them there.
-
-After this, the owner tests across channels and reports changes before M6.
+Next: the owner tests across channels and reports changes before M6.
 
 ## M3 (done)
 

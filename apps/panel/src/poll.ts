@@ -3,9 +3,8 @@ import { useEffect, useRef, useState } from "react";
 const EVERY_MS = 1000;
 
 /** `load()` now and every second after; the latest result, or undefined until the first arrives. */
-export function usePoll<T>(load: () => Promise<T>, key: unknown = null): [T | undefined, () => void] {
+export function usePoll<T>(load: () => Promise<T>): T | undefined {
   const [value, setValue] = useState<T>();
-  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     const run = () => load().then((v) => live && setValue(v), () => {});
@@ -15,8 +14,8 @@ export function usePoll<T>(load: () => Promise<T>, key: unknown = null): [T | un
       live = false;
       clearInterval(timer);
     };
-  }, [key, tick]);
-  return [value, () => setTick((t) => t + 1)];
+  }, []);
+  return value;
 }
 
 /** An append-only list (steps, chat lines): fetches only what's newer than the last item it has. */

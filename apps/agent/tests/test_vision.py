@@ -2,10 +2,10 @@ import asyncio
 
 import httpx
 
-from agent.phone.relay import Screenshot
+from agent.messages import Image
 from agent.phone.vision import Box, FallbackLocator
 
-SCREEN = Screenshot(b"jpg", 540, 1200)
+SCREEN = Image(b"jpg", "image/jpeg")
 BOX = Box(0.1, 0.1, 0.2, 0.2)
 
 
@@ -14,7 +14,7 @@ class FakeLocator:
         self.answer = answer
         self.asked = 0
 
-    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
+    async def locate(self, screen: Image, target: str) -> Box | None:
         self.asked += 1
         if isinstance(self.answer, Exception):
             raise self.answer

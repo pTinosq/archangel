@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api, lineImageUrl } from "./api";
+import { api, hideExpired, imageUrl } from "./api";
 import { useFeed } from "./poll";
 
 export function Chat() {
-  const lines = useFeed(api.chat);
+  const lines = useFeed(api.transcript);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -25,16 +25,17 @@ export function Chat() {
 
   return (
     <section className="chat">
-      <h2>Chat</h2>
+      <h2>Conversation</h2>
       <div className="lines">
         {lines.map((line) => (
           <div key={line.id} className={`line ${line.sender}`}>
+            <span className="via">{line.channel}</span>
             <p>{line.text}</p>
-            {line.image && (
-              <a href={lineImageUrl(line.id)} target="_blank">
-                <img src={lineImageUrl(line.id)} alt="" />
+            {line.images.map((name) => (
+              <a key={name} href={imageUrl(name)} target="_blank">
+                <img src={imageUrl(name)} alt="" onError={hideExpired} />
               </a>
-            )}
+            ))}
           </div>
         ))}
         <div ref={end} />

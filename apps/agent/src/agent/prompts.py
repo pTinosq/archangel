@@ -39,18 +39,26 @@ class Prompts:
 
     def live(self, name: str) -> Callable[[], str]:
         """For an agent's `instructions`: the prompt as it is when each run starts."""
-        DEFAULTS[name]  # fail at startup, not mid-run, on a typo
+        _known(name)  # at startup, not mid-run
         return lambda: self[name]
 
+    def get(self, name: str) -> Prompt:
+        return Prompt(name, self[name], DEFAULTS[name])
+
     def all(self) -> list[Prompt]:
-        return [Prompt(name, self[name], default) for name, default in DEFAULTS.items()]
+        return [self.get(name) for name in DEFAULTS]
 
     def edit(self, name: str, text: str | None) -> None:
         """Replace a prompt; None (or the default itself) restores the default."""
-        DEFAULTS[name]
+        _known(name)
         if text is None or text == DEFAULTS[name]:
             self._edits.pop(name, None)
             self._store.save_prompt(name, None)
         else:
             self._edits[name] = text
             self._store.save_prompt(name, text)
+
+
+def _known(name: str) -> None:
+    if name not in DEFAULTS:
+        raise KeyError(f"No prompt called {name!r}")

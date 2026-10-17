@@ -5,13 +5,13 @@ It only runs when the pilot repeats itself or is stuck, so everyday steps stay o
 """
 
 import logging
-from collections.abc import Callable
 from typing import Protocol
 
-from pydantic_ai import Agent, BinaryContent
+from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from agent.phone.relay import Screenshot
+from agent.messages import Image
+from agent.models import Instructions, content
 
 log = logging.getLogger(__name__)
 
@@ -25,19 +25,19 @@ and one concrete way past it. If the task can't be done from here, say so and wh
 
 
 class Investigator(Protocol):
-    async def investigate(self, goal: str, steps: list[str], screens: list[Screenshot]) -> str | None:
+    async def investigate(self, goal: str, steps: list[str], screens: list[Image]) -> str | None:
         """What's blocking `goal` and how to get past it; None if no opinion could be had."""
         ...
 
 
 class ModelInvestigator:
-    def __init__(self, model: Model, instructions: str | Callable[[], str] = INSTRUCTIONS):
+    def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
         self._agent = Agent(model, instructions=instructions)
 
-    async def investigate(self, goal: str, steps: list[str], screens: list[Screenshot]) -> str | None:
+    async def investigate(self, goal: str, steps: list[str], screens: list[Image]) -> str | None:
         prompt = [
             f"Task: {goal}\nRecent steps, oldest first:\n" + "\n".join(f"- {step}" for step in steps),
-            *(BinaryContent(data=screen.jpeg, media_type="image/jpeg") for screen in screens),
+            *(content(screen) for screen in screens),
         ]
         try:
             diagnosis = (await self._agent.run(prompt)).output

@@ -1,6 +1,7 @@
 import asyncio
 
 import pydantic_ai
+from fakes import SCREEN, FakeChannel, FakePilot
 from pydantic_ai import (
     BinaryContent,
     ModelMessage,
@@ -12,51 +13,38 @@ from pydantic_ai import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from agent.messages import Conversation, Image, Message, Text
+from agent.events import OwnerMessage
+from agent.gateway import Gateway
+from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
 from agent.phone.pilot import Outcome
-from agent.phone.relay import Screenshot
-from agent.store import Store
 from agent.tasks import Tasks
-
-CONVERSATION = Conversation("cli", "local")
-
-
-class FakePilot:
-    def __init__(self, outcome: Outcome):
-        self.outcome = outcome
-        self.calls: list[tuple] = []
-
-    async def run(self, goal, paused=None, answer=None, record=None) -> Outcome:
-        self.calls.append((goal, answer))
-        return self.outcome
 
 
 class Owner:
-    """Talks to an orchestrator and collects every reply, including those that arrive after tasks finish."""
+    """Talks to an orchestrator over two channels and collects every reply, including those after tasks finish."""
 
-    def __init__(self, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
+    def __init__(self, store, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
         self.requests: list[list[ModelMessage]] = []
         self.pilot = FakePilot(outcome)
-        self.tasks = Tasks(Store(":memory:"), self.pilot)
+        self.tasks = Tasks(store, self.pilot)
+        self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
+        self.store = store
 
         def recording(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
             self.requests.append(messages)
             return respond(messages, info)
 
-        self.orchestrator = Orchestrator(FunctionModel(recording), Store(":memory:"), self.tasks)
-        self.replies: list[Message] = []
+        gateway = Gateway([self.cli, self.email], store)
+        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway)
 
-    def says(self, *parts) -> list[Message]:
-        async def reply(message: Message) -> None:
-            self.replies.append(message)
-
+    def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
         async def scenario():
-            await self.orchestrator.handle(Message(CONVERSATION, parts), reply)
+            await self.orchestrator.handle(OwnerMessage(Message((via or self.cli).owner, parts)))
             await self.tasks.idle()
 
         asyncio.run(scenario())
-        return self.replies
+        return self.cli.sent
 
 
 def ok(messages, info) -> ModelResponse:
@@ -69,96 +57,145 @@ def prompt_of(messages: list[ModelMessage]) -> str:
     return part.content if isinstance(part.content, str) else " ".join(i for i in part.content if isinstance(i, str))
 
 
-def test_replies_with_model_output():
-    assert Owner(ok).says(Text("hi")) == [Message(CONVERSATION, (Text("ok"),))]
+def tool_result_or(respond):
+    """Says each tool's result back as the reply; otherwise `respond(prompt)`."""
+
+    def model(messages, info) -> ModelResponse:
+        last = messages[-1].parts[-1]
+        if isinstance(last, ToolReturnPart):
+            return ModelResponse(parts=[TextPart(str(last.content))])
+        return respond(prompt_of(messages))
+
+    return model
 
 
-def test_text_and_images_reach_the_model():
-    owner = Owner(ok)
+def call(tool: str, **args) -> ModelResponse:
+    return ModelResponse(parts=[ToolCallPart(tool, args)])
+
+
+def say(text: str) -> ModelResponse:
+    return ModelResponse(parts=[TextPart(text)])
+
+
+def test_replies_go_back_where_the_owner_wrote(store):
+    owner = Owner(store, ok)
+    owner.says(Text("hi"), via=owner.email)
+    assert (owner.cli.sent, owner.email.sent) == ([], [Message(owner.email.owner, (Text("ok"),))])
+
+
+def test_the_model_sees_the_channel_text_and_images(store):
+    owner = Owner(store, ok)
     owner.says(Image(b"png", "image/png"), Text("what is this?"))
 
-    prompt = owner.requests[0][-1].parts[-1].content
-    assert prompt == [BinaryContent(data=b"png", media_type="image/png"), "what is this?"]
+    assert owner.requests[0][-1].parts[-1].content == [
+        "(via cli)",
+        BinaryContent(data=b"png", media_type="image/png"),
+        "what is this?",
+    ]
 
 
-def test_history_carries_over():
-    owner = Owner(ok)
+def test_one_conversation_across_channels(store):
+    owner = Owner(store, ok)
     owner.says(Text("first"))
-    owner.says(Text("second"))
+    owner.says(Text("second"), via=owner.email)
     assert len(owner.requests[1]) == 3  # first request, its response, second request
 
 
-def starts_a_task_then_relays_updates(messages, info) -> ModelResponse:
-    last = messages[-1].parts[-1]
-    if isinstance(last, ToolReturnPart):
-        return ModelResponse(parts=[TextPart(f"On it: {last.content}")])
-    if "not from the owner" in prompt_of(messages):
-        return ModelResponse(parts=[TextPart(f"Relayed: {prompt_of(messages)}")])
-    return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Open WhatsApp"})])
+def starts_a_task_then_relays_updates(prompt: str) -> ModelResponse:
+    if "not from the owner" in prompt:
+        return say(f"Relayed: {prompt}")
+    if "email" in prompt:
+        return call("start_task", goal="Open WhatsApp", report_via="email")
+    return call("start_task", goal="Open WhatsApp")
 
 
-def test_tasks_run_in_the_background_and_report_back():
-    owner = Owner(starts_a_task_then_relays_updates)
+def test_tasks_run_in_the_background_and_report_back(store):
+    owner = Owner(store, tool_result_or(starts_a_task_then_relays_updates))
     replies = owner.says(Text("open whatsapp"))
 
     assert owner.pilot.calls == [("Open WhatsApp", None)]
     assert [r.text for r in replies] == [
-        "On it: Started task #1.",
+        "Started task #1.",
         "Relayed: [Update on task #1, not from the owner] done: WhatsApp is open.",
     ]
 
 
-def test_questions_reach_the_owner_with_a_screenshot():
-    waiting = Outcome("waiting", "Approve: post the tweet?", pydantic_ai.Conversation(), Screenshot(b"jpg", 1, 1))
-    replies = Owner(starts_a_task_then_relays_updates, waiting).says(Text("tweet hello"))
+def test_task_results_can_go_to_another_channel(store):
+    owner = Owner(store, tool_result_or(starts_a_task_then_relays_updates))
+    owner.says(Text("open whatsapp and email me"))
 
-    assert replies[-1].parts[-1] == Image(b"jpg", "image/jpeg")
+    assert [r.text for r in owner.cli.sent] == ["Started task #1."]
+    assert owner.email.sent[0].text.startswith("Relayed: [Update on task #1")
 
 
-def test_only_the_owner_can_approve():
-    def approves_on_its_own(messages, info) -> ModelResponse:
-        last = messages[-1].parts[-1]
-        if isinstance(last, ToolReturnPart):
-            return ModelResponse(parts=[TextPart(str(last.content))])
-        if "not from the owner" in prompt_of(messages):
-            return ModelResponse(parts=[ToolCallPart("answer_task", {"id": 1, "answer": "yes", "approve": True})])
-        return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Post hello"})])
+def test_the_model_can_message_another_channel(store):
+    owner = Owner(store, tool_result_or(lambda prompt: call("send", channel="email", text="Your summary")))
+    replies = owner.says(Text("email me a summary"))
 
-    waiting = Outcome("waiting", "Approve: post?", pydantic_ai.Conversation())
-    owner = Owner(approves_on_its_own, waiting)
+    assert [m.text for m in owner.email.sent] == ["Your summary"]
+    assert [r.text for r in replies] == ["Sent via email."]
+    assert [(line.channel, line.sender) for line in store.lines()] == [("email", "archangel"), ("cli", "archangel")]
+
+
+def test_questions_reach_the_owner_with_a_screenshot(store):
+    waiting = Outcome("needs_approval", "Approve: post the tweet?", pydantic_ai.Conversation(), SCREEN)
+    replies = Owner(store, tool_result_or(starts_a_task_then_relays_updates), waiting).says(Text("tweet hello"))
+
+    assert replies[-1].parts[-1] == SCREEN
+
+
+def test_only_the_owner_can_approve(store):
+    def approves_on_its_own(prompt):
+        if "not from the owner" in prompt:
+            return call("answer_task", id=1, answer="yes", approve=True)
+        return call("start_task", goal="Post hello")
+
+    owner = Owner(
+        store,
+        tool_result_or(approves_on_its_own),
+        Outcome("needs_approval", "Approve: post?", pydantic_ai.Conversation()),
+    )
     replies = owner.says(Text("post hello"))
 
     assert replies[-1].text == "Only the owner can approve. Ask them."
     assert len(owner.pilot.calls) == 1
 
 
-def test_the_owner_can_approve():
-    def relays_then_approves(messages, info) -> ModelResponse:
-        last = messages[-1].parts[-1]
-        if isinstance(last, ToolReturnPart):
-            return ModelResponse(parts=[TextPart(str(last.content))])
-        text = prompt_of(messages)
-        if "not from the owner" in text:
-            return ModelResponse(parts=[TextPart("Post it?")])
-        if text == "yes":
-            return ModelResponse(parts=[ToolCallPart("answer_task", {"id": 1, "answer": "yes", "approve": True})])
-        return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Post hello"})])
+def test_the_owner_can_approve(store):
+    def relays_then_approves(prompt):
+        if "not from the owner" in prompt:
+            return say("Post it?")
+        if prompt.endswith("yes"):
+            return call("answer_task", id=1, answer="yes", approve=True)
+        return call("start_task", goal="Post hello")
 
-    owner = Owner(relays_then_approves, Outcome("waiting", "Approve: post?", pydantic_ai.Conversation()))
+    owner = Owner(
+        store,
+        tool_result_or(relays_then_approves),
+        Outcome("needs_approval", "Approve: post?", pydantic_ai.Conversation()),
+    )
     owner.says(Text("post hello"))
     owner.says(Text("yes"))
 
     assert owner.pilot.calls[-1][1].approved
 
 
-def test_a_task_can_be_cancelled_from_its_own_update():
-    def cancels_waiting_tasks(messages, info) -> ModelResponse:
-        last = messages[-1].parts[-1]
-        if isinstance(last, ToolReturnPart):
-            return ModelResponse(parts=[TextPart(str(last.content))])
-        if "not from the owner" in prompt_of(messages):
-            return ModelResponse(parts=[ToolCallPart("cancel_task", {"id": 1})])
-        return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Post hello"})])
+def test_a_task_can_be_cancelled_from_its_own_update(store):
+    def cancels_waiting_tasks(prompt):
+        if "not from the owner" in prompt:
+            return call("cancel_task", id=1)
+        return call("start_task", goal="Post hello")
 
-    owner = Owner(cancels_waiting_tasks, Outcome("waiting", "Approve: post?", pydantic_ai.Conversation()))
+    owner = Owner(
+        store,
+        tool_result_or(cancels_waiting_tasks),
+        Outcome("needs_approval", "Approve: post?", pydantic_ai.Conversation()),
+    )
     assert owner.says(Text("post hello"))[-1].text == "Task #1 cancelled."
+
+
+def test_failures_reach_the_owner(store):
+    def broken(messages, info):
+        raise RuntimeError("boom")
+
+    assert Owner(store, broken).says(Text("hi"))[-1].text == "Something went wrong (RuntimeError). Try again."

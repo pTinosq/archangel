@@ -1,70 +1,43 @@
 import asyncio
 
-from agent.channels import Channel, Deliver
-from agent.gateway import Gateway, Reply
-from agent.messages import Conversation, Message, Text
+from fakes import FakeChannel
 
-A = Conversation("fake", "a")
-B = Conversation("fake", "b")
-
-
-def message(conversation: Conversation, text: str) -> Message:
-    return Message(conversation, (Text(text),))
+from agent.events import OwnerMessage
+from agent.gateway import Gateway
+from agent.messages import Address, Message, Text
 
 
-class FakeChannel(Channel):
-    name = "fake"
+def test_every_channel_feeds_the_one_handler_and_the_transcript(store):
+    cli, panel = FakeChannel("cli", ["hi"]), FakeChannel("panel", ["hello"])
+    events = []
 
-    def __init__(self, inbound: list[Message]):
-        self.inbound = inbound
-        self.sent: list[Message] = []
+    async def handle(event):
+        events.append(event)
 
-    async def start(self, deliver: Deliver) -> None:
-        for item in self.inbound:
-            await deliver(item)
+    asyncio.run(Gateway([cli, panel], store).run(handle))
 
-    async def send(self, message: Message) -> None:
-        self.sent.append(message)
-
-
-class EchoBrain:
-    """Replies twice; the first message in each conversation is slow."""
-
-    def __init__(self):
-        self.seen: set[Conversation] = set()
-
-    async def handle(self, message: Message, reply: Reply) -> None:
-        if message.conversation not in self.seen:
-            self.seen.add(message.conversation)
-            await asyncio.sleep(0.05)
-        await reply(message)
-        await reply(message)
+    assert {(e.reply_to.channel, e.message.text) for e in events} == {("cli", "hi"), ("panel", "hello")}
+    assert all(isinstance(e, OwnerMessage) and e.from_owner for e in events)
+    assert sorted(line.text for line in store.lines()) == ["hello", "hi"]
 
 
-def run(inbound: list[Message], brain) -> list[str]:
-    channel = FakeChannel(inbound)
-    asyncio.run(Gateway([channel], brain).run())
-    return [f"{sent.conversation.id}:{sent.text}" for sent in channel.sent]
+def test_messages_go_to_their_channel(store):
+    cli, panel = FakeChannel("cli"), FakeChannel("panel")
+    gateway = Gateway([cli, panel], store)
+
+    asyncio.run(gateway.send(Message(panel.owner, (Text("done"),))))
+
+    assert (cli.sent, [m.text for m in panel.sent]) == ([], ["done"])
+    assert [(line.channel, line.sender) for line in store.lines()] == [("panel", "archangel")]
+    assert gateway.owner("panel") == panel.owner
+    assert gateway.owner("fax") is None
 
 
-def test_replies_go_back_to_the_conversation():
-    sent = run([message(A, "1"), message(B, "2")], EchoBrain())
-    assert sorted(sent) == ["a:1", "a:1", "b:2", "b:2"]
+def test_a_failing_channel_doesnt_break_sending(store):
+    class Broken(FakeChannel):
+        async def send(self, message):
+            raise ConnectionError("down")
 
-
-def test_conversations_do_not_wait_on_each_other():
-    class SlowA(EchoBrain):
-        async def handle(self, message, reply):
-            if message.conversation == A:
-                await asyncio.sleep(0.05)
-            await reply(message)
-
-    assert run([message(A, "slow"), message(B, "fast")], SlowA()) == ["b:fast", "a:slow"]
-
-
-def test_brain_failure_is_reported_to_the_conversation():
-    class Broken:
-        async def handle(self, message, reply):
-            raise RuntimeError("boom")
-
-    assert run([message(A, "hi")], Broken()) == ["a:Something went wrong (RuntimeError). Try again."]
+    gateway = Gateway([Broken("sms")], store)
+    asyncio.run(gateway.send(Message(Address("sms", "owner"), (Text("hi"),))))
+    asyncio.run(gateway.send(Message(Address("fax", "owner"), (Text("hi"),))))

@@ -19,7 +19,7 @@ just agent
 › what's my battery level?      # uses the phone; needs the relay and bridge running
 ```
 
-Phone work runs as background tasks, so you can keep talking, ask for status, or say stop. Before anything that sends, pays, logs in, deletes or changes a setting, it asks you, and prints a screenshot path; reply yes or no. History and tasks live in `apps/agent/data/archangel.db` and survive restarts. If Jev can't find something on screen, or a task starts going in circles, a second model (GPT-6 Luna) takes a look.
+It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask. Phone work runs as background tasks, so you can keep talking, ask for status, or say stop. Before anything that sends, pays, logs in, deletes or changes a setting, it asks you, and prints a screenshot path; reply yes or no. History and tasks live in `apps/agent/data/` and survive restarts; screenshots are kept for 3 days. If Jev can't find something on screen, or a task starts going in circles, a second model (GPT-6 Luna) takes a look.
 
 Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Settings: [CLAUDE.md](CLAUDE.md#agent).
 

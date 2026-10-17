@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from agent.channels import Channel, Deliver
-from agent.messages import Conversation, Image, Message, Part, Text
+from agent.messages import Address, Image, Message, Part, Text
 
 PROMPT = "› "
 IMAGE_COMMAND = "/image "
@@ -16,7 +16,7 @@ class CliChannel(Channel):
     """Talk to Archangel in the terminal. `/image <path> [text]` attaches an image."""
 
     name = "cli"
-    conversation = Conversation(name, "local")
+    owner = Address(name, "local")
 
     async def start(self, deliver: Deliver) -> None:
         print("Archangel. `/image <path> [text]` attaches an image. Ctrl-D to quit.")
@@ -28,10 +28,10 @@ class CliChannel(Channel):
                 print(error)
                 continue
             if parts:
-                await deliver(Message(self.conversation, parts))
+                await deliver(Message(self.owner, parts))
 
     async def send(self, message: Message) -> None:
-        lines = [message.text] + [f"[image: {_save(part)}]" for part in message.parts if isinstance(part, Image)]
+        lines = [message.text] + [f"[image: {_save(image)}]" for image in message.images]
         # Clear the waiting prompt, print the reply, then redraw the prompt.
         print("\r" + "\n".join(lines) + f"\n{PROMPT}", end="", flush=True)
 

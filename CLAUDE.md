@@ -3,8 +3,9 @@
 AI agent that operates a real Android phone. No cable, ADB or root at runtime. Progress: `docs/roadmap.md`.
 
 ```
-channels ──▶ gateway ──▶ orchestrator ──▶ tasks ──▶ pilot ──▶ relay ◀──WebSocket── bridge (phone)
- (comms)                 (talks, manages)  (background sub-agents)   (action)
+channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilot ──▶ relay ◀──WebSocket── bridge (phone)
+ (any medium,  (events in,  (one conversation,  (background     (action)
+  one owner)    routing out)  talks, manages)    sub-agents)
 ```
 
 ## Layout
@@ -40,23 +41,27 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 
 ## Agent
 
+One owner, one conversation, any channel. Everything that wakes the orchestrator is an `Event`; everything it says goes out through the gateway to an `Address`.
+
 | File | Role |
 |---|---|
-| `messages.py` | `Message(conversation, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
-| `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. `panel.py`: the control panel's chat plus its API (tasks, steps, screenshots, answers, prompts); 127.0.0.1 only, Host-checked, all routes async (SQLite). |
-| `gateway.py` | Routes channels ⇄ orchestrator. Never blocks a channel. |
-| `orchestrator.py` | The agent the owner talks to. Never touches the phone: `start_task`, `answer_task`, `cancel_task`. Sees the task list every turn. Runs on owner messages and task updates, one at a time per conversation. Approvals only count in turns the owner triggered. Attaches the screenshot when a task waits on the owner. |
-| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. Saves each step the pilot reports, with its screen. |
-| `store.py` | SQLite at `apps/agent/data/archangel.db`: each conversation's history (continuous, no expiry), tasks and their steps with screenshots, the panel chat, edited prompts. |
-| `prompts.py` | Every prompt by name. Defaults live in code beside their agents; panel edits live in the store and win from the agent's next run. Agents take `instructions` as a string or `Prompts.live(name)`. |
+| `messages.py` | `Address(channel, id)`, `Message(address, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
+| `models.py` | The model-library seam: `openrouter(name)`, `content(image)`, `prompt(parts)`, `Instructions` (string, or a callable read each run). |
+| `events.py` | `Event`: `prompt()`, `reply_to`, `from_owner`, `attachments()`, `fallback(error)`. `OwnerMessage`, `TaskUpdate`. A new trigger (schedule, incoming call) is a new subclass. |
+| `channels/` | `Channel`: `name`, `owner` (the owner's address there), `start(deliver)`, `send(message)`. Channels only move messages. `cli.py`: terminal, `/image <path> [text]`. `panel.py`: control panel channel plus its local API (transcript, tasks, steps, images, prompts); 127.0.0.1 only, Host-checked, routes async (SQLite). Its buttons send owner messages. |
+| `gateway.py` | Both ways: owner messages → `OwnerMessage` events, handled concurrently; outgoing messages → the channel in their address. Records the transcript. A failing channel is logged, not raised. |
+| `orchestrator.py` | The agent the owner talks to; never touches the phone. `handle(event)`, one at a time. Tools: `start_task(goal, report_via?)`, `answer_task`, `cancel_task`, `send(channel, text)`. Sees the channels and task list every turn. Replies go to `event.reply_to`; approvals only count when `event.from_owner`. |
+| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. Records each step; sends a `TaskUpdate` when a task finishes or needs the owner. |
+| `store.py` | `data/archangel.db`: the one history (continuous), transcript, tasks (with `report_to`) and their steps, edited prompts. Images (screens, chat pictures) are files in `data/images/`, deleted after 3 days. Paused runs keep only their latest screen. |
+| `prompts.py` | Every prompt by name. Defaults live in code beside their agents; panel edits live in the store and win from the agent's next run (`Prompts.live(name)`). |
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
-| `instructions.md` | System prompt. |
-| `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |
-| `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) for questions and approvals. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion from the investigator, at most 2 per run. |
-| `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for the owner's approval. Fails closed. |
-| `phone/investigator.py` | Fallback model looks at the last 3 screenshots and recent steps of a task going nowhere: what's in the way, how to get past it. Also explains stuck reports. Optional: failures return None. |
-| `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API), `LlmLocator` (any vision model), `FallbackLocator` (second locator when the first misses or fails). |
-| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. Phone offline (503): waits up to 60 s, then resends (it never arrived). Lost mid-command (502): resends only read-only commands. |
+| `instructions.md` | Orchestrator prompt. |
+| `logs.py` | `logs/<time>/agent.log` at DEBUG (`logs/latest` → newest, last 20 kept). `logs.run(agent, …)` logs each tool call, result and invalid call. |
+| `phone/pilot.py` | Sub-agent for one task: act → screenshot → decide. `Pilot(model, Kit(phone, locator, guard, investigator))`. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) as `needs_approval` or `needs_answer`. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion, at most 2 per run. |
+| `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval. Fails closed. |
+| `phone/investigator.py` | The fallback model reads the last 3 screens and recent steps of a task going nowhere: what's in the way, how past it. Also explains stuck reports. |
+| `phone/vision.py` | `Locator.locate(screen, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API), `LlmLocator` (any vision model), `FallbackLocator` (second locator on a miss or failure). |
+| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots are half-scale JPEG at quality 30 (Jev rejects WebP; 30 locates as well as 80). Phone offline (503): waits up to 60 s, then resends. Lost mid-command (502): resends only read-only commands. |
 
 The pilot never handles coordinates: it describes what to tap, the locator finds the box, the centre gets tapped.
 
@@ -68,15 +73,15 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | `pixel-6` |
 
-Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by Pydantic AI's OpenRouter client (it uses the `openai` package as its HTTP client; every call goes to OpenRouter).
+Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, via `event.fallback(error)`. Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by Pydantic AI's OpenRouter client (it uses the `openai` package as its HTTP client; every call goes to OpenRouter).
 
 Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalRequired` from the guard, `CallDeferred` from `ask_owner`). The paused run is saved with the task, so an answer works even after a restart. Tasks running at shutdown come back `interrupted`.
 
-**Investigating a run:** `tail -100 apps/agent/logs/latest/agent.log`, then open the numbered screenshots around the step in question. `jev` lines show Jev's raw answers (noul, box, confidence).
+**Investigating a run:** the task's steps and screens in the control panel, then `tail -100 apps/agent/logs/latest/agent.log`. `jev` lines show Jev's raw answers (noul, box, confidence).
 
-Tests use `FunctionModel` and `httpx.MockTransport`; no API calls.
+Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. Shared fakes in `tests/fakes.py`; the `store` fixture is a fresh store in a temp dir.
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.
-New channel = one `Channel` subclass registered in `__main__.py`; the orchestrator never knows which channel it serves. Images in replies (approval screenshots) must be shown by the channel; the CLI saves them to a temp file and prints the path.
+New channel = one `Channel` subclass registered in `__main__.py`; the orchestrator only sees its name ("via telegram") and can route to it. Images in replies (approval screenshots) must be shown by the channel; the CLI saves them to a temp file and prints the path.
 
 ## Bridge
 
@@ -126,5 +131,6 @@ minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.version
 - Install or force-stop switches the service off.
 - `type` uses `ACTION_SET_TEXT`; editors that reject it (X's compose box) get a clipboard paste instead, which overwrites the clipboard.
 - The guard is a model judging a screenshot: strong, not perfect. It adds one model call per tap.
+- The control panel's buttons are messages to the orchestrator, so approving from it costs one model call.
 - A waiting task doesn't hold the phone; if another task runs meanwhile, the approved tap re-locates its target on whatever screen is there.
 - Android rate-limits screenshots; the bridge retries briefly.

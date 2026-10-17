@@ -5,8 +5,9 @@ import json
 import httpx
 import pytest
 
+from agent.messages import Image
 from agent.phone import relay
-from agent.phone.relay import Phone, PhoneError, Screenshot
+from agent.phone.relay import Phone, PhoneError
 from agent.phone.vision import Box, JevLocator
 
 HELLO = [{"device": "pixel-6", "screen": {"width": 1000, "height": 2000}}]
@@ -35,14 +36,19 @@ def test_screenshot_is_small_and_decoded():
         data = {"width": 540, "height": 1200, "jpeg": base64.b64encode(b"jpg").decode()}
         return httpx.Response(200, json={"id": "1", "ok": True, "data": data})
 
-    assert asyncio.run(phone(handler).screenshot()) == Screenshot(b"jpg", 540, 1200)
+    assert asyncio.run(phone(handler).screenshot()) == Image(b"jpg", "image/jpeg")
 
 
 @pytest.mark.parametrize(
     "response, message",
     [
         (httpx.Response(504, json={"code": "timeout", "message": "Device did not reply"}), "Device did not reply"),
-        (httpx.Response(200, json={"id": "1", "ok": False, "error": {"code": "not_found", "message": "No focused input field"}}), "No focused input field"),
+        (
+            httpx.Response(
+                200, json={"id": "1", "ok": False, "error": {"code": "not_found", "message": "No focused input field"}}
+            ),
+            "No focused input field",
+        ),
     ],
 )
 def test_failures_become_phone_errors(response, message):
@@ -96,7 +102,7 @@ def jev(answers: dict, requests: list) -> JevLocator:
     return JevLocator(httpx.AsyncClient(transport=httpx.MockTransport(handler)), "typesafe/jev-1.14")
 
 
-SCREEN = Screenshot(b"jpg", 540, 1200)
+SCREEN = Image(b"jpg", "image/jpeg")
 BOX = {"type": "box", "box": {"top": 0.18, "bottom": 0.26, "left": 0.31, "right": 0.46}, "confidence": 0.72}
 
 

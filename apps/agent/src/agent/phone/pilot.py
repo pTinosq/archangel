@@ -1,3 +1,5 @@
+"""The phone sub-agent: carries out one task by looking at the screen, acting, and checking the result."""
+
 import asyncio
 import logging
 from collections import deque
@@ -10,7 +12,6 @@ import pydantic_ai
 from pydantic_ai import (
     Agent,
     ApprovalRequired,
-    BinaryContent,
     CallDeferred,
     DeferredToolRequests,
     DeferredToolResults,
@@ -28,9 +29,11 @@ from pydantic_ai.models import Model
 
 from agent import logs
 from agent.history import forget_old_screenshots
+from agent.messages import Image
+from agent.models import Instructions, content
 from agent.phone.guard import Guard
 from agent.phone.investigator import Investigator
-from agent.phone.relay import Phone, PhoneError, Screenshot
+from agent.phone.relay import Phone, PhoneError
 from agent.phone.vision import Locator
 
 log = logging.getLogger(__name__)
@@ -63,35 +66,47 @@ class Answer:
 
 @dataclass(frozen=True)
 class Outcome:
-    status: Literal["done", "gave_up", "stuck", "failed", "waiting"]
+    status: Literal["done", "gave_up", "stuck", "failed", "needs_approval", "needs_answer"]
     report: str
-    """What happened; when waiting, what the owner is being asked."""
+    """What happened; when it needs the owner, what they're being asked."""
     run: pydantic_ai.Conversation | None = None
-    """Set when waiting: pass back to `Pilot.run` with the owner's answer to continue."""
-    screen: Screenshot | None = None
+    """Set when it needs the owner: pass back to `Pilot.run` with their answer to continue."""
+    screen: Image | None = None
+
+
+@dataclass(frozen=True)
+class Kit:
+    """What a pilot works with: the phone, and the models that find things on it, keep it safe and unstick it."""
+
+    phone: Phone
+    locator: Locator
+    guard: Guard
+    investigator: Investigator
+
+
+Record = Callable[[str, Image | None], None]
+"""Hears each step of a run as it happens, with the screen it left, for watching the task live."""
 
 
 class Stuck(Exception):
     pass
 
 
-Record = Callable[[str, Screenshot | None], None]
-"""Hears each step of a run as it happens, with the screen it left, for watching the task live."""
-
-
 @dataclass
 class _Session:
-    phone: Phone
-    locator: Locator
-    guard: Guard
-    investigator: Investigator
+    kit: Kit
     goal: str
-    record: Record = lambda text, screen: None
-    screen: Screenshot | None = None
+    record: Record
+    screen: Image | None = None
     failures: list[str] = field(default_factory=list)
     steps: list[str] = field(default_factory=list)
-    screens: deque[Screenshot] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
+    screens: deque[Image] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
     second_opinions: int = 0
+
+    async def shoot(self) -> Image:
+        self.screen = await self.kit.phone.screenshot()
+        self.screens.append(self.screen)
+        return self.screen
 
     async def act(self, action: Awaitable[None], note: str) -> ToolReturn | str:
         """Run `action`, then show the model the result. Failures go back to the model to work around."""
@@ -120,14 +135,12 @@ class _Session:
     async def look(self, note: str) -> ToolReturn:
         """Let the screen settle, then show it to the model with `note`."""
         await asyncio.sleep(SETTLE_SECONDS)
-        self.screen = await self.phone.screenshot()
-        self.screens.append(self.screen)
-        log.debug("screenshot %s", logs.save_screenshot(self.screen.jpeg))
+        await self.shoot()
         self.steps.append(note)
         if self.looping(note):
             note += await self.second_opinion()
         self.record(note, self.screen)
-        return ToolReturn(note, content=[_image(self.screen)])
+        return ToolReturn(note, content=[content(self.screen)])
 
     def looping(self, note: str) -> bool:
         # Scrolling the same way several times is how lists get searched, not a loop.
@@ -143,7 +156,7 @@ class _Session:
         return f"\nSecond opinion, from a model that looked at the recent screens: {advice}" if advice else ""
 
     async def diagnose(self) -> str | None:
-        return await self.investigator.investigate(self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens))
+        return await self.kit.investigator.investigate(self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens))
 
 
 @dataclass(frozen=True)
@@ -168,19 +181,8 @@ class Pilot:
     Pauses, resumably, when the owner must answer a question or approve a consequential tap.
     """
 
-    def __init__(
-        self,
-        model: Model,
-        phone: Phone,
-        locator: Locator,
-        guard: Guard,
-        investigator: Investigator,
-        instructions: str | Callable[[], str] = INSTRUCTIONS,
-    ):
-        self._phone = phone
-        self._locator = locator
-        self._guard = guard
-        self._investigator = investigator
+    def __init__(self, model: Model, kit: Kit, instructions: Instructions = INSTRUCTIONS):
+        self._kit = kit
         self._agent = Agent(
             model,
             instructions=instructions,
@@ -202,27 +204,19 @@ class Pilot:
         )
 
     async def run(
-        self,
-        goal: str,
-        paused: pydantic_ai.Conversation | None = None,
-        answer: Answer | None = None,
-        record: Record | None = None,
+        self, goal: str, record: Record, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
     ) -> Outcome:
-        """Start `goal`, or continue a `paused` run with the owner's `answer`."""
+        """Start `goal`, or continue a `paused` run with the owner's `answer`. Each step goes to `record`."""
         log.info("Phone task: %s", goal)
-        session = _Session(self._phone, self._locator, self._guard, self._investigator, goal)
-        if record:
-            session.record = record
+        session = _Session(self._kit, goal, record)
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
-            session.screen = await self._phone.screenshot()
-            session.screens.append(session.screen)
-            log.debug("screenshot %s", logs.save_screenshot(session.screen.jpeg))
-            session.record(f"Continuing. {_answered(answer)}" if paused else "Started.", session.screen)
+            screen = await session.shoot()
+            record(f"Continuing. {_answered(answer)}" if paused else "Started.", screen)
             if paused:
-                prompt, resume = None, dict(conversation=paused, deferred_tool_results=_results(paused, answer))
+                prompt, resume = None, {"conversation": paused, "deferred_tool_results": _results(paused, answer)}
             else:
-                prompt, resume = [goal, _image(session.screen)], {}
+                prompt, resume = [goal, content(screen)], {}
             result = await logs.run(
                 self._agent, prompt, deps=session, usage_limits=UsageLimits(request_limit=MAX_STEPS), **resume
             )
@@ -243,7 +237,8 @@ class Pilot:
         output = result.output
         if isinstance(output, DeferredToolRequests):
             log.info("Waiting on the owner: %s", _question(output))
-            return Outcome("waiting", _question(output), result.conversation, session.screen)
+            status = "needs_approval" if output.approvals else "needs_answer"
+            return Outcome(status, _question(output), result.conversation, session.screen)
         log.debug("Phone task result: %s", output)
         return Outcome("done" if output.finished else "gave_up", output.report, screen=session.screen)
 
@@ -279,11 +274,12 @@ def _results(paused: pydantic_ai.Conversation, answer: Answer | None) -> Deferre
 
 async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Open an installed app by its name, e.g. "WhatsApp"."""
-    apps = await ctx.deps.phone.apps()
+    phone = ctx.deps.kit.phone
+    apps = await phone.apps()
     package = next((p for label, p in apps.items() if label.lower() == name.lower()), None)
     if not package:
         return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
-    return await ctx.deps.act(ctx.deps.phone.launch(package), f"Opened {name}.")
+    return await ctx.deps.act(phone.launch(package), f"Opened {name}.")
 
 
 async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> ToolReturn | str:
@@ -292,30 +288,30 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
     Set `hold` to long-press.
     """
     try:
-        box = await ctx.deps.locator.locate(ctx.deps.screen, target)
+        box = await ctx.deps.kit.locator.locate(ctx.deps.screen, target)
     except Exception as error:  # the locators are remote models: any failure is one failed step, not a failed task
         return await ctx.deps.failed(f"Couldn't search the screen: {error}")
     log.debug("located %r: %s", target, box)
     if not box:
         return await ctx.deps.failed(f"Couldn't find {target} on the screen.")
-    return await ctx.deps.act(ctx.deps.phone.tap(*box.center, hold=hold), f"Tapped {target}.")
+    return await ctx.deps.act(ctx.deps.kit.phone.tap(*box.center, hold=hold), f"Tapped {target}.")
 
 
 async def type_text(ctx: RunContext[_Session], text: str) -> ToolReturn | str:
     """Replace the text in the focused input field. Tap the field first."""
-    return await ctx.deps.act(ctx.deps.phone.type(text), "Typed.")
+    return await ctx.deps.act(ctx.deps.kit.phone.type(text), "Typed.")
 
 
 async def scroll(ctx: RunContext[_Session], direction: Literal["down", "up", "left", "right"]) -> ToolReturn | str:
     """Scroll to reveal more content in `direction`."""
-    return await ctx.deps.act(ctx.deps.phone.swipe(*SCROLLS[direction]), f"Scrolled {direction}.")
+    return await ctx.deps.act(ctx.deps.kit.phone.swipe(*SCROLLS[direction]), f"Scrolled {direction}.")
 
 
 async def press(
     ctx: RunContext[_Session], key: Literal["back", "home", "recents", "notifications", "enter"]
 ) -> ToolReturn | str:
     """Press a system button. `enter` submits the focused field (search, next, send)."""
-    return await ctx.deps.act(ctx.deps.phone.key(key), f"Pressed {key}.")
+    return await ctx.deps.act(ctx.deps.kit.phone.key(key), f"Pressed {key}.")
 
 
 async def look(ctx: RunContext[_Session]) -> ToolReturn:
@@ -344,9 +340,5 @@ async def _check(ctx: RunContext[_Session], action: str) -> None:
     """Pause for the owner's approval if the guard says `action` commits something. Runs before the tool."""
     if ctx.tool_call_approved:
         return
-    if consequence := await ctx.deps.guard.check(ctx.deps.screen, action, ctx.deps.goal):
+    if consequence := await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal):
         raise ApprovalRequired(metadata={"action": consequence})
-
-
-def _image(screen: Screenshot) -> BinaryContent:
-    return BinaryContent(data=screen.jpeg, media_type="image/jpeg")

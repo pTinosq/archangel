@@ -5,14 +5,14 @@ still can't send, pay or log in on its own.
 """
 
 import logging
-from collections.abc import Callable
 from typing import Protocol
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, BinaryContent
+from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from agent.phone.relay import Screenshot
+from agent.messages import Image
+from agent.models import Instructions, content
 
 log = logging.getLogger(__name__)
 
@@ -37,20 +37,17 @@ class Verdict(BaseModel):
 
 
 class Guard(Protocol):
-    async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
+    async def check(self, screen: Image, target: str, task: str) -> str | None:
         """What the tap would commit, if the owner must approve it first; otherwise None."""
         ...
 
 
 class ModelGuard:
-    def __init__(self, model: Model, instructions: str | Callable[[], str] = INSTRUCTIONS):
+    def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
         self._agent = Agent(model, instructions=instructions, output_type=Verdict)
 
-    async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
-        prompt = [
-            f"Task: {task}\nAbout to tap: {target}",
-            BinaryContent(data=screen.jpeg, media_type="image/jpeg"),
-        ]
+    async def check(self, screen: Image, target: str, task: str) -> str | None:
+        prompt = [f"Task: {task}\nAbout to tap: {target}", content(screen)]
         try:
             verdict = (await self._agent.run(prompt)).output
         except Exception as error:

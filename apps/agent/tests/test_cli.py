@@ -40,7 +40,7 @@ def test_missing_file(tmp_path):
 
 
 def test_images_are_saved_and_linked(capsys):
-    message = Message(CliChannel.conversation, (Text("Post this?"), Image(b"jpg", "image/jpeg")))
+    message = Message(CliChannel.owner, (Text("Post this?"), Image(b"jpg", "image/jpeg")))
     asyncio.run(CliChannel().send(message))
 
     printed = capsys.readouterr().out

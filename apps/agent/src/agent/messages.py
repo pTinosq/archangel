@@ -1,10 +1,12 @@
-"""What flows between channels and the brain, independent of any medium or model."""
+"""What flows between the owner and Archangel, independent of any medium or model."""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Conversation:
+class Address:
+    """Where a message comes from or goes: a channel, and who on it (a chat id, a phone number, an email)."""
+
     channel: str
     id: str
 
@@ -25,9 +27,13 @@ Part = Text | Image
 
 @dataclass(frozen=True)
 class Message:
-    conversation: Conversation
+    address: Address
     parts: tuple[Part, ...]
 
     @property
     def text(self) -> str:
         return "\n".join(part.text for part in self.parts if isinstance(part, Text))
+
+    @property
+    def images(self) -> list[Image]:
+        return [part for part in self.parts if isinstance(part, Image)]

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api, screenUrl, type Step, type Task } from "./api";
+import { api, hideExpired, imageUrl, type Step, type Task } from "./api";
 import { useFeed, usePoll } from "./poll";
 
 export function Tasks() {
-  const [tasks, refresh] = usePoll(api.tasks);
+  const tasks = usePoll(api.tasks);
   const [selected, setSelected] = useState<number>();
   const shown = tasks?.find((t) => t.id === selected) ?? tasks?.[0];
 
@@ -23,16 +23,16 @@ export function Tasks() {
           ))}
         </ul>
       </section>
-      {shown ? <TaskDetail key={shown.id} task={shown} changed={refresh} /> : <section className="detail" />}
+      {shown ? <TaskDetail key={shown.id} task={shown} /> : <section className="detail" />}
     </>
   );
 }
 
 function Status({ task }: { task: Task }) {
-  return <span className={`status ${task.status}`}>{task.status}</span>;
+  return <span className={`status ${task.status.replace(" ", "-")}`}>{task.status}</span>;
 }
 
-function TaskDetail({ task, changed }: { task: Task; changed: () => void }) {
+function TaskDetail({ task }: { task: Task }) {
   const steps = useFeed((after) => api.steps(task.id, after), task.id);
   const screens = steps.filter((s) => s.screen);
   const [viewing, setViewing] = useState<Step>();
@@ -48,7 +48,7 @@ function TaskDetail({ task, changed }: { task: Task; changed: () => void }) {
       <div className="screen">
         {shownScreen ? (
           <>
-            <img src={screenUrl(shownScreen.id)} alt="Phone screen" />
+            <img src={imageUrl(shownScreen.screen!)} alt="Phone screen" onError={hideExpired} />
             <p className="quiet">
               {viewing ? (
                 <>
@@ -68,13 +68,10 @@ function TaskDetail({ task, changed }: { task: Task; changed: () => void }) {
           #{task.id} {task.goal}
         </h2>
         <p>
-          <Status task={task} /> <span className="quiet">from {task.conversation}</span>
+          <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
         </p>
         {task.report && <p className="report">{task.report}</p>}
-        {task.status === "waiting" && <Waiting task={task} changed={changed} />}
-        {task.open && task.status !== "waiting" && (
-          <button onClick={() => api.cancel(task.id).then(changed)}>Cancel</button>
-        )}
+        {task.open && <Controls task={task} />}
         <ol className="steps">
           {steps.map((step) => (
             <li
@@ -93,27 +90,34 @@ function TaskDetail({ task, changed }: { task: Task; changed: () => void }) {
   );
 }
 
-function Waiting({ task, changed }: { task: Task; changed: () => void }) {
+/** Shortcuts for messages the owner could type: they go through the conversation like any other. */
+function Controls({ task }: { task: Task }) {
   const [reply, setReply] = useState("");
-  const approval = task.report.startsWith("Approve:");
-  const send = (approve: boolean) => api.answer(task.id, reply, approve).then(changed);
+  const [sent, setSent] = useState("");
+  const say = (text: string) => api.say(text).then(() => setSent(text));
+  const answer = () => reply && say(`Task #${task.id}: ${reply}`).then(() => setReply(""));
+
   return (
-    <div className="answer">
-      <input
-        value={reply}
-        onChange={(e) => setReply(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && !approval && reply && send(false)}
-        placeholder={approval ? "Optional note" : "Your answer"}
-      />
-      {approval ? (
+    <div className={task.status.startsWith("needs") ? "controls waiting" : "controls"}>
+      {task.status === "needs approval" && (
         <>
-          <button className="approve" onClick={() => send(true)}>Approve</button>
-          <button onClick={() => send(false)}>Decline</button>
+          <button className="approve" onClick={() => say(`Yes, approve task #${task.id}.`)}>Approve</button>
+          <button onClick={() => say(`No, don't do it (task #${task.id}).`)}>Decline</button>
         </>
-      ) : (
-        <button onClick={() => send(false)} disabled={!reply}>Reply</button>
       )}
-      <button onClick={() => api.cancel(task.id).then(changed)}>Cancel task</button>
+      {task.status === "needs answer" && (
+        <>
+          <input
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && answer()}
+            placeholder="Your answer"
+          />
+          <button onClick={answer} disabled={!reply}>Reply</button>
+        </>
+      )}
+      <button onClick={() => say(`Cancel task #${task.id}.`)}>Cancel task</button>
+      {sent && <p className="quiet">Sent “{sent}”</p>}
     </div>
   );
 }
