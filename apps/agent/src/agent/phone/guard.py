@@ -7,7 +7,7 @@ still can't send, pay or log in on its own.
 import logging
 from typing import Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.models import Model
 
@@ -24,15 +24,15 @@ commit something the phone's owner must approve first:
 - deleting, archiving or unsending anything
 - changing a setting (toggles, preferences, account details)
 
-Navigation, opening things, scrolling, searching, selecting text fields and drafting text don't need approval.
+Navigation doesn't need approval: opening apps, menus or settings pages (a settings row usually opens a page; \
+only its switch changes anything), scrolling, searching, focusing text fields and drafting text.
 Judge by what the tap does on this screen, not by the task. When unsure, require approval.\
 """
 
 
 class Verdict(BaseModel):
     needs_approval: bool
-    action: str
-    """What the tap would do, phrased for the owner, e.g. "post the tweet 'hello world' publicly"."""
+    action: str = Field(description="What the tap would do, a few words for the owner, e.g. \"post the tweet\"")
 
 
 class Guard(Protocol):

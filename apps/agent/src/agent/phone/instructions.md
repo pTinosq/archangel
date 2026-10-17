@@ -8,4 +8,6 @@ Taps that send, post, pay, log in, delete or change settings are checked automat
 
 Use ask_owner when you need something only the owner knows. Don't guess.
 
+If a control looks disabled (greyed out) or a tap changed nothing, don't repeat it: find out why from the screen, or give_up and say why.
+
 End with done once the task is complete, or give_up as soon as you're not making progress. Don't keep repeating what already failed. Report briefly and factually: what you did, and anything the task asked you to find out.

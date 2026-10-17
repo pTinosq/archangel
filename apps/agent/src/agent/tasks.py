@@ -40,7 +40,8 @@ class Tasks:
         self._store = store
         self._pilot = pilot
         self._phone = asyncio.Lock()
-        self._running: dict[int, asyncio.Task] = {}
+        self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
+        self._updates: set[asyncio.Task] = set()  # notifications being handled
         self.notify: Notify | None = None
 
     def start(self, conversation: Conversation, goal: str) -> Task:
@@ -76,14 +77,11 @@ class Tasks:
 
     async def idle(self) -> None:
         """Wait for every running task, and anything they trigger, to finish."""
-        while self._running:
-            await asyncio.gather(*self._running.values(), return_exceptions=True)
+        while self._running or self._updates:
+            await asyncio.gather(*self._running.values(), *self._updates, return_exceptions=True)
 
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
-        running = asyncio.create_task(self._run(task, paused, answer))
-        self._running[task.id] = running
-        # Only forget this run: a task answered from its own notification has already relaunched under its id.
-        running.add_done_callback(lambda _: self._running.get(task.id) is running and self._running.pop(task.id))
+        self._running[task.id] = asyncio.create_task(self._run(task, paused, answer))
 
     async def _run(self, task: Task, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> None:
         try:
@@ -96,8 +94,13 @@ class Tasks:
             task.status, task.report = Status.CANCELLED, "Cancelled while running."
             self._store.save_task(task)
             return
+        finally:
+            del self._running[task.id]
         task.status, task.report, task.run = _STATUSES[outcome.status], outcome.report, outcome.run
         self._store.save_task(task)
         log.info("Task #%d %s: %s", task.id, task.status, task.report)
         if self.notify:
-            await self.notify(task, outcome.screen)
+            # Separate from the pilot's run, so cancelling or answering the task from the update can't cancel the update.
+            update = asyncio.create_task(self.notify(task, outcome.screen))
+            self._updates.add(update)
+            update.add_done_callback(self._updates.discard)

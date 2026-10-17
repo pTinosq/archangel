@@ -149,3 +149,16 @@ def test_the_owner_can_approve():
     owner.says(Text("yes"))
 
     assert owner.pilot.calls[-1][1].approved
+
+
+def test_a_task_can_be_cancelled_from_its_own_update():
+    def cancels_waiting_tasks(messages, info) -> ModelResponse:
+        last = messages[-1].parts[-1]
+        if isinstance(last, ToolReturnPart):
+            return ModelResponse(parts=[TextPart(str(last.content))])
+        if "not from the owner" in prompt_of(messages):
+            return ModelResponse(parts=[ToolCallPart("cancel_task", {"id": 1})])
+        return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Post hello"})])
+
+    owner = Owner(cancels_waiting_tasks, Outcome("waiting", "Approve: post?", pydantic_ai.Conversation()))
+    assert owner.says(Text("post hello"))[-1].text == "Task #1 cancelled."
