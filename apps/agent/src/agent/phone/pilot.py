@@ -20,6 +20,7 @@ from pydantic_ai import (
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
+from agent import logs
 from agent.phone.relay import Phone, PhoneError, Screenshot
 from agent.phone.vision import Locator
 
@@ -27,6 +28,7 @@ log = logging.getLogger(__name__)
 
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 MAX_STEPS = 40
+TOOL_RETRIES = 3
 SETTLE_SECONDS = 1.0
 KEPT_SCREENSHOTS = 2
 SCROLLS = {
@@ -57,6 +59,7 @@ class _Session:
         """Let the screen settle, then show it to the model with `note`."""
         await asyncio.sleep(SETTLE_SECONDS)
         self.screen = await self.phone.screenshot()
+        log.debug("screenshot %s", logs.save_screenshot(self.screen.jpeg))
         return ToolReturn(note, content=[_image(self.screen)])
 
 
@@ -70,6 +73,7 @@ class Pilot:
             model,
             instructions=INSTRUCTIONS,
             deps_type=_Session,
+            retries=TOOL_RETRIES,
             tools=[open_app, tap, type_text, scroll, press, look],
             capabilities=[ProcessHistory(forget_old_screenshots)],
         )
@@ -79,15 +83,24 @@ class Pilot:
         session = _Session(self._phone, self._locator)
         try:
             session.screen = await self._phone.screenshot()
-            result = await self._agent.run(
+            log.debug("screenshot %s", logs.save_screenshot(session.screen.jpeg))
+            result = await logs.run(
+                self._agent,
                 [task, _image(session.screen)],
                 deps=session,
                 usage_limits=UsageLimits(request_limit=MAX_STEPS),
             )
         except PhoneError as error:
+            log.warning("Phone unavailable: %s", error)
             return f"Couldn't use the phone: {error}"
         except UsageLimitExceeded:
+            log.warning("Gave up after %d steps", MAX_STEPS)
             return f"Gave up after {MAX_STEPS} steps without finishing."
+        except Exception as error:
+            # Hand the failure back to the brain to decide what to do, rather than ending the conversation.
+            log.exception("Phone task failed")
+            return f"The phone task failed unexpectedly ({type(error).__name__}: {error})."
+        log.debug("Phone task result: %s", result.output)
         return result.output
 
 
@@ -109,6 +122,7 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
         box = await ctx.deps.locator.locate(ctx.deps.screen, target)
     except httpx.HTTPError as error:
         return f"Couldn't search the screen: {error}"
+    log.debug("located %r: %s", target, box)
     if not box:
         log.info("Couldn't find %s", target)
         return f"Couldn't find {target} on the screen."

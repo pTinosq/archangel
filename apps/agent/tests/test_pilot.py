@@ -104,6 +104,12 @@ def test_gives_up_after_the_step_limit(monkeypatch):
     assert run(forever, FakePhone()) == "Gave up after 3 steps without finishing."
 
 
+def test_unexpected_failures_are_reported_not_raised():
+    invalid = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("scroll", {"direction": "sideways"})]))
+    report = run(invalid, FakePhone())
+    assert report.startswith("The phone task failed unexpectedly (UnexpectedModelBehavior")
+
+
 def test_only_recent_screenshots_stay_in_context():
     def screen(n: int) -> ModelRequest:
         return ModelRequest(parts=[UserPromptPart([f"screen {n}", BinaryContent(b"jpg", media_type="image/jpeg")])])

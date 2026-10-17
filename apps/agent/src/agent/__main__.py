@@ -1,13 +1,12 @@
 import asyncio
 import contextlib
-import logging
 
 import httpx
 import pydantic_ai
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from agent import config
+from agent import config, logs
 from agent.brain import Brain
 from agent.channels.cli import CliChannel
 from agent.gateway import Gateway
@@ -19,8 +18,7 @@ from agent.threads import Threads
 
 def main() -> None:
     pydantic_ai.BANNER_ENABLED = False
-    logging.basicConfig(format="  · %(message)s")
-    logging.getLogger("agent").setLevel(logging.INFO)
+    logs.start()
     api_key = config.openrouter_api_key()
     model = OpenRouterModel(config.model(), provider=OpenRouterProvider(api_key=api_key))
     relay = httpx.AsyncClient(

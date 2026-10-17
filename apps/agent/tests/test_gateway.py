@@ -67,4 +67,4 @@ def test_brain_failure_is_reported_to_the_conversation():
         async def handle(self, message, reply):
             raise RuntimeError("boom")
 
-    assert run([message(A, "hi")], Broken()) == ["a:Something went wrong. Try again."]
+    assert run([message(A, "hi")], Broken()) == ["a:Something went wrong (RuntimeError). Try again."]

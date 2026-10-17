@@ -1,6 +1,7 @@
 """Finding things on the screen. Positions are fractions of the screenshot, from the top-left."""
 
 import base64
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -10,6 +11,8 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from agent.phone.relay import Screenshot
+
+log = logging.getLogger(__name__)
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 VISIBLE_THRESHOLD = 0.5
@@ -62,6 +65,7 @@ class JevLocator:
         )
         response.raise_for_status()
         answers = response.json()["answers"]
+        log.debug("jev %r: %s", target, answers)
         if answers["visible"]["noul"] < VISIBLE_THRESHOLD:
             return None
         return Box(**answers["box"]["box"])

@@ -46,6 +46,7 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | `brain.py` | Pydantic AI agent. `handle(message, reply)`; may reply any number of times. Tool: `use_phone(task)`. |
 | `threads.py` | History per conversation; resets after 2 h idle. In memory until M3. |
 | `instructions.md` | System prompt. |
+| `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |
 | `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide, max 40 steps. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`. Keeps only the last 2 screenshots in context. |
 | `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API) or `LlmLocator` (any vision model). |
 | `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. |
@@ -58,6 +59,10 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 | `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `LlmLocator` |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | `pixel-6` |
+
+Errors: a failed phone task (phone offline, step limit, model misbehaving) comes back to the brain as text so it can decide what next. Only brain-level failures reach the user, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls.
+
+**Investigating a run:** `tail -100 apps/agent/logs/latest/agent.log`, then open the numbered screenshots around the step in question. `jev` lines show Jev's raw answers (noul, box, confidence).
 
 Tests use `FunctionModel` and `httpx.MockTransport`; no API calls.
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.

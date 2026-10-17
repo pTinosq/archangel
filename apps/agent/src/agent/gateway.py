@@ -45,9 +45,10 @@ class Gateway:
         async with self._locks[message.conversation]:
             try:
                 await self._brain.handle(message, self._send)
-            except Exception:
+            except Exception as error:
                 log.exception("Failed to handle message in %s", message.conversation)
-                await self._send(Message(message.conversation, (Text("Something went wrong. Try again."),)))
+                text = f"Something went wrong ({type(error).__name__}). Try again."
+                await self._send(Message(message.conversation, (Text(text),)))
 
     async def _send(self, message: Message) -> None:
         await self._channels[message.conversation.channel].send(message)
