@@ -49,6 +49,7 @@ async def run(agent: Agent, prompt: Any, **kwargs: Any) -> AgentRunResult:
     """`agent.run`, logging and announcing each step as it happens: model calls, tool calls, results, and calls
     the model got wrong."""
     name, model = agent.name or "agent", short_name(agent.model)
+    activity.declare(name, "agent")
     with activity.acting(name):
         async with agent.iter(prompt, **kwargs) as steps:
             async for node in steps:

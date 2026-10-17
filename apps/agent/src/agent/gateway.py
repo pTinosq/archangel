@@ -22,6 +22,8 @@ Handle = Callable[[Event], Awaitable[None]]
 class Gateway:
     def __init__(self, channels: list[Channel], store: Store):
         self._channels = {channel.name: channel for channel in channels}
+        for name in self._channels:
+            activity.declare(name, "channel")
         self._store = store
         self._running: set[asyncio.Task] = set()
 

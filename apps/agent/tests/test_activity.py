@@ -120,3 +120,10 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
     assert {n.request for n in notices} == {notices[0].request} != {None}
     assert all(n.task == 1 for n in notices if "pilot" in (n.source, n.target))
     assert [n.text for n in notices if n.target == "cli"] == ["On it.", "Done."]
+    roles = {n.source: n.source_role for n in notices} | {n.target: n.target_role for n in notices}
+    assert (roles["cli"], roles["gateway"], roles["orchestrator"], roles["pilot"]) == (
+        "channel",
+        "part",
+        "agent",
+        "agent",
+    )

@@ -15,7 +15,11 @@ export type Notice = {
   request: number | null;
   task: number | null;
   ok: boolean;
+  /** What each end is, as declared by the agent: names are never hard-coded here. */
+  source_role: Role;
+  target_role: Role;
 };
+export type Role = "channel" | "agent" | "model" | "device" | "part";
 
 const KEPT = 400;
 const RETRY_MS = 2000;

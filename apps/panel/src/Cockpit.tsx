@@ -15,7 +15,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
-import { CALLS, type Notice, openCalls, useActivity } from "./activity";
+import { CALLS, type Notice, openCalls, type Role, useActivity } from "./activity";
 
 const NODE = { width: 120, height: 44 }; // as in styles.css
 const PULSE_SECONDS = 1.2;
@@ -92,7 +92,7 @@ function Graph({
   inRequest: (n: Notice) => boolean;
   following: boolean;
 }) {
-  const kindOf = kinds(notices);
+  const kindOf = roles(notices);
   const { names, links } = useTopology(notices, kindOf);
   const shape = names.join() + "|" + links.map((l) => l.join(">")).join();
   // Laid out again only when a part or a link first appears, so nothing moves while you watch.
@@ -180,7 +180,7 @@ function Hop({ id, data, ...ends }: EdgeProps<Edge<HopData>>) {
 /** Every part and link seen since the cockpit opened, each link pointing from caller to callee. Calls say
  * who's calling; channels always feed the gateway; for other messages, the first one in a request we saw begin
  * (a page opened mid-request sees replies before what they answer). */
-function useTopology(notices: Notice[], kindOf: Map<string, string>): { names: string[]; links: [string, string][] } {
+function useTopology(notices: Notice[], kindOf: Map<string, Role>): { names: string[]; links: [string, string][] } {
   const seen = useRef({
     names: new Set<string>(),
     links: new Map<string, [string, string]>(),
@@ -217,21 +217,14 @@ function layout(names: string[], links: [string, string][]): Map<string, { x: nu
   return new Map(names.map((name) => [name, { x: graph.node(name).x, y: graph.node(name).y }]));
 }
 
-/** What each node is, judged by how it's called: whatever asks a model is an agent, and so on. */
-function kinds(notices: Notice[]): Map<string, string> {
-  const kinds = new Map<string, string>();
+/** Each node's role, as the agent declared it; the latest word wins, as a part's role becomes known. */
+function roles(notices: Notice[]): Map<string, Role> {
+  const roles = new Map<string, Role>();
   for (const n of notices) {
-    if (n.dir !== "tx") continue;
-    if (n.kind === "model") kinds.set(n.source, "agent").set(n.target, "model");
-    else if (n.kind === "agent") kinds.set(n.target, "agent");
-    else if (n.kind === "phone") kinds.set(n.target, "device");
+    if (n.source_role !== "part" || !roles.has(n.source)) roles.set(n.source, n.source_role);
+    if (n.target_role !== "part" || !roles.has(n.target)) roles.set(n.target, n.target_role);
   }
-  for (const n of notices) {
-    // The far end of a message to or from the gateway, if it's nothing else: a channel.
-    const other = n.source === "gateway" ? n.target : n.target === "gateway" ? n.source : null;
-    if (n.kind === "message" && other && !kinds.has(other)) kinds.set(other, "channel");
-  }
-  return kinds;
+  return roles;
 }
 
 const pair = (a: string, b: string) => [a, b].sort().join("|");

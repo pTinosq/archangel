@@ -4,6 +4,10 @@ Components announce each hop (a message, a model call, a phone command) the way 
 whoever is listening. Nothing here can slow or break the real work: announcing never waits or raises, and a
 listener that falls behind misses notices. Nothing is stored; only the last few are kept for new listeners.
 
+Each participant's role (channel, agent, model, device) is established here, at the source, so watchers need
+no list of names: channels are declared by whoever owns them, agents by their runs, and models and the phone by
+the kind of call made to them.
+
 Context variables carry the ids, so nothing passes them along: the request (one owner message, and everything it
 leads to, including the tasks it starts), the task, and the actor (who is speaking).
 """
@@ -27,6 +31,8 @@ MAX_TEXT = 200
 
 Kind = Literal["message", "agent", "model", "tool", "phone", "task"]
 """agent, model and phone are always calls: a tx, then an rx when it's done. The rest are one-way hops."""
+Role = Literal["channel", "agent", "model", "device", "part"]
+_CALLED: dict[str, Role] = {"agent": "agent", "model": "model", "phone": "device"}  # what a call says about its callee
 
 
 @dataclass(frozen=True)
@@ -42,6 +48,8 @@ class Notice:
     request: int | None
     task: int | None
     ok: bool = True
+    source_role: Role = "part"
+    target_role: Role = "part"
 
 
 _actor = contextvars.ContextVar("actor", default="archangel")
@@ -51,6 +59,12 @@ _ids = itertools.count(1)
 _requests = itertools.count(1)
 _recent: deque[Notice] = deque(maxlen=RECENT)
 _listeners: set[asyncio.Queue[Notice]] = set()
+_roles: dict[str, Role] = {}
+
+
+def declare(name: str, role: Role) -> None:
+    """Say what `name` is, for whoever draws it."""
+    _roles[name] = role
 
 
 def hop(target: str, kind: Kind, text: object, source: str | None = None, dir: Literal["tx", "rx"] = "tx") -> None:
@@ -120,6 +134,8 @@ async def listen(idle: float | None = None) -> AsyncIterator[Notice | None]:
 def _announce(source: str, target: str, dir: Literal["tx", "rx"], kind: Kind, text: object, ok: bool = True) -> None:
     try:
         text = " ".join(str(text).split())
+        if dir == "tx" and kind in _CALLED:
+            _roles[target] = _CALLED[kind]
         notice = Notice(
             next(_ids),
             time.time(),
@@ -131,6 +147,8 @@ def _announce(source: str, target: str, dir: Literal["tx", "rx"], kind: Kind, te
             _request.get(),
             _task.get(),
             ok,
+            _roles.get(source, "part"),
+            _roles.get(target, "part"),
         )
         _recent.append(notice)
         for queue in _listeners:
