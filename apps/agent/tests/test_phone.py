@@ -29,9 +29,9 @@ def test_tap_converts_fractions_to_pixels():
     assert sent == [{"type": "tap", "x": 250, "y": 1000, "durationMs": 50}]
 
 
-def test_screenshot_is_scaled_and_decoded():
+def test_screenshot_is_small_and_decoded():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert json.loads(request.content) == {"type": "screenshot", "scale": 0.5}
+        assert json.loads(request.content) == {"type": "screenshot", "scale": 0.5, "quality": 30}
         data = {"width": 540, "height": 1200, "jpeg": base64.b64encode(b"jpg").decode()}
         return httpx.Response(200, json={"id": "1", "ok": True, "data": data})
 
