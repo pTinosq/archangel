@@ -1,0 +1,18 @@
+.env
+.DS_Store
+.idea/
+
+# Android
+build/
+.gradle/
+.kotlin/
+local.properties
+*.iml
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Dev output
+screenshot.jpg
