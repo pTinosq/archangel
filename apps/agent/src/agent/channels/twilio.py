@@ -109,7 +109,8 @@ class SmsChannel(Channel):
 
 class VoiceChannel(Channel):
     """Phone calls with the owner. Twilio's ConversationRelay does the listening and speaking; this trades text with it
-    over a WebSocket. With no call live, Archangel rings the owner and says the message as its greeting."""
+    over a WebSocket. Anything said while the owner's on a call is spoken on it. Otherwise Archangel rings them only if
+    they asked for a call back (the message is addressed to them, not to an old call); after a hang-up, it texts."""
 
     name = "voice"
 
@@ -167,7 +168,10 @@ class VoiceChannel(Channel):
 
     async def send(self, message: Message) -> None:
         text = message.text + (" The screenshot is in the panel." if message.images else "")
-        if call := self._calls.get(message.address.id):
+        owner = self._twilio.account.owner
+        if call := self._calls.get(message.address.id) or next(iter(self._calls.values()), None):
             await call.send_text(json.dumps({"type": "text", "token": text, "last": True}))
-        else:  # hung up, or never called: ring them
-            await self._twilio.call(self._twilio.account.owner, self._twiml(text))
+        elif message.address.id == owner:
+            await self._twilio.call(owner, self._twiml(text))
+        else:  # they hung up without asking to be rung back; ringing unasked is worse than a text
+            await self._twilio.send_sms(owner, text)

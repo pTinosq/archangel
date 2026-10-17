@@ -93,11 +93,12 @@ class Voice:
 
     def __init__(self):
         self.calls: list[dict[str, list[str]]] = []
+        self.texts: list[dict[str, list[str]]] = []
         self.delivered: list[Message] = []
 
         def api(request: httpx.Request) -> httpx.Response:
-            assert request.url.path == "/2010-04-01/Accounts/AC1/Calls.json"
-            self.calls.append(parse_qs(request.content.decode()))
+            kind = request.url.path.removeprefix("/2010-04-01/Accounts/AC1/")
+            (self.calls if kind == "Calls.json" else self.texts).append(parse_qs(request.content.decode()))
             return httpx.Response(201, json={})
 
         web = Web()
@@ -142,12 +143,29 @@ def test_what_the_owner_says_joins_the_conversation_and_the_reply_is_spoken():
         asyncio.run(voice.channel.send(Message(Address("voice", "CA1"), (Text("Eighty percent."),))))
         assert json.loads(ws.receive_text()) == {"type": "text", "token": "Eighty percent.", "last": True}
     assert voice.delivered == [Message(Address("voice", "CA1"), (Text("what's my battery?"),))]
-    assert voice.calls == []
+    assert voice.calls == voice.texts == []
 
 
-def test_with_no_call_live_it_rings_the_owner_and_says_it():
+def test_while_on_a_call_everything_is_said_on_it():
     voice = Voice()
-    asyncio.run(voice.channel.send(Message(Address("voice", "CA1"), (Text('Ready to send "hi" & go?'),))))
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA2"})
+        ws.send_json({"type": "interrupt"})  # setup handled
+        asyncio.run(voice.channel.send(Message(voice.channel.owner, (Text("Done."),))))
+        assert json.loads(ws.receive_text())["token"] == "Done."
+    assert voice.calls == voice.texts == []
+
+
+def test_after_a_hang_up_it_texts_rather_than_ringing():
+    voice = Voice()
+    asyncio.run(voice.channel.send(Message(Address("voice", "CA1"), (Text("Flashlight's on."),))))
+    assert voice.calls == []
+    assert voice.texts == [{"To": [ACCOUNT.owner], "From": [ACCOUNT.number], "Body": ["Flashlight's on."]}]
+
+
+def test_asked_for_a_call_back_it_rings_the_owner_and_says_it():
+    voice = Voice()
+    asyncio.run(voice.channel.send(Message(voice.channel.owner, (Text('Ready to send "hi" & go?'),))))
     (call,) = voice.calls
     assert call["To"] == [ACCOUNT.owner] and call["From"] == [ACCOUNT.number]
     relay = ElementTree.fromstring(call["Twiml"][0]).find("Connect/ConversationRelay")
