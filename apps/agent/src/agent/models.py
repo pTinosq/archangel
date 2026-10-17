@@ -32,3 +32,8 @@ def describe(parts: Sequence[Part | str]) -> str:
     return " ".join(
         part if isinstance(part, str) else part.text if isinstance(part, Text) else "[image]" for part in parts
     )
+
+
+def short_name(model: Model | str) -> str:
+    """openai/gpt-6-luna → gpt-6-luna: how a model is named where it's shown, e.g. the cockpit."""
+    return str(getattr(model, "model_name", model)).split("/")[-1]

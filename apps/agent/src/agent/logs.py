@@ -14,6 +14,7 @@ from typing import Any
 from pydantic_ai import Agent, AgentRunResult, RetryPromptPart, TextPart, ToolCallPart, ToolReturnPart
 
 from agent import activity
+from agent.models import short_name
 
 LOGS = Path("logs")
 KEPT_RUNS = 20
@@ -47,7 +48,7 @@ def start() -> Path:
 async def run(agent: Agent, prompt: Any, **kwargs: Any) -> AgentRunResult:
     """`agent.run`, logging and announcing each step as it happens: model calls, tool calls, results, and calls
     the model got wrong."""
-    name, model = agent.name or "agent", _short(agent.model)
+    name, model = agent.name or "agent", short_name(agent.model)
     with activity.acting(name):
         async with agent.iter(prompt, **kwargs) as steps:
             async for node in steps:
@@ -69,11 +70,6 @@ async def run(agent: Agent, prompt: Any, **kwargs: Any) -> AgentRunResult:
                             activity.hop(name, "tool", f"{part.tool_name} → {part.model_response_str()}", dir="rx")
                     activity.hop(model, "model", "thinking")
     return steps.result
-
-
-def _short(model: object) -> str:
-    """One cockpit node per model: openai/gpt-6-luna → gpt-6-luna."""
-    return str(getattr(model, "model_name", model)).split("/")[-1]
 
 
 def _clip(value: object) -> str:

@@ -11,7 +11,7 @@ from pydantic_ai.models import Model
 
 from agent import activity, config, logs
 from agent.messages import Image
-from agent.models import Instructions, content, openrouter
+from agent.models import Instructions, content, openrouter, short_name
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class JevLocator:
 
     async def locate(self, screen: Image, target: str) -> Box | None:
         image = f"data:{screen.media_type};base64," + base64.b64encode(screen.data).decode()
-        with activity.call(self._model.split("/")[-1], "model", f"find {target}") as reply:
+        with activity.call(short_name(self._model), "model", f"find {target}") as reply:
             response = await self._client.post(
                 DECISIONS_URL,
                 headers={"TypeSafe-Danger-Zone-Images": "true"},
