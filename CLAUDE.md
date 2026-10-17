@@ -3,15 +3,15 @@
 AI agent that operates a real Android phone. No cable, ADB or root at runtime. Progress: `docs/roadmap.md`.
 
 ```
-channels ──▶ gateway ──▶ brain ──tools──▶ relay ◀──WebSocket── bridge (phone)
- (comms)                (agentic)        (action)
+channels ──▶ gateway ──▶ orchestrator ──▶ tasks ──▶ pilot ──▶ relay ◀──WebSocket── bridge (phone)
+ (comms)                 (talks, manages)  (background sub-agents)   (action)
 ```
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, brain. |
+| `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, phone pilot. |
 | `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
 | `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
 | `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
@@ -42,8 +42,9 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 |---|---|
 | `messages.py` | `Message(conversation, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
 | `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. |
-| `gateway.py` | Routes channels ⇄ brain. Never blocks a channel; one run at a time per conversation. |
-| `brain.py` | Pydantic AI agent. `handle(message, reply)`; may reply any number of times. Tool: `use_phone(task)`. |
+| `gateway.py` | Routes channels ⇄ orchestrator. Never blocks a channel. |
+| `orchestrator.py` | The agent the owner talks to. Never touches the phone: `start_task`, `answer_task`, `cancel_task`. Sees the task list every turn. Runs on owner messages and task updates, one at a time per conversation. Approvals only count in turns the owner triggered. Attaches the screenshot when a task waits on the owner. |
+| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. |
 | `store.py` | SQLite at `apps/agent/data/archangel.db`: each conversation's history (continuous, no expiry) and tasks. |
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | System prompt. |
@@ -57,18 +58,20 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 
 | Env | Default |
 |---|---|
-| `ARCHANGEL_MODEL` | `anthropic/claude-sonnet-5.5` (brain + pilot) |
+| `ARCHANGEL_MODEL` | `anthropic/claude-sonnet-5.5` (orchestrator, pilot, guard) |
 | `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `LlmLocator` |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | `pixel-6` |
 
-Errors: a failed phone task (phone offline, step limit, model misbehaving) comes back to the brain as text so it can decide what next. Only brain-level failures reach the user, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls.
+Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls.
+
+Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalRequired` from the guard, `CallDeferred` from `ask_owner`). The paused run is saved with the task, so an answer works even after a restart. Tasks running at shutdown come back `interrupted`.
 
 **Investigating a run:** `tail -100 apps/agent/logs/latest/agent.log`, then open the numbered screenshots around the step in question. `jev` lines show Jev's raw answers (noul, box, confidence).
 
 Tests use `FunctionModel` and `httpx.MockTransport`; no API calls.
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.
-New channel = one `Channel` subclass registered in `__main__.py`; the brain never knows which channel it serves.
+New channel = one `Channel` subclass registered in `__main__.py`; the orchestrator never knows which channel it serves. Images in replies (approval screenshots) must be shown by the channel; the CLI saves them to a temp file and prints the path.
 
 ## Bridge
 
@@ -117,6 +120,6 @@ minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.version
 - Browser-sideloaded on Android 13+: App info → ⋮ → "Allow restricted settings" before enabling. `adb install` unaffected.
 - Install or force-stop switches the service off.
 - `type` uses `ACTION_SET_TEXT`; editors that reject it (X's compose box) get a clipboard paste instead, which overwrites the clipboard.
-- The pilot can loop on repeated failures until the 40-step cap; stuck detection is M3.
-- Safety (no sending, posting, paying or logging in without the owner) is prompt-only until M3's `ask_user`. See `docs/roadmap.md`.
+- The guard is a model judging a screenshot: strong, not perfect. It adds one model call per tap.
+- A waiting task doesn't hold the phone; if another task runs meanwhile, the approved tap re-locates its target on whatever screen is there.
 - Android rate-limits screenshots; the bridge retries briefly.

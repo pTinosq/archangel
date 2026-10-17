@@ -47,9 +47,9 @@ def run(inbound: list[Message], brain) -> list[str]:
     return [f"{sent.conversation.id}:{sent.text}" for sent in channel.sent]
 
 
-def test_replies_go_back_to_the_conversation_in_order():
-    sent = run([message(A, "1"), message(A, "2")], EchoBrain())
-    assert sent == ["a:1", "a:1", "a:2", "a:2"]
+def test_replies_go_back_to_the_conversation():
+    sent = run([message(A, "1"), message(B, "2")], EchoBrain())
+    assert sorted(sent) == ["a:1", "a:1", "b:2", "b:2"]
 
 
 def test_conversations_do_not_wait_on_each_other():

@@ -1,7 +1,10 @@
+import asyncio
+from pathlib import Path
+
 import pytest
 
-from agent.channels.cli import parse
-from agent.messages import Image, Text
+from agent.channels.cli import CliChannel, parse
+from agent.messages import Image, Message, Text
 
 
 def test_text():
@@ -34,3 +37,13 @@ def test_rejects_non_images(tmp_path):
 def test_missing_file(tmp_path):
     with pytest.raises(OSError):
         parse(f"/image {tmp_path / 'nope.png'}")
+
+
+def test_images_are_saved_and_linked(capsys):
+    message = Message(CliChannel.conversation, (Text("Post this?"), Image(b"jpg", "image/jpeg")))
+    asyncio.run(CliChannel().send(message))
+
+    printed = capsys.readouterr().out
+    path = Path(printed.split("[image: ")[1].split("]")[0])
+    assert printed.startswith("\rPost this?\n[image: ")
+    assert path.read_bytes() == b"jpg"

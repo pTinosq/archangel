@@ -80,7 +80,8 @@ class Store:
         run = ConversationTypeAdapter.dump_json(task.run) if task.run else None
         with self._db:
             self._db.execute(
-                "UPDATE tasks SET status = ?, report = ?, run = ? WHERE id = ?", (task.status, task.report, run, task.id)
+                "UPDATE tasks SET status = ?, report = ?, run = ? WHERE id = ?",
+                (task.status, task.report, run, task.id),
             )
 
     def task(self, id: int) -> Task | None:

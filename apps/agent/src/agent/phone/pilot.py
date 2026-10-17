@@ -152,7 +152,9 @@ class Pilot:
             capabilities=[ProcessHistory(forget_old_screenshots)],
         )
 
-    async def run(self, goal: str, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None) -> Outcome:
+    async def run(
+        self, goal: str, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
+    ) -> Outcome:
         """Start `goal`, or continue a `paused` run with the owner's `answer`."""
         log.info("Phone task: %s", goal)
         session = _Session(self._phone, self._locator, self._guard, goal)

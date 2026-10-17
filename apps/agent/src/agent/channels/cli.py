@@ -1,6 +1,7 @@
 import asyncio
 import mimetypes
 import readline  # noqa: F401  (line editing for input())
+import tempfile
 import threading
 from pathlib import Path
 
@@ -30,8 +31,9 @@ class CliChannel(Channel):
                 await deliver(Message(self.conversation, parts))
 
     async def send(self, message: Message) -> None:
+        lines = [message.text] + [f"[image: {_save(part)}]" for part in message.parts if isinstance(part, Image)]
         # Clear the waiting prompt, print the reply, then redraw the prompt.
-        print(f"\r{message.text}\n{PROMPT}", end="", flush=True)
+        print("\r" + "\n".join(lines) + f"\n{PROMPT}", end="", flush=True)
 
 
 def parse(line: str) -> tuple[Part, ...]:
@@ -46,6 +48,14 @@ def parse(line: str) -> tuple[Part, ...]:
         raise ValueError(f"Not an image: {file}")
     image = Image(file.read_bytes(), media_type)
     return (image, Text(text.strip())) if text.strip() else (image,)
+
+
+def _save(image: Image) -> Path:
+    """Terminals can't show images; write it where a click or `open` can."""
+    suffix = mimetypes.guess_extension(image.media_type) or ""
+    with tempfile.NamedTemporaryFile(prefix="archangel-", suffix=suffix, delete=False) as file:
+        file.write(image.data)
+    return Path(file.name)
 
 
 def _read_lines() -> asyncio.Queue[str | None]:
