@@ -20,15 +20,21 @@ class PhoneError(Exception):
 
 
 class Phone:
-    """The phone, reached through the relay. Positions are fractions of the screen, from the top-left."""
+    """The phone, reached through the relay. Positions are fractions of the screen, from the top-left.
 
-    def __init__(self, client: httpx.AsyncClient, device: str):
+    Without a `device` name, it's whichever phone is connected, as long as there's only one.
+    """
+
+    def __init__(self, client: httpx.AsyncClient, device: str | None = None):
         self._client = client
         self._device = device
-        self._size: tuple[int, int] | None = None
+        self._found: str | None = None  # the connected phone, when no name was given
+        self._size: tuple[int, int] | None = None  # in pixels, as of the latest screenshot
 
     async def screenshot(self) -> Image:
         data = await self._command("screenshot", scale=SCREENSHOT_SCALE, quality=SCREENSHOT_QUALITY)
+        # Taps are placed on this screen, so they use its size: it changes when the phone rotates.
+        self._size = round(data["width"] / SCREENSHOT_SCALE), round(data["height"] / SCREENSHOT_SCALE)
         return Image(base64.b64decode(data["jpeg"]), "image/jpeg")
 
     async def tap(self, x: float, y: float, hold: bool = False) -> None:
@@ -54,17 +60,34 @@ class Phone:
         return {app["label"]: app["package"] for app in data["apps"]}
 
     async def _pixels(self, x: float, y: float) -> tuple[int, int]:
-        if not self._size:
-            hello = await self._hello()
-            if not hello:
+        if not self._size:  # no screenshot yet: the size it said hello with
+            if not (hello := await self._reachable_hello()):
                 raise PhoneError("Phone is not connected")
             self._size = hello["screen"]["width"], hello["screen"]["height"]
         width, height = self._size
         return round(x * width), round(y * height)
 
+    async def _name(self) -> str:
+        if not (self._device or self._found) and not await self._reachable_hello():
+            await self._wait_online()
+        return self._device or self._found
+
     async def _hello(self) -> dict[str, Any] | None:
-        response = await self._client.get("/devices")
-        return next((d for d in response.json() if d["device"] == self._device), None)
+        """The phone's hello (name, screen), if it's connected."""
+        phones = (await self._client.get("/devices")).json()
+        if self._device:
+            return next((p for p in phones if p["device"] == self._device), None)
+        if len(phones) > 1:
+            names = ", ".join(p["device"] for p in phones)
+            raise PhoneError(f"Several phones are connected ({names}); set ARCHANGEL_DEVICE to choose one")
+        self._found = phones[0]["device"] if phones else None
+        return phones[0] if phones else None
+
+    async def _reachable_hello(self) -> dict[str, Any] | None:
+        try:
+            return await self._hello()
+        except httpx.HTTPError as error:
+            raise PhoneError(f"Relay unreachable: {error}") from error
 
     async def _command(self, type: str, **params: Any) -> dict[str, Any]:
         with activity.call("phone", "phone", " ".join([type, *map(str, params.values())])):
@@ -72,6 +95,7 @@ class Phone:
             if response.status_code == 503:
                 # Never reached the phone, so resending can't repeat anything. Phones drop off briefly (network
                 # switches, the service restarting); wait for it rather than failing the task.
+                self._found = self._size = None  # it may come back as another phone
                 await self._wait_online()
                 response = await self._send(type, params)
             elif response.status_code == 502 and type in READ_ONLY:
@@ -86,7 +110,8 @@ class Phone:
 
     async def _send(self, type: str, params: dict[str, Any]) -> httpx.Response:
         try:
-            return await self._client.post(f"/devices/{self._device}/commands", json={"type": type, **params})
+            device = await self._name()
+            return await self._client.post(f"/devices/{device}/commands", json={"type": type, **params})
         except httpx.HTTPError as error:
             raise PhoneError(f"Relay unreachable: {error}") from error
 

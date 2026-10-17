@@ -4,7 +4,6 @@ DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 DEFAULT_VISION_MODEL = "typesafe/jev-1.14"
 DEFAULT_FALLBACK_MODEL = "openai/gpt-6-luna"
 DEFAULT_RELAY_URL = "http://localhost:8080"
-DEFAULT_DEVICE = "pixel-6"
 
 
 def model() -> str:
@@ -23,8 +22,9 @@ def relay_url() -> str:
     return os.environ.get("ARCHANGEL_RELAY_URL", DEFAULT_RELAY_URL)
 
 
-def device() -> str:
-    return os.environ.get("ARCHANGEL_DEVICE", DEFAULT_DEVICE)
+def device() -> str | None:
+    """None: whichever phone is connected, if only one is."""
+    return os.environ.get("ARCHANGEL_DEVICE") or None
 
 
 def openrouter_api_key() -> str:

@@ -94,6 +94,50 @@ def test_only_read_only_commands_are_resent_after_a_lost_connection():
         asyncio.run(phone(lambda _: lost).type("hi"))
 
 
+def unnamed(devices: list, sent: list) -> Phone:
+    """A phone with no name configured, behind a relay with `devices` connected."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/devices":
+            return httpx.Response(200, json=devices)
+        sent.append(request.url.path)
+        return DONE
+
+    return Phone(httpx.AsyncClient(base_url="http://relay", transport=httpx.MockTransport(handler)))
+
+
+def test_without_a_name_it_uses_the_one_phone_connected():
+    sent = []
+    asyncio.run(unnamed([{"device": "galaxy-s30", "screen": {}}], sent).type("hi"))
+    assert sent == ["/devices/galaxy-s30/commands"]
+
+
+def test_without_a_name_several_phones_are_ambiguous():
+    phones = [{"device": "a", "screen": {}}, {"device": "b", "screen": {}}]
+    with pytest.raises(PhoneError, match=r"Several phones are connected \(a, b\); set ARCHANGEL_DEVICE"):
+        asyncio.run(unnamed(phones, []).type("hi"))
+
+
+def test_taps_follow_the_latest_screenshot_when_the_phone_rotates():
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        command = json.loads(request.content)
+        sent.append(command)
+        landscape = {"width": 1000, "height": 500, "jpeg": ""}  # half scale: the screen is 2000 × 1000
+        return httpx.Response(
+            200, json={"id": "1", "ok": True, "data": landscape if command["type"] == "screenshot" else None}
+        )
+
+    async def scenario():
+        p = phone(handler)
+        await p.screenshot()
+        await p.tap(0.5, 0.5)
+
+    asyncio.run(scenario())
+    assert sent[-1] == {"type": "tap", "x": 1000, "y": 500, "durationMs": 50}
+
+
 def jev(answers: dict, requests: list) -> JevLocator:
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)

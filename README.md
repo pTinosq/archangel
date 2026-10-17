@@ -44,8 +44,8 @@ Open **Archangel Bridge** on the phone. It should say **Connected**. Then, with 
 
 ```
 GET  /devices
-POST /devices/pixel-6/commands   {"type":"tap","x":540,"y":1200}
-GET  /devices/pixel-6/screenshot.jpg
+POST /devices/<device>/commands  {"type":"tap","x":540,"y":1200}
+GET  /devices/<device>/screenshot.jpg
 ```
 
 Or `just send '{"type":"key","key":"home"}'`. Commands: [docs/protocol.md](docs/protocol.md).

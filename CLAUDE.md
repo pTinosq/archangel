@@ -62,7 +62,7 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval. Fails closed. |
 | `phone/investigator.py` | The fallback model reads the last 3 screens and recent steps of a task going nowhere: what's in the way, how past it. Also explains stuck reports. |
 | `phone/vision.py` | `Locator.locate(screen, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API), `LlmLocator` (any vision model), `FallbackLocator` (second locator on a miss or failure). |
-| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots are half-scale JPEG at quality 30 (Jev rejects WebP; 30 locates as well as 80). Phone offline (503): waits up to 60 s, then resends. Lost mid-command (502): resends only read-only commands. |
+| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions, turned into pixels with the latest screenshot's size (so rotation is fine); screenshots are half-scale JPEG at quality 30 (Jev rejects WebP; 30 locates as well as 80). Phone offline (503): waits up to 60 s, then resends. Lost mid-command (502): resends only read-only commands. |
 
 The pilot never handles coordinates: it describes what to tap, the locator finds the box, the centre gets tapped.
 
@@ -72,7 +72,7 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 | `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `LlmLocator` |
 | `ARCHANGEL_FALLBACK_MODEL` | `openai/gpt-6-luna` (locator fallback, investigator). Vision required. |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
-| `ARCHANGEL_DEVICE` | `pixel-6` |
+| `ARCHANGEL_DEVICE` | unset: the one phone connected to the relay. Set it only to choose between several. |
 
 Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, via `event.fallback(error)`. Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by Pydantic AI's OpenRouter client (it uses the `openai` package as its HTTP client; every call goes to OpenRouter).
 

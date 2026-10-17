@@ -48,14 +48,20 @@ tunnel:
     ngrok http {{port}}
 
 # Send a command, e.g. just send '{"type":"tap","x":540,"y":1200}'
-send command device="pixel-6":
-    @curl -s -X POST localhost:{{port}}/devices/{{device}}/commands \
+send command device=env("ARCHANGEL_DEVICE", ""):
+    @d="{{device}}"; curl -s -X POST localhost:{{port}}/devices/${d:-$(just _phone)}/commands \
         -H "Authorization: Bearer $ARCHANGEL_TOKEN" -H "Content-Type: application/json" -d '{{command}}'; echo
 
 # Save the phone's screen to screenshot.jpg
-screenshot device="pixel-6":
-    @curl -sf -o screenshot.jpg localhost:{{port}}/devices/{{device}}/screenshot.jpg \
+screenshot device=env("ARCHANGEL_DEVICE", ""):
+    @d="{{device}}"; curl -sf -o screenshot.jpg localhost:{{port}}/devices/${d:-$(just _phone)}/screenshot.jpg \
         -H "Authorization: Bearer $ARCHANGEL_TOKEN" && echo "screenshot.jpg"
+
+# The connected phone's name, when there's only one
+[private]
+_phone:
+    @curl -sf localhost:{{port}}/devices -H "Authorization: Bearer $ARCHANGEL_TOKEN" | python3 -c \
+        'import json, sys; p = json.load(sys.stdin); print(p[0]["device"]) if len(p) == 1 else sys.exit(f"{len(p)} phones connected; set ARCHANGEL_DEVICE")'
 
 test:
     cd {{agent}} && uv run pytest -q
