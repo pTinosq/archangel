@@ -27,6 +27,8 @@ SMS_LIMIT = 1600  # Twilio's cap for one message, however many parts it's sent i
 MORE = "… (more in the panel)"
 EMPTY = "<Response/>"  # TwiML for "nothing to do": replies are sent separately
 REJECT = "<Response><Reject/></Response>"
+HANG_UP = "<Response><Hangup/></Response>"
+UNANSWERED = {"busy", "no-answer", "failed", "canceled"}
 GREETING = "Archangel."
 
 
@@ -48,13 +50,17 @@ class Twilio:
     async def send_sms(self, to: str, text: str) -> None:
         await self._post("Messages.json", {"To": to, "From": self.account.number, "Body": text})
 
-    async def call(self, to: str, twiml: str) -> None:
-        await self._post("Calls.json", {"To": to, "From": self.account.number, "Twiml": twiml})
+    async def call(self, to: str, answered: str, ended: str) -> str:
+        """Ring `to`; Twilio asks `answered` what to do once it knows who picked up, and tells `ended` how it went.
+        Returns the call's id."""
+        form = {"To": to, "From": self.account.number, "Url": answered, "MachineDetection": "Enable"}
+        return (await self._post("Calls.json", form | {"StatusCallback": ended}))["sid"]
 
-    async def _post(self, path: str, form: dict[str, str]) -> None:
+    async def _post(self, path: str, form: dict[str, str]) -> dict:
         url = f"{API}/Accounts/{self.account.sid}/{path}"
         response = await self._client.post(url, data=form, auth=(self.account.sid, self.account.token))
         response.raise_for_status()
+        return response.json()
 
     async def signed(self, request: Request) -> dict[str, str] | None:
         """The form Twilio posted, or None if Twilio didn't send it."""
@@ -90,7 +96,7 @@ class SmsChannel(Channel):
                 log.warning("Ignored a text from %s", sender)
             elif body and self._deliver:
                 await self._deliver(Message(Address(self.name, sender), (Text(body),)))
-            return Response(EMPTY, media_type="application/xml")
+            return _xml(EMPTY)
 
     async def start(self, deliver: Deliver) -> None:
         self._deliver = deliver
@@ -109,8 +115,13 @@ class SmsChannel(Channel):
 
 class VoiceChannel(Channel):
     """Phone calls with the owner. Twilio's ConversationRelay does the listening and speaking; this trades text with it
-    over a WebSocket. Anything said while the owner's on a call is spoken on it. Otherwise Archangel rings them only if
-    they asked for a call back (the message is addressed to them, not to an old call); after a hang-up, it texts."""
+    over a WebSocket.
+
+    While the owner's on a call, everything is said on it. Otherwise Archangel rings only if they asked for a call back
+    (the message is addressed to them, not to a call); a voicemail or missed call gets a text instead, so a recording
+    is never taken for the owner. Updates for a call that has ended are texted, but replies to what was said on it
+    aren't: hanging up after "bye" shouldn't bring a text saying "Goodbye."
+    """
 
     name = "voice"
 
@@ -118,9 +129,12 @@ class VoiceChannel(Channel):
         self.owner = Address(self.name, twilio.account.owner)
         self._twilio = twilio
         self._web = web
+        self._url = public_url
         # The URL Twilio signs the handshake with is the one we give it; behind a proxy, request.url isn't that.
         self._relay = public_url.replace("https://", "wss://", 1) + "/twilio/voice/relay"
-        self._calls: dict[str, WebSocket] = {}
+        self._calls: dict[str, WebSocket] = {}  # live, by call id
+        self._unanswered: dict[str, int] = {}  # things the owner said on each call that haven't been replied to
+        self._ringing: dict[str, list[str]] = {}  # what to say on calls Archangel is making, once they're answered
         self._deliver: Deliver | None = None
 
         @web.app.post("/twilio/voice")
@@ -129,8 +143,29 @@ class VoiceChannel(Channel):
                 return Response(status_code=403)
             if (caller := form.get("From", "")) != twilio.account.owner:
                 log.warning("Rejected a call from %s", caller)
-                return Response(REJECT, media_type="application/xml")
-            return Response(self._twiml(GREETING), media_type="application/xml")
+                return _xml(REJECT)
+            return _xml(self._twiml(GREETING))
+
+        @web.app.post("/twilio/voice/answered")
+        async def answered(request: Request) -> Response:
+            if (form := await twilio.signed(request)) is None:
+                return Response(status_code=403)
+            said = " ".join(self._ringing.pop(form.get("CallSid", ""), [])) or GREETING
+            if form.get("AnsweredBy", "unknown") in ("human", "unknown"):
+                return _xml(self._twiml(said))
+            log.info("Voicemail picked up; texting instead")
+            await twilio.send_sms(twilio.account.owner, said)
+            return _xml(HANG_UP)
+
+        @web.app.post("/twilio/voice/ended")
+        async def ended(request: Request) -> Response:
+            if (form := await twilio.signed(request)) is None:
+                return Response(status_code=403)
+            missed = self._ringing.pop(form.get("CallSid", ""), None)
+            if missed and form.get("CallStatus") in UNANSWERED:
+                log.info("Call %s; texting instead", form.get("CallStatus"))
+                await twilio.send_sms(twilio.account.owner, " ".join(missed))
+            return _xml(EMPTY)
 
         @web.app.websocket("/twilio/voice/relay")
         async def relay(websocket: WebSocket) -> None:
@@ -148,9 +183,10 @@ class VoiceChannel(Channel):
                         self._calls[call] = websocket
                     elif event.get("type") == "prompt" and (said := event.get("voicePrompt", "").strip()):
                         if self._deliver:
+                            self._unanswered[call] = self._unanswered.get(call, 0) + 1
                             await self._deliver(Message(Address(self.name, call), (Text(said),)))
-                    else:
-                        log.info("Call %s: %s", call, event)
+                    elif event.get("type") == "error":
+                        log.warning("Call %s: %s", call, event.get("description"))
             except WebSocketDisconnect:
                 pass
             finally:
@@ -168,10 +204,41 @@ class VoiceChannel(Channel):
 
     async def send(self, message: Message) -> None:
         text = message.text + (" The screenshot is in the panel." if message.images else "")
-        owner = self._twilio.account.owner
-        if call := self._calls.get(message.address.id) or next(iter(self._calls.values()), None):
-            await call.send_text(json.dumps({"type": "text", "token": text, "last": True}))
-        elif message.address.id == owner:
-            await self._twilio.call(owner, self._twiml(text))
-        else:  # they hung up without asking to be rung back; ringing unasked is worse than a text
+        to, owner = message.address.id, self._twilio.account.owner
+        replying = self._unanswered.get(to, 0) > 0
+        if replying:
+            self._unanswered[to] -= 1
+        if (call := self._calls.get(to) or next(iter(self._calls.values()), None)) and await self._say(call, text):
+            return
+        if to == owner:
+            await self._ring(text)
+        elif replying:
+            log.info("Not texting a reply to a call that has ended: %s", text)
+        else:
             await self._twilio.send_sms(owner, text)
+
+    async def _say(self, call: WebSocket, text: str) -> bool:
+        try:
+            await call.send_text(json.dumps({"type": "text", "token": text, "last": True}))
+            return True
+        except Exception:  # the call dropped as we spoke
+            log.warning("Couldn't say it on the call", exc_info=True)
+            return False
+
+    async def _ring(self, text: str) -> None:
+        if self._ringing:  # already ringing them: say it on that call too
+            next(iter(self._ringing.values())).append(text)
+            return
+        said = self._ringing[""] = [text]  # held under "" until Twilio gives the call an id
+        url = self._url + "/twilio/voice"
+        try:
+            self._ringing[await self._twilio.call(self._twilio.account.owner, url + "/answered", url + "/ended")] = said
+        except httpx.HTTPError:
+            log.warning("Couldn't ring; texting instead", exc_info=True)
+            await self._twilio.send_sms(self._twilio.account.owner, " ".join(said))
+        finally:
+            del self._ringing[""]
+
+
+def _xml(twiml: str) -> Response:
+    return Response(twiml, media_type="application/xml")

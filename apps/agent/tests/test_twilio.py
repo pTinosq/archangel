@@ -99,7 +99,7 @@ class Voice:
         def api(request: httpx.Request) -> httpx.Response:
             kind = request.url.path.removeprefix("/2010-04-01/Accounts/AC1/")
             (self.calls if kind == "Calls.json" else self.texts).append(parse_qs(request.content.decode()))
-            return httpx.Response(201, json={})
+            return httpx.Response(201, json={"sid": f"CA{len(self.calls) + 100}"})
 
         web = Web()
         twilio = Twilio(ACCOUNT, httpx.AsyncClient(transport=httpx.MockTransport(api)))
@@ -111,10 +111,15 @@ class Voice:
 
         self.channel._deliver = deliver
 
+    def twilio_posts(self, path: str, forged: bool = False, **form: str) -> httpx.Response:
+        sig = signature("not the token" if forged else ACCOUNT.token, f"http://localhost{path}", form)
+        return self.client.post(path, data=form, headers={"X-Twilio-Signature": sig})
+
     def ring(self, caller: str, forged: bool = False) -> httpx.Response:
-        form = {"From": caller, "To": ACCOUNT.number, "CallSid": "CA1"}
-        sig = signature("not the token" if forged else ACCOUNT.token, "http://localhost/twilio/voice", form)
-        return self.client.post("/twilio/voice", data=form, headers={"X-Twilio-Signature": sig})
+        return self.twilio_posts("/twilio/voice", forged, From=caller, To=ACCOUNT.number, CallSid="CA1")
+
+    def says(self, text: str, to: Address | None = None) -> None:
+        asyncio.run(self.channel.send(Message(to or self.channel.owner, (Text(text),))))
 
     def relay(self, forged: bool = False):
         sig = signature("not the token" if forged else ACCOUNT.token, RELAY, {})
@@ -151,7 +156,7 @@ def test_while_on_a_call_everything_is_said_on_it():
     with voice.relay() as ws:
         ws.send_json({"type": "setup", "callSid": "CA2"})
         ws.send_json({"type": "interrupt"})  # setup handled
-        asyncio.run(voice.channel.send(Message(voice.channel.owner, (Text("Done."),))))
+        voice.says("Done.")
         assert json.loads(ws.receive_text())["token"] == "Done."
     assert voice.calls == voice.texts == []
 
@@ -163,10 +168,47 @@ def test_after_a_hang_up_it_texts_rather_than_ringing():
     assert voice.texts == [{"To": [ACCOUNT.owner], "From": [ACCOUNT.number], "Body": ["Flashlight's on."]}]
 
 
-def test_asked_for_a_call_back_it_rings_the_owner_and_says_it():
+def test_after_saying_goodbye_and_hanging_up_the_goodbye_isnt_texted():
     voice = Voice()
-    asyncio.run(voice.channel.send(Message(voice.channel.owner, (Text('Ready to send "hi" & go?'),))))
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA1"})
+        ws.send_json({"type": "prompt", "voicePrompt": "thanks, bye", "last": True})
+    voice.says("Goodbye.", Address("voice", "CA1"))
+    voice.says("Uber's closed.", Address("voice", "CA1"))  # a task finishing afterwards still gets through
+
+    assert [t["Body"] for t in voice.texts] == [["Uber's closed."]]
+
+
+def test_asked_for_a_call_back_it_rings_and_says_it_once_answered():
+    voice = Voice()
+    voice.says('Ready to send "hi" & go?')
+    voice.says("Also, Alex replied.")  # while it rings: one call, both said
+
     (call,) = voice.calls
-    assert call["To"] == [ACCOUNT.owner] and call["From"] == [ACCOUNT.number]
-    relay = ElementTree.fromstring(call["Twiml"][0]).find("Connect/ConversationRelay")
-    assert relay.get("welcomeGreeting") == 'Ready to send "hi" & go?' and relay.get("url") == RELAY
+    assert call["To"] == [ACCOUNT.owner] and call["MachineDetection"] == ["Enable"]
+    assert call["Url"] == ["https://archangel.example/twilio/voice/answered"]
+    assert call["StatusCallback"] == ["https://archangel.example/twilio/voice/ended"]
+    assert voice.twilio_posts("/twilio/voice/answered", forged=True, CallSid="CA101").status_code == 403
+    answered = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="human").text
+    relay = ElementTree.fromstring(answered).find("Connect/ConversationRelay")
+    assert relay.get("welcomeGreeting") == 'Ready to send "hi" & go? Also, Alex replied.' and relay.get("url") == RELAY
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="completed")
+    assert voice.texts == []
+
+
+def test_a_voicemail_gets_hung_up_on_and_the_owner_texted():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    response = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="machine_start")
+
+    assert response.text == "<Response><Hangup/></Response>"
+    assert [t["Body"] for t in voice.texts] == [["Your basket's ready."]]
+
+
+def test_a_missed_call_becomes_a_text():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")  # once only
+
+    assert [t["Body"] for t in voice.texts] == [["Your basket's ready."]]
