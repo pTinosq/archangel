@@ -52,8 +52,8 @@ class Orchestrator:
             """Start a phone task in the background; you'll get an update when it finishes or needs the owner.
 
             Describe the whole goal and what to find out, e.g. "Open WhatsApp and read the latest message from Alex".
-            Updates come back where you're talking now; set `report_via` to a channel if the owner wants the
-            results there instead.
+            Updates come back where you're talking now. Set `report_via` only if the owner asked for the results
+            elsewhere: "voice" rings them, even if they're on a call now.
             """
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
