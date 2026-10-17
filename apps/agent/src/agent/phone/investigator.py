@@ -10,6 +10,7 @@ from typing import Protocol
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
+from agent import logs
 from agent.messages import Image
 from agent.models import Instructions, content
 
@@ -32,7 +33,7 @@ class Investigator(Protocol):
 
 class ModelInvestigator:
     def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
-        self._agent = Agent(model, instructions=instructions)
+        self._agent = Agent(model, name="investigator", instructions=instructions)
 
     async def investigate(self, goal: str, steps: list[str], screens: list[Image]) -> str | None:
         prompt = [
@@ -40,7 +41,7 @@ class ModelInvestigator:
             *(content(screen) for screen in screens),
         ]
         try:
-            diagnosis = (await self._agent.run(prompt)).output
+            diagnosis = (await logs.run(self._agent, prompt)).output
         except Exception as error:
             # Advice is optional: without it the pilot still has its own judgement and the stuck limits.
             log.warning("Investigator failed: %s", error)

@@ -12,7 +12,7 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
-from agent import history, logs
+from agent import activity, history, logs
 from agent.events import Event
 from agent.gateway import Gateway
 from agent.messages import Message, Text
@@ -39,6 +39,7 @@ class Orchestrator:
         tasks.notify = self.handle
         self._agent = Agent(
             model,
+            name="orchestrator",
             deps_type=Event,
             instructions=[instructions, self._situation],
             retries=TOOL_RETRIES,
@@ -86,17 +87,18 @@ class Orchestrator:
 
     async def handle(self, event: Event) -> None:
         async with self._lock:
-            try:
-                messages = self._store.history()
-                log.debug("in (%d prior messages): %s", len(messages), describe(event.prompt()))
-                result = await logs.run(self._agent, prompt(event.prompt()), deps=event, message_history=messages)
-                self._store.save_history(result.all_messages())
-                log.debug("out to %s: %s", event.reply_to, result.output)
-                parts = (Text(result.output), *event.attachments())
-            except Exception as error:
-                log.exception("Failed to handle: %s", describe(event.prompt()))
-                parts = (Text(event.fallback(error)),)
-            await self._gateway.send(Message(event.reply_to, parts))
+            with activity.acting("orchestrator"):
+                try:
+                    messages = self._store.history()
+                    log.debug("in (%d prior messages): %s", len(messages), describe(event.prompt()))
+                    result = await logs.run(self._agent, prompt(event.prompt()), deps=event, message_history=messages)
+                    self._store.save_history(result.all_messages())
+                    log.debug("out to %s: %s", event.reply_to, result.output)
+                    parts = (Text(result.output), *event.attachments())
+                except Exception as error:
+                    log.exception("Failed to handle: %s", describe(event.prompt()))
+                    parts = (Text(event.fallback(error)),)
+                await self._gateway.send(Message(event.reply_to, parts))
 
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]

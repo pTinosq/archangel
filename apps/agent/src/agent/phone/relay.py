@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from agent import activity
 from agent.messages import Image
 
 SCREENSHOT_SCALE = 0.5
@@ -66,21 +67,22 @@ class Phone:
         return next((d for d in response.json() if d["device"] == self._device), None)
 
     async def _command(self, type: str, **params: Any) -> dict[str, Any]:
-        response = await self._send(type, params)
-        if response.status_code == 503:
-            # Never reached the phone, so resending can't repeat anything. Phones drop off briefly (network
-            # switches, the service restarting); wait for it rather than failing the task.
-            await self._wait_online()
+        with activity.call("phone", "phone", " ".join([type, *map(str, params.values())])):
             response = await self._send(type, params)
-        elif response.status_code == 502 and type in READ_ONLY:
-            # Lost mid-command: only safe to resend what doesn't change anything.
-            response = await self._send(type, params)
-        if response.status_code != 200:
-            raise PhoneError(response.json().get("message", f"Relay returned {response.status_code}"))
-        reply = response.json()
-        if not reply["ok"]:
-            raise PhoneError(reply["error"]["message"])
-        return reply.get("data") or {}
+            if response.status_code == 503:
+                # Never reached the phone, so resending can't repeat anything. Phones drop off briefly (network
+                # switches, the service restarting); wait for it rather than failing the task.
+                await self._wait_online()
+                response = await self._send(type, params)
+            elif response.status_code == 502 and type in READ_ONLY:
+                # Lost mid-command: only safe to resend what doesn't change anything.
+                response = await self._send(type, params)
+            if response.status_code != 200:
+                raise PhoneError(response.json().get("message", f"Relay returned {response.status_code}"))
+            reply = response.json()
+            if not reply["ok"]:
+                raise PhoneError(reply["error"]["message"])
+            return reply.get("data") or {}
 
     async def _send(self, type: str, params: dict[str, Any]) -> httpx.Response:
         try:

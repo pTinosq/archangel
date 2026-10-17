@@ -8,6 +8,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from agent import activity
 from agent.channels import Channel
 from agent.events import Event, OwnerMessage
 from agent.messages import Address, Message
@@ -38,7 +39,7 @@ class Gateway:
 
         async def deliver(message: Message) -> None:
             self._store.add_line(message, "owner")
-            task = asyncio.create_task(handle(OwnerMessage(message)))
+            task = asyncio.create_task(self._handle(handle, message), context=activity.new_request("gateway"))
             self._running.add(task)
             task.add_done_callback(self._running.discard)
 
@@ -49,6 +50,8 @@ class Gateway:
 
     async def send(self, message: Message) -> None:
         self._store.add_line(message, "archangel")
+        activity.hop("gateway", "message", message.text)
+        activity.hop(message.address.channel, "message", message.text, source="gateway")
         if not (channel := self._channels.get(message.address.channel)):
             log.warning("No channel %r; dropped: %s", message.address.channel, message.text)
             return
@@ -57,3 +60,8 @@ class Gateway:
         except Exception:
             # One medium failing (network, rate limits) mustn't take down the conversation; it's in the transcript.
             log.exception("Couldn't send via %s", channel.name)
+
+    async def _handle(self, handle: Handle, message: Message) -> None:
+        activity.hop("gateway", "message", message.text, source=message.address.channel)
+        activity.hop("orchestrator", "message", message.text)
+        await handle(OwnerMessage(message))

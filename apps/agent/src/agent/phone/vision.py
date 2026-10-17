@@ -9,7 +9,7 @@ import httpx
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from agent import config
+from agent import activity, config, logs
 from agent.messages import Image
 from agent.models import Instructions, content, openrouter
 
@@ -57,20 +57,22 @@ class JevLocator:
 
     async def locate(self, screen: Image, target: str) -> Box | None:
         image = f"data:{screen.media_type};base64," + base64.b64encode(screen.data).decode()
-        response = await self._client.post(
-            DECISIONS_URL,
-            headers={"TypeSafe-Danger-Zone-Images": "true"},
-            json={
-                "model": self._model,
-                "state": {"screen": {"type": "image_url", "image_url": {"url": image}}},
-                "questions": {
-                    "visible": {"type": "noul", "instructions": f"Is {target} visible in `screen`?"},
-                    "box": {"type": "box", "instructions": f"{target} in `screen`"},
+        with activity.call(self._model.split("/")[-1], "model", f"find {target}") as reply:
+            response = await self._client.post(
+                DECISIONS_URL,
+                headers={"TypeSafe-Danger-Zone-Images": "true"},
+                json={
+                    "model": self._model,
+                    "state": {"screen": {"type": "image_url", "image_url": {"url": image}}},
+                    "questions": {
+                        "visible": {"type": "noul", "instructions": f"Is {target} visible in `screen`?"},
+                        "box": {"type": "box", "instructions": f"{target} in `screen`"},
+                    },
                 },
-            },
-        )
-        response.raise_for_status()
-        answers = response.json()["answers"]
+            )
+            response.raise_for_status()
+            answers = response.json()["answers"]
+            reply(f"visible {answers['visible']['noul']:.2f}")
         log.debug("jev %r: %s", target, answers)
         if answers["visible"]["noul"] < VISIBLE_THRESHOLD:
             return None
@@ -90,10 +92,10 @@ class LlmLocator:
     """Any vision model, asked for a bounding box as structured output."""
 
     def __init__(self, model: Model, instructions: Instructions = LOCATOR_INSTRUCTIONS):
-        self._agent = Agent(model, output_type=Located, instructions=instructions)
+        self._agent = Agent(model, name="locator", output_type=Located, instructions=instructions)
 
     async def locate(self, screen: Image, target: str) -> Box | None:
-        located = (await self._agent.run([f"Find: {target}", content(screen)])).output
+        located = (await logs.run(self._agent, [f"Find: {target}", content(screen)])).output
         return Box(located.left, located.top, located.right, located.bottom) if located.found else None
 
 

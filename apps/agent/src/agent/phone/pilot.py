@@ -27,7 +27,7 @@ from pydantic_ai import (
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
-from agent import logs
+from agent import activity, logs
 from agent.history import forget_old_screenshots
 from agent.messages import Image
 from agent.models import Instructions, content
@@ -156,7 +156,12 @@ class _Session:
         return f"\nSecond opinion, from a model that looked at the recent screens: {advice}" if advice else ""
 
     async def diagnose(self) -> str | None:
-        return await self.kit.investigator.investigate(self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens))
+        with activity.call("investigator", "agent", self.goal) as reply:
+            advice = await self.kit.investigator.investigate(
+                self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens)
+            )
+            reply(advice or "no opinion")
+        return advice
 
 
 @dataclass(frozen=True)
@@ -185,6 +190,7 @@ class Pilot:
         self._kit = kit
         self._agent = Agent(
             model,
+            name="pilot",
             instructions=instructions,
             deps_type=_Session,
             output_type=[ToolOutput(done, name="done"), ToolOutput(give_up, name="give_up"), DeferredToolRequests],
@@ -288,7 +294,9 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
     Set `hold` to long-press.
     """
     try:
-        box = await ctx.deps.kit.locator.locate(ctx.deps.screen, target)
+        with activity.call("locator", "agent", target) as reply:
+            box = await ctx.deps.kit.locator.locate(ctx.deps.screen, target)
+            reply(box or "not found")
     except Exception as error:  # the locators are remote models: any failure is one failed step, not a failed task
         return await ctx.deps.failed(f"Couldn't search the screen: {error}")
     log.debug("located %r: %s", target, box)
@@ -340,5 +348,8 @@ async def _check(ctx: RunContext[_Session], action: str) -> None:
     """Pause for the owner's approval if the guard says `action` commits something. Runs before the tool."""
     if ctx.tool_call_approved:
         return
-    if consequence := await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal):
+    with activity.call("guard", "agent", action) as reply:
+        consequence = await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal)
+        reply(f"needs approval: {consequence}" if consequence else "fine")
+    if consequence:
         raise ApprovalRequired(metadata={"action": consequence})

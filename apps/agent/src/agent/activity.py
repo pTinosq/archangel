@@ -52,9 +52,9 @@ _recent: deque[Notice] = deque(maxlen=RECENT)
 _listeners: set[asyncio.Queue[Notice]] = set()
 
 
-def hop(target: str, kind: Kind, text: object, source: str | None = None) -> None:
+def hop(target: str, kind: Kind, text: object, source: str | None = None, dir: Literal["tx", "rx"] = "tx") -> None:
     """Something sent one way, from the current actor unless `source` says otherwise."""
-    _announce(source or _actor.get(), target, "tx", kind, text)
+    _announce(source or _actor.get(), target, dir, kind, text)
 
 
 @contextmanager
@@ -64,14 +64,16 @@ def call(target: str, kind: Kind, text: object) -> Iterator[Callable[[object], N
     source = _actor.get()
     _announce(source, target, "tx", kind, text)
     reply: list[object] = [""]
+    ok = True
     token = _actor.set(target)
-    ok = False
     try:
         yield lambda text: reply.__setitem__(0, text)
-        ok = True
+    except BaseException as error:
+        ok, reply[0] = False, f"{type(error).__name__}: {error}"
+        raise
     finally:
         _actor.reset(token)
-        _announce(target, source, "rx", kind, reply[0] or ("" if ok else "failed"), ok)
+        _announce(target, source, "rx", kind, reply[0], ok)
 
 
 @contextmanager

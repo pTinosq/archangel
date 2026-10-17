@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 
 import pydantic_ai
 
+from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
 from agent.phone.pilot import Answer, Pilot, Record
@@ -73,14 +74,19 @@ class Tasks:
             await asyncio.gather(*self._running.values(), *self._updates, return_exceptions=True)
 
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
-        self._running[task.id] = asyncio.create_task(self._run(task, paused, answer))
+        activity.hop("tasks", "task", f"#{task.id} {'continue' if paused else 'start'}: {task.goal}")
+        self._running[task.id] = asyncio.create_task(
+            self._run(task, paused, answer), context=activity.in_task(task.id, "tasks")
+        )
 
     async def _run(self, task: Task, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> None:
         try:
             async with self._phone:
                 task.status = Status.RUNNING
                 self._store.save_task(task)
-                outcome = await self._pilot.run(task.goal, self._recorder(task), paused, answer)
+                with activity.call("pilot", "task", task.goal) as reply:
+                    outcome = await self._pilot.run(task.goal, self._recorder(task), paused, answer)
+                    reply(f"{outcome.status}: {outcome.report}")
         except asyncio.CancelledError:
             log.info("Task #%d cancelled", task.id)
             self._settle(task, Status.CANCELLED, "Cancelled while running.")
@@ -90,6 +96,7 @@ class Tasks:
         task.run = outcome.run
         self._settle(task, _STATUSES[outcome.status], outcome.report)
         if self.notify:
+            activity.hop("orchestrator", "task", f"#{task.id} {task.status}: {task.report}")
             # Its own asyncio task: cancelling or answering the task from the update mustn't cancel the update.
             update = asyncio.create_task(self.notify(TaskUpdate(task, outcome.screen)))
             self._updates.add(update)

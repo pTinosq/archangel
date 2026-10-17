@@ -1,8 +1,15 @@
 import asyncio
 
 import pytest
+from fakes import FakeChannel, FakePilot
+from pydantic_ai import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.models.function import FunctionModel
 
 from agent import activity
+from agent.gateway import Gateway
+from agent.orchestrator import Orchestrator
+from agent.phone.pilot import Outcome
+from agent.tasks import Tasks
 
 
 def hops():
@@ -23,9 +30,9 @@ def test_a_call_and_its_reply_nest_under_the_actor():
 
 def test_a_failed_call_says_so():
     with pytest.raises(RuntimeError), activity.acting("pilot"), activity.call("phone", "phone", "tap"):
-        raise RuntimeError
+        raise RuntimeError("offline")
 
-    assert hops()[-1] == ("phone", "pilot", "rx", "failed", False)
+    assert hops()[-1] == ("phone", "pilot", "rx", "RuntimeError: offline", False)
 
 
 def test_ids_follow_a_request_into_its_tasks():
@@ -78,3 +85,38 @@ def test_a_listener_that_falls_behind_misses_notices_and_holds_nothing_up():
         return first
 
     assert asyncio.run(main()).text == "0"
+
+
+def test_one_request_can_be_followed_through_its_task_and_back(store):
+    def model(messages, info) -> ModelResponse:
+        last = messages[-1].parts[-1]
+        if isinstance(last, UserPromptPart) and "(via cli)" in last.content:
+            return ModelResponse(parts=[ToolCallPart("start_task", {"goal": "Open WhatsApp"})])
+        return ModelResponse(parts=[TextPart("On it." if isinstance(last, ToolReturnPart) else "Done.")])
+
+    cli = FakeChannel("cli", ["open whatsapp"])
+    gateway = Gateway([cli], store)
+    tasks = Tasks(store, FakePilot(Outcome("done", "WhatsApp is open.")))
+    orchestrator = Orchestrator(FunctionModel(model), store, tasks, gateway)
+
+    async def main():
+        await gateway.run(orchestrator.handle)
+        await tasks.idle()
+
+    asyncio.run(main())
+
+    notices = list(activity._recent)
+    edges = {(n.source, n.target) for n in notices}
+    assert {
+        ("cli", "gateway"),
+        ("gateway", "orchestrator"),
+        ("orchestrator", "tasks"),
+        ("tasks", "pilot"),
+        ("pilot", "tasks"),
+        ("tasks", "orchestrator"),
+        ("orchestrator", "gateway"),
+        ("gateway", "cli"),
+    } <= edges
+    assert {n.request for n in notices} == {notices[0].request} != {None}
+    assert all(n.task == 1 for n in notices if "pilot" in (n.source, n.target))
+    assert [n.text for n in notices if n.target == "cli"] == ["On it.", "Done."]

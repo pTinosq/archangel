@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
+from agent import logs
 from agent.messages import Image
 from agent.models import Instructions, content
 
@@ -44,12 +45,12 @@ class Guard(Protocol):
 
 class ModelGuard:
     def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
-        self._agent = Agent(model, instructions=instructions, output_type=Verdict)
+        self._agent = Agent(model, name="guard", instructions=instructions, output_type=Verdict)
 
     async def check(self, screen: Image, target: str, task: str) -> str | None:
         prompt = [f"Task: {task}\nAbout to tap: {target}", content(screen)]
         try:
-            verdict = (await self._agent.run(prompt)).output
+            verdict = (await logs.run(self._agent, prompt)).output
         except Exception as error:
             # Fail closed: an unchecked tap might be the one that pays.
             log.warning("guard failed, asking the owner instead: %s", error)

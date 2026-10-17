@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic_ai import Agent, AgentRunResult, RetryPromptPart, TextPart, ToolCallPart, ToolReturnPart
 
+from agent import activity
+
 LOGS = Path("logs")
 KEPT_RUNS = 20
 MAX_LOGGED_CHARS = 2000
@@ -43,22 +45,35 @@ def start() -> Path:
 
 
 async def run(agent: Agent, prompt: Any, **kwargs: Any) -> AgentRunResult:
-    """`agent.run`, logging each step as it happens: tool calls, results, and calls the model got wrong."""
-    async with agent.iter(prompt, **kwargs) as steps:
-        async for node in steps:
-            if Agent.is_call_tools_node(node):
-                for part in node.model_response.parts:
-                    if isinstance(part, ToolCallPart):
-                        log.debug("call %s %s", part.tool_name, _clip(part.args))
-                    elif isinstance(part, TextPart):
-                        log.debug("text %s", _clip(part.content))
-            elif Agent.is_model_request_node(node):
-                for part in node.request.parts:
-                    if isinstance(part, RetryPromptPart):
-                        log.warning("invalid call %s: %s", part.tool_name, _clip(part.model_response()))
-                    elif isinstance(part, ToolReturnPart):
-                        log.debug("result %s: %s", part.tool_name, _clip(part.content))
+    """`agent.run`, logging and announcing each step as it happens: model calls, tool calls, results, and calls
+    the model got wrong."""
+    name, model = agent.name or "agent", _short(agent.model)
+    with activity.acting(name):
+        async with agent.iter(prompt, **kwargs) as steps:
+            async for node in steps:
+                if Agent.is_call_tools_node(node):
+                    calls = [p for p in node.model_response.parts if isinstance(p, ToolCallPart)]
+                    activity.hop(name, "model", ", ".join(c.tool_name for c in calls) or "answer", model, "rx")
+                    for part in node.model_response.parts:
+                        if isinstance(part, ToolCallPart):
+                            log.debug("call %s %s", part.tool_name, _clip(part.args))
+                            activity.hop(name, "tool", f"{part.tool_name} {part.args_as_json_str()}")
+                        elif isinstance(part, TextPart):
+                            log.debug("text %s", _clip(part.content))
+                elif Agent.is_model_request_node(node):
+                    for part in node.request.parts:
+                        if isinstance(part, RetryPromptPart):
+                            log.warning("invalid call %s: %s", part.tool_name, _clip(part.model_response()))
+                        elif isinstance(part, ToolReturnPart):
+                            log.debug("result %s: %s", part.tool_name, _clip(part.content))
+                            activity.hop(name, "tool", f"{part.tool_name} → {part.model_response_str()}", dir="rx")
+                    activity.hop(model, "model", "thinking")
     return steps.result
+
+
+def _short(model: object) -> str:
+    """One cockpit node per model: openai/gpt-6-luna → gpt-6-luna."""
+    return str(getattr(model, "model_name", model)).split("/")[-1]
 
 
 def _clip(value: object) -> str:
