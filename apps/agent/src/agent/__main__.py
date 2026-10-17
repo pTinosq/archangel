@@ -8,7 +8,7 @@ import pydantic_ai
 from agent import config, logs
 from agent.channels.cli import CliChannel
 from agent.channels.panel import PanelChannel
-from agent.channels.twilio import SmsChannel, Twilio
+from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.gateway import Gateway
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
@@ -48,7 +48,10 @@ def main() -> None:
     web = Web(config.github(), config.port())
     channels = [PanelChannel(store, prompts, web)]
     if account := config.twilio():
-        channels.append(SmsChannel(Twilio(account), web, config.public_url()))
+        twilio = Twilio(account)
+        channels.append(SmsChannel(twilio, web, config.public_url()))
+        if public_url := config.public_url():  # ConversationRelay needs a wss:// URL to reach
+            channels.append(VoiceChannel(twilio, web, public_url))
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)

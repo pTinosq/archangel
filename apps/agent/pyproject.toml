@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic-ai-slim[openrouter]>=2.57",
     "uvicorn>=0.32",
+    "websockets>=17.2",
 ]
 
 [dependency-groups]
