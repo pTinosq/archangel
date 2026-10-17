@@ -36,12 +36,13 @@ class Orchestrator:
         self._tasks = tasks
         self._gateway = gateway
         self._lock = asyncio.Lock()
+        self._arrived_to = ""  # the situation as the event being handled arrived
         tasks.notify = self.handle
         self._agent = Agent(
             model,
             name="orchestrator",
             deps_type=Event,
-            instructions=[instructions, self._situation],
+            instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
         )
@@ -88,6 +89,9 @@ class Orchestrator:
     async def handle(self, event: Event) -> None:
         async with self._lock:
             with activity.acting("orchestrator"):
+                # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
+                # it had been there all along, and the model apologises for starting a duplicate.
+                self._arrived_to = await self._situation()
                 try:
                     messages = self._store.history()
                     log.debug("in (%d prior messages): %s", len(messages), describe(event.prompt()))
@@ -107,7 +111,9 @@ class Orchestrator:
         return "\n".join(
             [
                 f"Channels the owner can be reached on: {', '.join(self._gateway.channels)}.",
-                "Tasks (open, then recently finished):" if lines else "Tasks: none yet.",
+                "Tasks when this arrived (open, then recently finished):"
+                if lines
+                else "Tasks when this arrived: none.",
                 *lines,
             ]
         )

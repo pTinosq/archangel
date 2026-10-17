@@ -120,6 +120,16 @@ def test_tasks_run_in_the_background_and_report_back(store):
     ]
 
 
+def test_a_task_just_started_isnt_mistaken_for_an_old_one(store):
+    owner = Owner(store, tool_result_or(starts_a_task_then_relays_updates))
+    owner.says(Text("open whatsapp"))
+
+    # The call writing the reply sees the tasks as the message found them; start_task's result says what's new.
+    replying = owner.requests[1]
+    assert "Tasks when this arrived: none." in replying[-1].instructions
+    assert "Started task #1." in str(replying[-1].parts[-1].content)
+
+
 def test_task_results_can_go_to_another_channel(store):
     owner = Owner(store, tool_result_or(starts_a_task_then_relays_updates))
     owner.says(Text("open whatsapp and email me"))
