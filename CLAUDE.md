@@ -37,7 +37,7 @@ just test             # all tests
 just logs             # bridge logcat
 ```
 
-Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
+Debug builds' Dev relay defaults to `ws://localhost:8080/ws/device` and the `.env` token. Prod is the deployed relay, entered once.
 
 ## Agent
 
@@ -96,7 +96,7 @@ Flat package `tech.arrakis.archangel.bridge`.
 | `CommandExecutor` | Decode, run serially, never throw. Replays replies for repeated ids (last 64). |
 | `Device` / `AndroidDevice` | Phone capabilities behind an interface; executor tests run on the JVM. |
 | `Protocol` | Wire types. |
-| `Config` / `ConfigStore` | URL, token, device name. One SharedPreferences value. |
+| `Config` / `ConfigStore` | Dev and Prod relays (URL and token each), which is on, and the device name. One SharedPreferences value; a tap switches. |
 | `MainActivity` | One Compose screen: status, config, settings shortcuts. |
 
 minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.versions.toml`. Release builds: `wss://` only, no baked-in URL or token.

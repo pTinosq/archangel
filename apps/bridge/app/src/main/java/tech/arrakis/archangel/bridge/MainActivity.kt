@@ -17,6 +17,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,13 +57,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun BridgeScreen(
-    initial: Config,
-    onSave: (Config) -> Unit,
+    initial: BridgeSettings,
+    onSave: (BridgeSettings) -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenBattery: () -> Unit,
 ) {
     val status by Connection.status.collectAsState()
-    var config by remember { mutableStateOf(initial) }
+    var settings by remember { mutableStateOf(initial) }
 
     Column(
         Modifier.safeDrawingPadding().padding(24.dp),
@@ -68,29 +71,41 @@ private fun BridgeScreen(
     ) {
         Text("Archangel Bridge", style = MaterialTheme.typography.headlineMedium)
         Text(status.label, style = MaterialTheme.typography.titleMedium)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            Mode.entries.forEachIndexed { i, mode ->
+                SegmentedButton(
+                    selected = settings.mode == mode,
+                    onClick = {
+                        settings = settings.copy(mode = mode)
+                        onSave(settings) // switching is the point: reconnect straight away
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(i, Mode.entries.size),
+                ) { Text(mode.name) }
+            }
+        }
         OutlinedTextField(
-            value = config.url,
-            onValueChange = { config = config.copy(url = it.trim()) },
+            value = settings.relay.url,
+            onValueChange = { settings = settings.withRelay(settings.relay.copy(url = it.trim())) },
             label = { Text("Relay URL") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
-            value = config.token,
-            onValueChange = { config = config.copy(token = it.trim()) },
+            value = settings.relay.token,
+            onValueChange = { settings = settings.withRelay(settings.relay.copy(token = it.trim())) },
             label = { Text("Token") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
-            value = config.device,
-            onValueChange = { config = config.copy(device = it.trim()) },
+            value = settings.device,
+            onValueChange = { settings = settings.copy(device = it.trim()) },
             label = { Text("Device name") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(onClick = { onSave(config) }, modifier = Modifier.fillMaxWidth()) { Text("Save & reconnect") }
+        Button(onClick = { onSave(settings) }, modifier = Modifier.fillMaxWidth()) { Text("Save & reconnect") }
         OutlinedButton(onClick = onOpenAccessibility, modifier = Modifier.fillMaxWidth()) {
             Text("Accessibility settings")
         }

@@ -52,6 +52,8 @@ Or `just send '{"type":"key","key":"home"}'`. Commands: [docs/protocol.md](docs/
 
 Without the cable: `just tunnel`, then set the app's URL to `wss://<ngrok-host>/ws/device`.
 
+The app keeps two relays, **Dev** (this laptop) and **Prod** (deployed); one tap switches between them.
+
 ## Deploy
 
 Archangel on Railway, the phone on your desk, the laptop closed.
