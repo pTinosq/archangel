@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Awaitable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -9,18 +9,16 @@ import httpx
 from pydantic_ai import (
     Agent,
     BinaryContent,
-    ModelMessage,
-    ModelRequest,
     RunContext,
     ToolReturn,
     UsageLimitExceeded,
     UsageLimits,
-    UserPromptPart,
 )
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
 from agent import logs
+from agent.history import forget_old_screenshots
 from agent.phone.relay import Phone, PhoneError, Screenshot
 from agent.phone.vision import Locator
 
@@ -30,7 +28,6 @@ INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 MAX_STEPS = 40
 TOOL_RETRIES = 3
 SETTLE_SECONDS = 1.0
-KEPT_SCREENSHOTS = 2
 SCROLLS = {
     "down": (0.5, 0.7, 0.5, 0.3),
     "up": (0.5, 0.3, 0.5, 0.7),
@@ -151,31 +148,5 @@ async def look(ctx: RunContext[_Session]) -> ToolReturn:
     return await ctx.deps.look("Current screen.")
 
 
-def forget_old_screenshots(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Keep only the latest screenshots in context; older ones cost tokens and add nothing."""
-    kept = 0
-    trimmed: list[ModelMessage] = []
-    for message in reversed(messages):
-        if isinstance(message, ModelRequest):
-            parts = []
-            for part in message.parts:
-                if isinstance(part, UserPromptPart) and _has_image(part):
-                    kept += 1
-                    if kept > KEPT_SCREENSHOTS:
-                        part = replace(part, content=[_drop_image(item) for item in part.content])
-                parts.append(part)
-            message = replace(message, parts=parts)
-        trimmed.append(message)
-    return trimmed[::-1]
-
-
 def _image(screen: Screenshot) -> BinaryContent:
     return BinaryContent(data=screen.jpeg, media_type="image/jpeg")
-
-
-def _has_image(part: UserPromptPart) -> bool:
-    return not isinstance(part.content, str) and any(isinstance(item, BinaryContent) for item in part.content)
-
-
-def _drop_image(item):
-    return "(earlier screenshot)" if isinstance(item, BinaryContent) else item

@@ -44,7 +44,8 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. |
 | `gateway.py` | Routes channels ⇄ brain. Never blocks a channel; one run at a time per conversation. |
 | `brain.py` | Pydantic AI agent. `handle(message, reply)`; may reply any number of times. Tool: `use_phone(task)`. |
-| `threads.py` | History per conversation; resets after 2 h idle. In memory until M3. |
+| `store.py` | SQLite at `apps/agent/data/archangel.db`: each conversation's history (continuous, no expiry) and tasks. |
+| `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | System prompt. |
 | `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |
 | `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide, max 40 steps. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`. Keeps only the last 2 screenshots in context. |

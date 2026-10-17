@@ -13,8 +13,9 @@ from pydantic_ai import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from agent.history import forget_old_screenshots
 from agent.phone import pilot as pilot_module
-from agent.phone.pilot import Pilot, forget_old_screenshots
+from agent.phone.pilot import Pilot
 from agent.phone.relay import PhoneError, Screenshot
 from agent.phone.vision import Box
 

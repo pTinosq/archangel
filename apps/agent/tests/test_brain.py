@@ -5,7 +5,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.brain import Brain
 from agent.messages import Conversation, Image, Message, Text
-from agent.threads import Threads
+from agent.store import Store
 
 CONVERSATION = Conversation("cli", "local")
 
@@ -32,7 +32,7 @@ class FakePilot:
 
 
 def brain(model) -> Brain:
-    return Brain(model, Threads(), FakePilot())
+    return Brain(model, Store(":memory:"), FakePilot())
 
 
 def send(brain: Brain, *parts) -> list[Message]:
@@ -75,7 +75,7 @@ def test_phone_tasks_go_to_the_pilot():
             return ModelResponse(parts=[TextPart(f"Done: {last.content}")])
         return ModelResponse(parts=[ToolCallPart("use_phone", {"task": "Open WhatsApp"})])
 
-    replies = send(Brain(FunctionModel(respond), Threads(), pilot), Text("open whatsapp"))
+    replies = send(Brain(FunctionModel(respond), Store(":memory:"), pilot), Text("open whatsapp"))
 
     assert pilot.tasks == ["Open WhatsApp"]
     assert replies[0].text == "Done: WhatsApp is open."

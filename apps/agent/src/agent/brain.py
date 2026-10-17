@@ -2,13 +2,14 @@ import logging
 from pathlib import Path
 
 from pydantic_ai import Agent, BinaryContent, UserContent
+from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
-from agent import logs
+from agent import history, logs
 from agent.gateway import Reply
 from agent.messages import Message, Text
 from agent.phone.pilot import Pilot
-from agent.threads import Threads
+from agent.store import Store
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +20,14 @@ INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 class Brain:
     """Turns each incoming message into a model run over that conversation's history."""
 
-    def __init__(self, model: Model, threads: Threads, pilot: Pilot):
-        self._agent = Agent(model, instructions=INSTRUCTIONS, retries=TOOL_RETRIES)
-        self._threads = threads
+    def __init__(self, model: Model, store: Store, pilot: Pilot):
+        self._agent = Agent(
+            model,
+            instructions=INSTRUCTIONS,
+            retries=TOOL_RETRIES,
+            capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
+        )
+        self._store = store
 
         @self._agent.tool_plain
         async def use_phone(task: str) -> str:
@@ -33,10 +39,10 @@ class Brain:
             return await pilot.run(task)
 
     async def handle(self, message: Message, reply: Reply) -> None:
-        history = self._threads.history(message.conversation)
-        log.debug("in %s (%d prior messages): %s", message.conversation, len(history), message)
-        result = await logs.run(self._agent, _prompt(message), message_history=history)
-        self._threads.save(message.conversation, result.all_messages())
+        messages = self._store.history(message.conversation)
+        log.debug("in %s (%d prior messages): %s", message.conversation, len(messages), message)
+        result = await logs.run(self._agent, _prompt(message), message_history=messages)
+        self._store.save_history(message.conversation, result.all_messages())
         log.debug("out %s: %s", message.conversation, result.output)
         await reply(Message(message.conversation, (Text(result.output),)))
 

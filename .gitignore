@@ -17,3 +17,6 @@ __pycache__/
 # Dev output
 screenshot.jpg
 logs/
+
+# Agent state
+data/

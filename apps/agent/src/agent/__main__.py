@@ -13,7 +13,7 @@ from agent.gateway import Gateway
 from agent.phone.pilot import Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import create_locator
-from agent.threads import Threads
+from agent.store import Store
 
 
 def main() -> None:
@@ -27,7 +27,7 @@ def main() -> None:
         timeout=30,
     )
     pilot = Pilot(model, Phone(relay, config.device()), create_locator(config.vision_model(), api_key))
-    gateway = Gateway([CliChannel()], Brain(model, Threads(), pilot))
+    gateway = Gateway([CliChannel()], Brain(model, Store(), pilot))
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(gateway.run())
     print()

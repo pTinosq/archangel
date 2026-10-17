@@ -4,7 +4,6 @@ DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 DEFAULT_VISION_MODEL = "typesafe/jev-1.14"
 DEFAULT_RELAY_URL = "http://localhost:8080"
 DEFAULT_DEVICE = "pixel-6"
-THREAD_TTL_SECONDS = 2 * 60 * 60
 
 
 def model() -> str:
