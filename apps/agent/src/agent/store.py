@@ -163,14 +163,18 @@ class Store:
         rows = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks ORDER BY id DESC LIMIT ?", (limit,))
         return [_task(row) for row in rows]
 
-    def interrupt_running(self) -> None:
-        """At startup: tasks that were mid-flight when Archangel stopped can't continue on their own."""
+    def interrupt_running(self) -> list[Task]:
+        """At startup: tasks that were mid-flight when Archangel stopped can't continue on their own. Returns them, so
+        whoever's waiting on one hears."""
+        open = (Status.QUEUED, Status.RUNNING)
+        ids = [id for (id,) in self._db.execute("SELECT id FROM tasks WHERE status IN (?, ?)", open)]
         with self._db:
             self._db.execute(
                 "UPDATE tasks SET status = ?, report = 'Archangel restarted while this was running.' "
                 "WHERE status IN (?, ?)",
-                (Status.INTERRUPTED, Status.QUEUED, Status.RUNNING),
+                (Status.INTERRUPTED, *open),
             )
+        return [self.task(id) for id in ids]
 
     def add_step(self, task: int, text: str, screen: Image | None = None) -> None:
         name = screen and self.save_image(screen)

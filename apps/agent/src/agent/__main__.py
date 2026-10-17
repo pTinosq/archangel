@@ -9,6 +9,7 @@ from agent import config, logs
 from agent.channels.cli import CliChannel
 from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
+from agent.events import TaskUpdate
 from agent.gateway import Gateway
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
@@ -18,7 +19,7 @@ from agent.phone.pilot import Kit, Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
-from agent.store import Store
+from agent.store import Store, Task
 from agent.tasks import Tasks
 from agent.web import Web
 
@@ -28,7 +29,7 @@ def main() -> None:
     logs.start()
     model, fallback = openrouter(config.model()), openrouter(config.fallback_vision_model())
     store = Store()
-    store.interrupt_running()
+    interrupted = store.interrupt_running()
     prompts = Prompts(store)
 
     relay = httpx.AsyncClient(
@@ -57,14 +58,16 @@ def main() -> None:
     gateway = Gateway(channels, store)
     orchestrator = Orchestrator(model, store, tasks, gateway, prompts.live("orchestrator"))
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(web, gateway, orchestrator))
+        asyncio.run(_run(web, gateway, orchestrator, interrupted))
     print()
 
 
-async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator) -> None:
+async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator, interrupted: list[Task]) -> None:
     async with asyncio.TaskGroup() as group:
         group.create_task(web.serve())
         group.create_task(gateway.run(orchestrator.handle))
+        for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
+            group.create_task(orchestrator.handle(TaskUpdate(task)))
 
 
 main()

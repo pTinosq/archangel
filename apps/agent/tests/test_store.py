@@ -31,8 +31,7 @@ def test_running_tasks_are_interrupted_on_restart(store):
     store.save_task(running)
     store.save_task(waiting)
 
-    store.interrupt_running()
-
+    assert [t.id for t in store.interrupt_running()] == [running.id]
     assert [t.status for t in store.tasks()] == [Status.NEEDS_APPROVAL, Status.INTERRUPTED]
 
 
