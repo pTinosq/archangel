@@ -185,7 +185,7 @@ def test_asked_for_a_call_back_it_rings_and_says_it_once_answered():
     voice.says("Also, Alex replied.")  # while it rings: one call, both said
 
     (call,) = voice.calls
-    assert call["To"] == [ACCOUNT.owner] and call["MachineDetection"] == ["Enable"]
+    assert call["To"] == [ACCOUNT.owner]
     assert call["Url"] == ["https://archangel.example/twilio/voice/answered"]
     assert call["StatusCallback"] == ["https://archangel.example/twilio/voice/ended"]
     assert voice.twilio_posts("/twilio/voice/answered", forged=True, CallSid="CA101").status_code == 403
@@ -196,13 +196,16 @@ def test_asked_for_a_call_back_it_rings_and_says_it_once_answered():
     assert voice.texts == []
 
 
-def test_a_voicemail_gets_hung_up_on_and_the_owner_texted():
+def test_a_voicemail_gets_the_message_and_the_owner_a_text():
     voice = Voice()
-    voice.says("Your basket's ready.")
-    response = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="machine_start")
+    voice.says("Your basket's ready & waiting.")
+    response = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="machine_end_beep")
 
-    assert response.text == "<Response><Hangup/></Response>"
-    assert [t["Body"] for t in voice.texts] == [["Your basket's ready."]]
+    assert voice.calls[0]["MachineDetection"] == ["DetectMessageEnd"]
+    assert response.text == (
+        '<Response><Say language="en-GB">Your basket\'s ready &amp; waiting.</Say><Hangup/></Response>'
+    )
+    assert [t["Body"] for t in voice.texts] == [["Tried to call you. Your basket's ready & waiting."]]
 
 
 def test_a_missed_call_becomes_a_text():
@@ -211,4 +214,4 @@ def test_a_missed_call_becomes_a_text():
     voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")
     voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")  # once only
 
-    assert [t["Body"] for t in voice.texts] == [["Your basket's ready."]]
+    assert [t["Body"] for t in voice.texts] == [["Tried to call you. Your basket's ready."]]

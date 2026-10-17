@@ -11,7 +11,7 @@ import json
 import logging
 from dataclasses import dataclass
 from urllib.parse import parse_qsl
-from xml.sax.saxutils import quoteattr
+from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 from fastapi import Request, Response, WebSocket, WebSocketDisconnect
@@ -29,6 +29,7 @@ EMPTY = "<Response/>"  # TwiML for "nothing to do": replies are sent separately
 REJECT = "<Response><Reject/></Response>"
 HANG_UP = "<Response><Hangup/></Response>"
 UNANSWERED = {"busy", "no-answer", "failed", "canceled"}
+MISSED = "Tried to call you. "
 GREETING = "Archangel."
 
 
@@ -53,7 +54,8 @@ class Twilio:
     async def call(self, to: str, answered: str, ended: str) -> str:
         """Ring `to`; Twilio asks `answered` what to do once it knows who picked up, and tells `ended` how it went.
         Returns the call's id."""
-        form = {"To": to, "From": self.account.number, "Url": answered, "MachineDetection": "Enable"}
+        # DetectMessageEnd: on a voicemail, Twilio waits for the beep before asking, so a message can be left.
+        form = {"To": to, "From": self.account.number, "Url": answered, "MachineDetection": "DetectMessageEnd"}
         return (await self._post("Calls.json", form | {"StatusCallback": ended}))["sid"]
 
     async def _post(self, path: str, form: dict[str, str]) -> dict:
@@ -118,8 +120,8 @@ class VoiceChannel(Channel):
     over a WebSocket.
 
     While the owner's on a call, everything is said on it. Otherwise Archangel rings only if they asked for a call back
-    (the message is addressed to them, not to a call); a voicemail or missed call gets a text instead, so a recording
-    is never taken for the owner. Updates for a call that has ended are texted, but replies to what was said on it
+    (the message is addressed to them, not to a call). A voicemail gets the message after the beep, then a hang-up,
+    so a recording is never taken for the owner; voicemails and missed calls get a text too. Updates for a call that has ended are texted, but replies to what was said on it
     aren't: hanging up after "bye" shouldn't bring a text saying "Goodbye."
     """
 
@@ -153,9 +155,11 @@ class VoiceChannel(Channel):
             said = " ".join(self._ringing.pop(form.get("CallSid", ""), [])) or GREETING
             if form.get("AnsweredBy", "unknown") in ("human", "unknown"):
                 return _xml(self._twiml(said))
-            log.info("Voicemail picked up; texting instead")
-            await twilio.send_sms(twilio.account.owner, said)
-            return _xml(HANG_UP)
+            log.info("Voicemail picked up; leaving a message and texting too")
+            await twilio.send_sms(twilio.account.owner, MISSED + said)
+            if form.get("AnsweredBy", "").startswith("machine_end"):  # after the beep
+                return _xml(f'<Response><Say language="en-GB">{escape(said)}</Say><Hangup/></Response>')
+            return _xml(HANG_UP)  # a fax, or a machine it couldn't wait out
 
         @web.app.post("/twilio/voice/ended")
         async def ended(request: Request) -> Response:
@@ -164,7 +168,7 @@ class VoiceChannel(Channel):
             missed = self._ringing.pop(form.get("CallSid", ""), None)
             if missed and form.get("CallStatus") in UNANSWERED:
                 log.info("Call %s; texting instead", form.get("CallStatus"))
-                await twilio.send_sms(twilio.account.owner, " ".join(missed))
+                await twilio.send_sms(twilio.account.owner, MISSED + " ".join(missed))
             return _xml(EMPTY)
 
         @web.app.websocket("/twilio/voice/relay")
