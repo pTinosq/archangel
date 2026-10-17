@@ -39,13 +39,14 @@ Error codes: `invalid_command`, `not_found`, `failed`, `internal`.
 
 | type         | params                                       | data                                         |
 |--------------|----------------------------------------------|----------------------------------------------|
-| `screenshot` |                                              | `{"width", "height", "jpeg": "<base64>"}`    |
+| `screenshot` | `scale`? in (0, 1] (default 1)               | `{"width", "height", "jpeg": "<base64>"}`    |
 | `tap`        | `x`, `y`, `durationMs`? (default 50)         |                                              |
 | `swipe`      | `x1`, `y1`, `x2`, `y2`, `durationMs`? (300)  |                                              |
 | `type`       | `text` (replaces the focused field's text)   |                                              |
 | `key`        | `key`: `back` `home` `recents` `notifications` `quick_settings` `lock` |                    |
 | `launch`     | `package`                                    |                                              |
 | `ui_tree`    |                                              | `{"windows": [Node]}`                        |
+| `apps`       |                                              | `{"apps": [{"label", "package"}]}`         |
 
 `Node`: `{"class", "text"?, "desc"?, "id"?, "bounds": [left, top, right, bottom], "flags"?: ["clickable", "editable", "scrollable", "focused"], "children"?: [Node]}`. Empty fields are omitted.
 

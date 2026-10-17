@@ -14,6 +14,7 @@ import android.util.Base64
 import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import java.io.ByteArrayOutputStream
+import kotlin.math.roundToInt
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
@@ -23,14 +24,20 @@ import kotlinx.coroutines.withContext
 
 class AndroidDevice(private val service: AccessibilityService) : Device {
 
-    override suspend fun screenshot(): Screenshot {
+    override suspend fun screenshot(scale: Float): Screenshot {
         val result = captureScreen()
         return withContext(Dispatchers.Default) {
             result.hardwareBuffer.use { buffer ->
                 val hardware = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
                     ?: throw CommandException(ErrorCode.FAILED, "Could not read screenshot")
-                val bitmap = hardware.copy(Bitmap.Config.ARGB_8888, false)
+                val full = hardware.copy(Bitmap.Config.ARGB_8888, false)
                 hardware.recycle()
+                val bitmap = if (scale == 1f) full else Bitmap.createScaledBitmap(
+                    full,
+                    (full.width * scale).roundToInt(),
+                    (full.height * scale).roundToInt(),
+                    true,
+                ).also { full.recycle() }
                 val jpeg = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
                 Screenshot(bitmap.width, bitmap.height, Base64.encodeToString(jpeg.toByteArray(), Base64.NO_WRAP))
                     .also { bitmap.recycle() }
@@ -110,6 +117,16 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
         val intent = service.packageManager.getLaunchIntentForPackage(packageName)
             ?: throw CommandException(ErrorCode.NOT_FOUND, "No launchable app: $packageName")
         service.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun apps(): Apps {
+        val packageManager = service.packageManager
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = packageManager.queryIntentActivities(launcher, 0)
+            .map { App(it.loadLabel(packageManager).toString(), it.activityInfo.packageName) }
+            .distinctBy { it.packageName }
+            .sortedBy { it.label.lowercase() }
+        return Apps(apps)
     }
 
     override fun uiTree() = UiTree(service.windows.mapNotNull { it.root?.toNode() })

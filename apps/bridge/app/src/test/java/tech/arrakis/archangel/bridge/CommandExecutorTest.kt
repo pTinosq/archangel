@@ -28,6 +28,21 @@ class CommandExecutorTest {
     }
 
     @Test
+    fun `screenshot scale is passed through and validated`() = runTest {
+        val reply = executor.execute("""{"id":"1","type":"screenshot","scale":0.5}""")
+        assertEquals("50", reply.data!!.jsonObject["width"]!!.jsonPrimitive.content)
+
+        assertError("invalid_command", executor.execute("""{"id":"2","type":"screenshot","scale":0}"""))
+        assertError("invalid_command", executor.execute("""{"id":"3","type":"screenshot","scale":1.5}"""))
+    }
+
+    @Test
+    fun `apps lists launchable apps`() = runTest {
+        val reply = executor.execute("""{"id":"1","type":"apps"}""")
+        assertEquals("""{"apps":[{"label":"WhatsApp","package":"com.whatsapp"}]}""", reply.data.toString())
+    }
+
+    @Test
     fun `repeated id replays the reply without executing again`() = runTest {
         val frame = """{"id":"1","type":"key","key":"home"}"""
 
@@ -74,7 +89,7 @@ class CommandExecutorTest {
 private class FakeDevice : Device {
     val calls = mutableListOf<String>()
 
-    override suspend fun screenshot() = Screenshot(1, 1, "abc")
+    override suspend fun screenshot(scale: Float) = Screenshot((100 * scale).toInt(), (200 * scale).toInt(), "abc")
 
     override suspend fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
         calls += "swipe $x1,$y1 -> $x2,$y2 in ${durationMs}ms"
@@ -91,4 +106,6 @@ private class FakeDevice : Device {
     override fun launch(packageName: String) = throw CommandException(ErrorCode.NOT_FOUND, packageName)
 
     override fun uiTree() = throw IllegalStateException("boom")
+
+    override fun apps() = Apps(listOf(App("WhatsApp", "com.whatsapp")))
 }

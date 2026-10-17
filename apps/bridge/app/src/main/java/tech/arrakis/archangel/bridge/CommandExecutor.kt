@@ -42,8 +42,12 @@ class CommandExecutor(private val device: Device) {
 
     private suspend fun perform(command: Command): JsonElement? {
         when (command) {
-            is Command.Screenshot -> return BridgeJson.encodeToJsonElement(device.screenshot())
+            is Command.Screenshot -> {
+                require(command.scale > 0f && command.scale <= 1f) { "scale must be in (0, 1]" }
+                return BridgeJson.encodeToJsonElement(device.screenshot(command.scale))
+            }
             is Command.UiTree -> return BridgeJson.encodeToJsonElement(device.uiTree())
+            is Command.Apps -> return BridgeJson.encodeToJsonElement(device.apps())
             is Command.Tap -> device.swipe(command.x, command.y, command.x, command.y, command.durationMs)
             is Command.Swipe -> device.swipe(command.x1, command.y1, command.x2, command.y2, command.durationMs)
             is Command.Type -> device.type(command.text)

@@ -18,7 +18,7 @@ sealed interface Command {
 
     @Serializable
     @SerialName("screenshot")
-    data class Screenshot(override val id: String) : Command
+    data class Screenshot(override val id: String, val scale: Float = 1f) : Command
 
     @Serializable
     @SerialName("tap")
@@ -50,6 +50,10 @@ sealed interface Command {
     @Serializable
     @SerialName("ui_tree")
     data class UiTree(override val id: String) : Command
+
+    @Serializable
+    @SerialName("apps")
+    data class Apps(override val id: String) : Command
 }
 
 @Serializable
@@ -91,6 +95,12 @@ data class Screenshot(val width: Int, val height: Int, val jpeg: String)
 
 @Serializable
 data class UiTree(val windows: List<Node>)
+
+@Serializable
+data class Apps(val apps: List<App>)
+
+@Serializable
+data class App(val label: String, @SerialName("package") val packageName: String)
 
 @Serializable
 data class Node(
