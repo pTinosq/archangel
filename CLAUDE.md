@@ -114,4 +114,7 @@ minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.version
 - Can't pass a secure lock screen. Unattended: no lock, "Stay awake while charging", battery optimisation off.
 - Browser-sideloaded on Android 13+: App info → ⋮ → "Allow restricted settings" before enabling. `adb install` unaffected.
 - Install or force-stop switches the service off.
+- `type` uses `ACTION_SET_TEXT`, which some custom editors reject (X's compose box). Needs a paste/IME fallback.
+- The pilot can loop on repeated failures until the 40-step cap; stuck detection is M3.
+- Safety (no sending, posting, paying or logging in without the owner) is prompt-only until M3's `ask_user`. See `docs/roadmap.md`.
 - Android rate-limits screenshots; the bridge retries briefly.
