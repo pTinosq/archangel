@@ -14,7 +14,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CALLS, type Notice, openCalls, type Role, useActivity } from "./activity";
 
 const NODE = { width: 120, height: 44 }; // as in styles.css
@@ -34,9 +34,11 @@ export function Cockpit() {
   return (
     <>
       <section className="cockpit">
-        <ReactFlowProvider>
-          <Graph notices={notices} now={now} inRequest={inRequest} following={request !== null} />
-        </ReactFlowProvider>
+        <Redrawn>
+          <ReactFlowProvider>
+            <Graph notices={notices} now={now} inRequest={inRequest} following={request !== null} />
+          </ReactFlowProvider>
+        </Redrawn>
       </section>
       <section className="timeline">
         <div className="follow">
@@ -72,6 +74,27 @@ export function Cockpit() {
       </section>
     </>
   );
+}
+
+/** If drawing the graph fails, says why and offers to try again, instead of the graph silently vanishing. */
+class Redrawn extends Component<{ children: ReactNode }, { error: Error | null; tries: number }> {
+  state = { error: null as Error | null, tries: 0 };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("Cockpit graph failed", error);
+  }
+  render() {
+    const { error, tries } = this.state;
+    if (!error) return <div key={tries} style={{ display: "contents" }}>{this.props.children}</div>;
+    return (
+      <p className="quiet">
+        The graph hit a problem: {error.message}{" "}
+        <button onClick={() => this.setState({ error: null, tries: tries + 1 })}>Redraw</button>
+      </p>
+    );
+  }
 }
 
 type PartData = { name: string; kind: string; doing?: string; here: boolean; flash: boolean };
