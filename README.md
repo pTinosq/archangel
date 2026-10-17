@@ -19,6 +19,8 @@ just agent
 › what's my battery level?      # uses the phone; needs the relay and bridge running
 ```
 
+Phone work runs as background tasks, so you can keep talking, ask for status, or say stop. Before anything that sends, pays, logs in, deletes or changes a setting, it asks you, and prints a screenshot path; reply yes or no. History and tasks live in `apps/agent/data/archangel.db` and survive restarts.
+
 Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Settings: [CLAUDE.md](CLAUDE.md#agent).
 
 ## Drive the phone
