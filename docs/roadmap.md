@@ -10,11 +10,37 @@ Each milestone ships something usable and proves one idea.
 | M3 ✅ | Orchestrator + human-in-the-loop + escape hatches + durable state | talk while tasks run in the background; "Post this? [screenshot]" → "yes"; tasks stop when stuck; answer an approval after a restart | orchestrator/sub-agent split; approvals enforced in code; deferred, resumable runs |
 | M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
 | M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
-| M6 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
-| M7 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
-| M8 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
-| M9 | Voice | call your Twilio number | LiveKit SIP as a channel |
-| M10 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+| M6 | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
+| M7 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
+| M8 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
+| M9 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
+| M10 | Voice | call your Twilio number | LiveKit SIP as a channel |
+| M11 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+
+## M6 requirements (from the owner): the cockpit
+
+A new view in the control panel that shows all communication inside Archangel as it happens. It should look cool: a live graph or chart, not a log. It's a nice-to-have, so it must never slow, block or break the real work.
+
+**What the owner wants to see**
+- **Where their request is right now.** Follow one message from the channel it arrived on, through the orchestrator, into the task it started, and back out to whichever channel the answer goes to.
+- **Which agent is doing what.** Orchestrator thinking, a tool call, the pilot deciding, the guard checking a tap, Jev or Luna locating, the investigator diagnosing, the phone acting or taking a screenshot.
+- **Messages travelling between them.** Each hop between components is visible as it happens: pulses along edges in a graph of the components, with sends and receives (tx/rx) both shown.
+
+**Shape (the owner's suggestion, refined)**
+- **Every component announces what it's doing.** It sends a small activity notice: who, to whom, tx or rx, what kind of thing (message, tool call, model call, phone command, screenshot), a short summary, and which request or task it belongs to. Notices are fire-and-forget.
+- **One in-process broadcast hub.** It fans notices out to whoever is listening. It's lossy by design: no listeners means notices are dropped, and a slow listener misses notices rather than holding anything up. At most there's a small recent buffer, so a newly opened cockpit isn't empty.
+- **A WebSocket on the panel API.** It streams the hub to the browser and is broadcast only, so the browser never sends commands over it. The cockpit draws itself purely from that stream.
+- **Correlation.** Notices carry ids (the owner message → the task it started → that task's steps), so the cockpit can highlight one request's whole path and show where it is now.
+
+**Design questions for the plan to settle**
+- **Explicit announcements or tracing.** Should each component announce explicitly, or should the hub be fed by tracing that already exists? Pydantic AI emits OpenTelemetry spans for agent runs, model calls and tool calls, and a span listener could cover the model side for free. Choose whichever gives the clearest picture for the least code. The phone, channels and gateway will need their own announcements either way.
+- **Where announcing lives.** Ideally a few seams rather than calls scattered everywhere: the gateway, `Event` handling, `logs.run` for tool calls, `Phone._command`, and the locators, guard and investigator.
+- **What the cockpit draws.** A node graph with animated edges, plus a running timeline and a "follow this request" mode. Keep the panel's existing simple style: React, plain CSS, and SVG or canvas. A graph library only if it clearly earns its place.
+
+**Not in scope**
+- **Not a source of truth.** Tasks, steps and the transcript stay in the store; the cockpit isn't stored or replayed.
+- **No control.** Commands don't flow through the cockpit.
+- **No remote access.** It's local only, like the rest of the panel.
 
 ## Cleanup (done, before M6)
 
@@ -24,7 +50,7 @@ Each milestone ships something usable and proves one idea.
 - **Screenshots:** JPEG quality 30 from the bridge (half the bytes; Jev rejects WebP). Stored as files deleted after 3 days. Paused runs keep only the latest screen. `logs/` no longer copies them.
 - **Duplication removed:** `models.py` (model building, image conversion, `Instructions`); `Pilot(model, Kit(...))`; one `Pilot` signature; `Screenshot` became `Image`; tasks say `needs approval` / `needs answer` explicitly.
 
-Next: the owner tests across channels and reports changes before M6.
+Next: M6, the cockpit; the owner also tests across channels and reports changes.
 
 ## M3 (done)
 
@@ -47,7 +73,7 @@ Next: the owner tests across channels and reports changes before M6.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M7).
+- **Not yet:** images from the panel chat; connectors and MCP setup (M8).
 
 ## M5 requirements (from the owner)
 
@@ -55,12 +81,12 @@ Next: the owner tests across channels and reports changes before M6.
 - **Monitoring.** Task status, live progress, each run's steps and screenshots.
 - **A channel.** Chat with Archangel from it, approvals included.
 - **Prompts in the database.** The defaults stay in the code; edited versions are saved in the store and edited from the panel.
-- **Setup.** Later: connectors and MCP servers (M7) are configured here.
+- **Setup.** Later: connectors and MCP servers (M8) are configured here.
 
-## M8 requirements (from the owner)
+## M9 requirements (from the owner)
 
 - **Learns as it goes.** Standing instructions said in any channel become memories with no extra step. Examples: "never return sponsored results for restaurant recommendations"; "Uber: always the cheapest ride, rate drivers 5 stars, no tip".
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 
-Temporal waits for M10: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+Temporal waits for M11: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
