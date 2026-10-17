@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Chat } from "./Chat";
+import { Cockpit } from "./Cockpit";
 import { Prompts } from "./Prompts";
 import { Tasks } from "./Tasks";
 
-type Tab = "tasks" | "prompts";
+type Tab = "tasks" | "cockpit" | "prompts";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("tasks");
@@ -12,7 +13,7 @@ export function App() {
       <header>
         <h1>Archangel</h1>
         <nav>
-          {(["tasks", "prompts"] as const).map((name) => (
+          {(["tasks", "cockpit", "prompts"] as const).map((name) => (
             <button key={name} className={tab === name ? "active" : ""} onClick={() => setTab(name)}>
               {name[0].toUpperCase() + name.slice(1)}
             </button>
@@ -20,7 +21,7 @@ export function App() {
         </nav>
       </header>
       <main className={tab}>
-        {tab === "tasks" ? <Tasks /> : <Prompts />}
+        {{ tasks: <Tasks />, cockpit: <Cockpit />, prompts: <Prompts /> }[tab]}
         <Chat />
       </main>
     </div>

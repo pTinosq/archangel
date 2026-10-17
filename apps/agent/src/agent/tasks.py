@@ -84,7 +84,7 @@ class Tasks:
             async with self._phone:
                 task.status = Status.RUNNING
                 self._store.save_task(task)
-                with activity.call("pilot", "task", task.goal) as reply:
+                with activity.call("pilot", "agent", task.goal) as reply:
                     outcome = await self._pilot.run(task.goal, self._recorder(task), paused, answer)
                     reply(f"{outcome.status}: {outcome.report}")
         except asyncio.CancelledError:

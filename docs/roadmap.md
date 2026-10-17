@@ -10,12 +10,24 @@ Each milestone ships something usable and proves one idea.
 | M3 ✅ | Orchestrator + human-in-the-loop + escape hatches + durable state | talk while tasks run in the background; "Post this? [screenshot]" → "yes"; tasks stop when stuck; answer an approval after a restart | orchestrator/sub-agent split; approvals enforced in code; deferred, resumable runs |
 | M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
 | M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
-| M6 | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
+| M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
 | M7 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
 | M8 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
 | M9 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M10 | Voice | call your Twilio number | LiveKit SIP as a channel |
 | M11 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+
+## M6 (done)
+
+- **Announcing:** `agent/activity.py`, used like logging. `hop` for one-way messages, `call` for a request and its reply. No handles are passed and no signatures changed; deleting the calls removes the cockpit.
+- **Ids in context:** context variables carry the request (set by the gateway per owner message), the task (set by `Tasks`) and the actor (set by each agent run). Everything a request leads to, including its tasks and their updates, carries its id.
+- **Seams:** gateway, `logs.run` (each model call and tool call of every agent; guard, investigator and locator now run through it too), tasks, the pilot's calls to guard, locator and investigator, Jev, and `Phone._command`.
+- **Lossy:** announcing never waits or raises. Each listener has a bounded queue and misses notices when it's full. The last 200 are kept for new listeners. Nothing is stored.
+- **Stream:** `GET /api/activity` uses server-sent events, not a WebSocket. It's one-way by construction, needs no new dependency, and the browser reconnects it. A heartbeat lets open streams end on shutdown.
+- **Cockpit tab:** an SVG graph of the parts, with channels on the left and models placed above their callers.
+  - Pulses travel each hop: blue for tx, green for rx, red for failures.
+  - A node glows while a call to it is open.
+  - A timeline sits beside the graph. "Follow latest", or clicking a notice, lights that request's path and rings the node holding it now.
 
 ## M6 requirements (from the owner): the cockpit
 
@@ -50,7 +62,7 @@ A new view in the control panel that shows all communication inside Archangel as
 - **Screenshots:** JPEG quality 30 from the bridge (half the bytes; Jev rejects WebP). Stored as files deleted after 3 days. Paused runs keep only the latest screen. `logs/` no longer copies them.
 - **Duplication removed:** `models.py` (model building, image conversion, `Instructions`); `Pilot(model, Kit(...))`; one `Pilot` signature; `Screenshot` became `Image`; tasks say `needs approval` / `needs answer` explicitly.
 
-Next: M6, the cockpit; the owner also tests across channels and reports changes.
+The owner also tests across channels and reports changes.
 
 ## M3 (done)
 

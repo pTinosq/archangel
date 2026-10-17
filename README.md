@@ -30,7 +30,7 @@ just agent               # keep running
 just panel               # open http://localhost:5173
 ```
 
-Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, and edit the prompts. Local only.
+Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, and edit the prompts. The Cockpit tab shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing. Local only.
 
 ## Drive the phone
 

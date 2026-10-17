@@ -15,7 +15,7 @@ channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilot ──▶ 
 | `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, phone pilot. |
 | `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
 | `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
-| `apps/panel/` | Control panel, React + Vite + plain CSS. Polls the agent's local API every second. |
+| `apps/panel/` | Control panel, React + Vite + plain CSS. Polls the agent's local API every second; the Cockpit tab draws the live activity stream (SVG, no graph library). |
 | `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
 | `docs/roadmap.md` | Milestones. Tick them off as they land. |
 | `justfile` | All dev tasks. `just` lists them. |

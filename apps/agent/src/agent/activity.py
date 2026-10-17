@@ -26,6 +26,7 @@ QUEUED_PER_LISTENER = 1000
 MAX_TEXT = 200
 
 Kind = Literal["message", "agent", "model", "tool", "phone", "task"]
+"""agent, model and phone are always calls: a tx, then an rx when it's done. The rest are one-way hops."""
 
 
 @dataclass(frozen=True)
