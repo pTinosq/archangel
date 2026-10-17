@@ -42,8 +42,8 @@ Error codes: `invalid_command`, `not_found`, `failed`, `internal`.
 | `screenshot` | `scale`? in (0, 1] (default 1)               | `{"width", "height", "jpeg": "<base64>"}`    |
 | `tap`        | `x`, `y`, `durationMs`? (default 50)         |                                              |
 | `swipe`      | `x1`, `y1`, `x2`, `y2`, `durationMs`? (300)  |                                              |
-| `type`       | `text` (replaces the focused field's text)   |                                              |
-| `key`        | `key`: `back` `home` `recents` `notifications` `quick_settings` `lock` |                    |
+| `type`       | `text` (replaces the focused field's text; pastes if the field refuses) |                                              |
+| `key`        | `key`: `back` `home` `recents` `notifications` `quick_settings` `lock` `enter` (focused field's IME action) |                    |
 | `launch`     | `package`                                    |                                              |
 | `ui_tree`    |                                              | `{"windows": [Node]}`                        |
 | `apps`       |                                              | `{"apps": [{"label", "package"}]}`         |

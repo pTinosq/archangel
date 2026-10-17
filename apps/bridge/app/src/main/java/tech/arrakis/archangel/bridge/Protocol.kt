@@ -64,6 +64,8 @@ enum class GlobalKey {
     @SerialName("notifications") Notifications,
     @SerialName("quick_settings") QuickSettings,
     @SerialName("lock") Lock,
+    /** Not global: the focused field's IME action (search, send, next). */
+    @SerialName("enter") Enter,
 }
 
 @Serializable

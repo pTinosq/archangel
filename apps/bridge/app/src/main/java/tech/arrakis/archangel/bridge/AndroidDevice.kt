@@ -5,6 +5,8 @@ import android.accessibilityservice.AccessibilityService.GestureResultCallback
 import android.accessibilityservice.AccessibilityService.ScreenshotResult
 import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.accessibilityservice.GestureDescription
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
@@ -91,17 +93,30 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
     }
 
     override fun type(text: String) {
-        val field = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            ?: throw CommandException(ErrorCode.NOT_FOUND, "No focused input field")
+        val field = focusedInput()
         val arguments = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
-        if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
+        if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) return
+        // Some custom editors (X's compose box) reject SET_TEXT but accept a paste over a full selection.
+        val clipboard = service.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("archangel", text))
+        val all = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, field.text?.length ?: 0)
+        }
+        field.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, all)
+        if (!field.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
             throw CommandException(ErrorCode.FAILED, "Focused field rejected the text")
         }
     }
 
     override fun key(key: GlobalKey) {
+        if (key == GlobalKey.Enter) {
+            val submitted = focusedInput().performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+            if (!submitted) throw CommandException(ErrorCode.FAILED, "Focused field has no enter action")
+            return
+        }
         val action = when (key) {
             GlobalKey.Back -> AccessibilityService.GLOBAL_ACTION_BACK
             GlobalKey.Home -> AccessibilityService.GLOBAL_ACTION_HOME
@@ -109,9 +124,14 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
             GlobalKey.Notifications -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
             GlobalKey.QuickSettings -> AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
             GlobalKey.Lock -> AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
+            GlobalKey.Enter -> error("handled above")
         }
         if (!service.performGlobalAction(action)) throw CommandException(ErrorCode.FAILED, "System refused $key")
     }
+
+    private fun focusedInput(): AccessibilityNodeInfo =
+        service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            ?: throw CommandException(ErrorCode.NOT_FOUND, "No focused input field")
 
     override fun launch(packageName: String) {
         val intent = service.packageManager.getLaunchIntentForPackage(packageName)

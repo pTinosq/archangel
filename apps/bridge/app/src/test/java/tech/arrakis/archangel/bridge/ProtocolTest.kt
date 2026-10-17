@@ -20,6 +20,10 @@ class ProtocolTest {
             Command.Key("3", GlobalKey.QuickSettings),
             BridgeJson.decodeFromString<Command>("""{"id":"3","type":"key","key":"quick_settings"}"""),
         )
+        assertEquals(
+            Command.Key("4", GlobalKey.Enter),
+            BridgeJson.decodeFromString<Command>("""{"id":"4","type":"key","key":"enter"}"""),
+        )
     }
 
     @Test
