@@ -5,6 +5,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.brain import Brain
 from agent.messages import Conversation, Image, Message, Text
+from agent.phone.pilot import Outcome
 from agent.store import Store
 
 CONVERSATION = Conversation("cli", "local")
@@ -26,9 +27,9 @@ class FakePilot:
     def __init__(self):
         self.tasks: list[str] = []
 
-    async def run(self, task: str) -> str:
+    async def run(self, task: str) -> Outcome:
         self.tasks.append(task)
-        return "WhatsApp is open."
+        return Outcome("done", "WhatsApp is open.")
 
 
 def brain(model) -> Brain:

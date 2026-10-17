@@ -48,7 +48,8 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | System prompt. |
 | `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |
-| `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide, max 40 steps. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`. Keeps only the last 2 screenshots in context. |
+| `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) for questions and approvals. |
+| `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for the owner's approval. Fails closed. |
 | `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API) or `LlmLocator` (any vision model). |
 | `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. |
 

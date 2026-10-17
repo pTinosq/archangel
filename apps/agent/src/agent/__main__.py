@@ -10,6 +10,7 @@ from agent import config, logs
 from agent.brain import Brain
 from agent.channels.cli import CliChannel
 from agent.gateway import Gateway
+from agent.phone.guard import ModelGuard
 from agent.phone.pilot import Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import create_locator
@@ -26,7 +27,7 @@ def main() -> None:
         headers={"Authorization": f"Bearer {config.relay_token()}"},
         timeout=30,
     )
-    pilot = Pilot(model, Phone(relay, config.device()), create_locator(config.vision_model(), api_key))
+    pilot = Pilot(model, Phone(relay, config.device()), create_locator(config.vision_model(), api_key), ModelGuard(model))
     gateway = Gateway([CliChannel()], Brain(model, Store(), pilot))
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(gateway.run())

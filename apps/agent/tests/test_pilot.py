@@ -6,7 +6,6 @@ from pydantic_ai import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    TextPart,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
@@ -15,7 +14,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.history import forget_old_screenshots
 from agent.phone import pilot as pilot_module
-from agent.phone.pilot import Pilot
+from agent.phone.pilot import Answer, Outcome, Pilot
 from agent.phone.relay import PhoneError, Screenshot
 from agent.phone.vision import Box
 
@@ -47,11 +46,22 @@ class FakePhone:
 
 class FakeLocator:
     async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
-        return Box(0.2, 0.4, 0.4, 0.6) if "WhatsApp" in target else None
+        return Box(0.2, 0.4, 0.4, 0.6) if "button" in target else None
+
+
+class FakeGuard:
+    """Flags anything mentioning "Send"."""
+
+    def __init__(self):
+        self.checked: list[str] = []
+
+    async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
+        self.checked.append(target)
+        return "send the message" if "Send" in target else None
 
 
 def scripted(*calls: tuple[str, dict]):
-    """A model that makes `calls` in order, then reports every tool result it saw."""
+    """A model that makes `calls` in order, then finishes, reporting every tool result it saw."""
     seen: list[str] = []
 
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
@@ -61,26 +71,27 @@ def scripted(*calls: tuple[str, dict]):
         step = sum(isinstance(m, ModelResponse) for m in messages)
         if step < len(calls):
             return ModelResponse(parts=[ToolCallPart(*calls[step])])
-        return ModelResponse(parts=[TextPart(" | ".join(seen))])
+        return ModelResponse(parts=[ToolCallPart("done", {"report": " | ".join(seen)})])
 
     return FunctionModel(respond)
 
 
-def run(model, phone: FakePhone) -> str:
-    return asyncio.run(Pilot(model, phone, FakeLocator()).run("do it"))
+def run(model, phone: FakePhone, guard: FakeGuard | None = None, **kwargs) -> Outcome:
+    pilot = Pilot(model, phone, FakeLocator(), guard or FakeGuard())
+    return asyncio.run(pilot.run("do it", **kwargs))
 
 
 def test_taps_the_centre_of_the_located_box():
     phone = FakePhone()
-    report = run(scripted(("tap", {"target": "the WhatsApp icon"})), phone)
+    outcome = run(scripted(("tap", {"target": "the WhatsApp button"})), phone)
 
     assert phone.actions == ["tap 0.30,0.50"]
-    assert report == "Tapped the WhatsApp icon."
+    assert outcome == Outcome("done", "Tapped the WhatsApp button.", screen=Screenshot(b"jpg", 540, 1200))
 
 
 def test_problems_are_reported_back_to_the_model():
     phone = FakePhone()
-    report = run(
+    outcome = run(
         scripted(
             ("tap", {"target": "a unicorn"}),
             ("type_text", {"text": "hi"}),
@@ -90,7 +101,7 @@ def test_problems_are_reported_back_to_the_model():
         phone,
     )
 
-    assert report.split(" | ") == [
+    assert outcome.report.split(" | ") == [
         "Couldn't find a unicorn on the screen.",
         "Failed: No focused input field",
         "No app called 'Snapchat'. Installed: WhatsApp.",
@@ -99,16 +110,68 @@ def test_problems_are_reported_back_to_the_model():
     assert phone.actions == ["launch com.whatsapp"]
 
 
+def test_a_repeated_failure_gets_a_nudge():
+    outcome = run(scripted(("type_text", {"text": "hi"}), ("type_text", {"text": "hi"})), FakePhone())
+    assert "failed the same way twice" in outcome.report.split(" | ")[1]
+
+
+def test_consecutive_failures_end_the_task_as_stuck():
+    outcome = run(scripted(*[("type_text", {"text": "hi"})] * 5), FakePhone())
+    assert outcome.status == "stuck"
+    assert "5 actions in a row failed" in outcome.report
+
+
+def test_the_model_can_give_up():
+    model = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("give_up", {"reason": "No signal"})]))
+    assert run(model, FakePhone()).status == "gave_up"
+
+
 def test_gives_up_after_the_step_limit(monkeypatch):
     monkeypatch.setattr(pilot_module, "MAX_STEPS", 3)
     forever = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("look", {})]))
-    assert run(forever, FakePhone()) == "Gave up after 3 steps without finishing."
+    assert run(forever, FakePhone()).report == "Gave up after 3 steps without finishing."
 
 
 def test_unexpected_failures_are_reported_not_raised():
     invalid = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("scroll", {"direction": "sideways"})]))
-    report = run(invalid, FakePhone())
-    assert report.startswith("The phone task failed unexpectedly (UnexpectedModelBehavior")
+    outcome = run(invalid, FakePhone())
+    assert outcome.status == "failed"
+    assert outcome.report.startswith("Failed unexpectedly (UnexpectedModelBehavior")
+
+
+def test_consequential_taps_wait_for_approval_then_tap_once():
+    phone, guard = FakePhone(), FakeGuard()
+    model = scripted(("tap", {"target": "the Send button"}))
+
+    waiting = run(model, phone, guard)
+    assert waiting.status == "waiting"
+    assert waiting.report == "Approve: send the message?"
+    assert phone.actions == []
+
+    resumed = run(model, phone, guard, paused=waiting.run, answer=Answer("yes", approved=True))
+    assert phone.actions == ["tap 0.30,0.50"]
+    assert resumed.status == "done"
+    assert guard.checked == ["tap the Send button"]  # approved calls aren't re-checked
+
+
+def test_a_declined_tap_never_happens():
+    phone = FakePhone()
+    model = scripted(("tap", {"target": "the Send button"}))
+    waiting = run(model, phone)
+
+    resumed = run(model, phone, paused=waiting.run, answer=Answer("not yet"))
+
+    assert phone.actions == []
+    assert resumed.report == "The owner said no: not yet"
+
+
+def test_questions_round_trip_to_the_owner():
+    model = scripted(("ask_owner", {"question": "Which Alex?"}))
+    waiting = run(model, FakePhone())
+    assert (waiting.status, waiting.report) == ("waiting", "Which Alex?")
+
+    resumed = run(model, FakePhone(), paused=waiting.run, answer=Answer("Alex Smith"))
+    assert resumed.report == "The owner replied: Alex Smith"
 
 
 def test_only_recent_screenshots_stay_in_context():

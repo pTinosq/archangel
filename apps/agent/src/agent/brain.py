@@ -36,7 +36,7 @@ class Brain:
             Describe the whole task and what to find out, e.g. "Open WhatsApp and read the latest
             message from Alex". Returns what was done and seen.
             """
-            return await pilot.run(task)
+            return (await pilot.run(task)).report
 
     async def handle(self, message: Message, reply: Reply) -> None:
         messages = self._store.history(message.conversation)
