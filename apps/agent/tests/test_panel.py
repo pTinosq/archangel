@@ -4,7 +4,7 @@ import json
 import httpx
 from fakes import FakePilot
 
-from agent import activity
+from agent import activity, web
 from agent.channels import panel
 from agent.channels.login import GitHub
 from agent.channels.panel import PanelChannel
@@ -12,13 +12,15 @@ from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
+from agent.web import Web
 
 
 class Panel:
     def __init__(self, store: Store, github: GitHub | None = None):
         self.store = store
         self.prompts = Prompts(store)
-        self.channel = PanelChannel(store, self.prompts, github)
+        self.web = Web(github)
+        self.channel = PanelChannel(store, self.prompts, self.web)
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -27,7 +29,7 @@ class Panel:
                 self.delivered.append(message)
 
             self.channel._deliver = deliver
-            transport = httpx.ASGITransport(self.channel.app)
+            transport = httpx.ASGITransport(self.web.finish())
             async with httpx.AsyncClient(transport=transport, base_url=f"http://{host}") as client:
                 return await client.request(method, url, **kwargs)
 
@@ -98,7 +100,7 @@ def test_public_only_behind_sign_in(store):
 
 def test_serves_the_built_app(store, tmp_path, monkeypatch):
     (tmp_path / "index.html").write_text("<h1>panel</h1>")
-    monkeypatch.setattr(panel, "DIST", tmp_path)
+    monkeypatch.setattr(web, "DIST", tmp_path)
     assert Panel(store).call("GET", "/").text == "<h1>panel</h1>"
     assert Panel(store).call("GET", "/api/tasks").json() == []
 
@@ -107,7 +109,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None))
+        events = panel._events(PanelChannel(None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line

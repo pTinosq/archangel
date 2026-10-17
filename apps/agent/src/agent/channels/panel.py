@@ -1,13 +1,9 @@
-"""The control panel's side of the agent: a channel for chatting, plus a local HTTP API onto the transcript,
+"""The control panel's side of the agent: a channel for chatting, plus an HTTP API (on `Web`) onto the transcript,
 tasks and their steps, and the prompts. The React app in apps/panel polls it, and watches live activity as a
 stream (server-sent events: one way, so nothing can be commanded through it).
 
 Its buttons (approve, decline, cancel) send ordinary owner messages, so every decision goes through the one
 conversation and the orchestrator knows about it.
-
-It speaks for the owner. Locally it binds to 127.0.0.1 and refuses any other Host header: a web page can't reach
-it by pointing its own domain at this machine (DNS rebinding). It only listens publicly with GitHub sign-in, and
-then serves the built app (apps/panel/dist) too, so the browser sees one origin.
 """
 
 import json
@@ -15,27 +11,20 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import asdict
-from pathlib import Path
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, Response
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import activity
 from agent.channels import Channel, Deliver
-from agent.channels.login import GitHub, protect
 from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.store import Line, Step, Store, Task
+from agent.web import Web
 
 log = logging.getLogger(__name__)
 
-PORT = 8765
-DIST = Path("../panel/dist")  # from apps/agent
-HOSTS = ["localhost", "127.0.0.1"]
 FOREVER = "max-age=31536000, immutable"  # an image never changes under its name
 HEARTBEAT_SECONDS = 1
 
@@ -44,31 +33,21 @@ class PanelChannel(Channel):
     name = "panel"
     owner = Address(name, "owner")
 
-    def __init__(self, store: Store, prompts: Prompts, github: GitHub | None = None, port: int = PORT):
-        """With `github`, the panel is public behind sign-in; without, it's local only."""
+    def __init__(self, store: Store, prompts: Prompts, web: Web):
         self._deliver: Deliver | None = None
-        self._server: uvicorn.Server | None = None
-        self._host, self._port = ("0.0.0.0" if github else "127.0.0.1"), port
-        self.app = _api(self, store, prompts, github)
+        self._web = web
+        _routes(web.app, self, store, prompts)
 
     async def start(self, deliver: Deliver) -> None:
         self._deliver = deliver
-        config = uvicorn.Config(self.app, host=self._host, port=self._port, log_level="warning")
-        log.info("Control panel on http://%s:%d", self._host, self._port)
-        self._server = uvicorn.Server(config)
-        try:
-            await self._server.serve()
-        except SystemExit:  # uvicorn's way of saying it couldn't start, usually the port
-            raise RuntimeError(
-                f"Control panel couldn't start on port {self._port}. Is Archangel already running?"
-            ) from None
+        await self._web.closed()
 
     async def send(self, message: Message) -> None:
         pass  # the panel shows the transcript, where the gateway has already put this
 
     @property
     def stopping(self) -> bool:
-        return bool(self._server and self._server.should_exit)
+        return self._web.stopping
 
     async def receive(self, text: str) -> None:
         if self._deliver:
@@ -79,17 +58,8 @@ class Said(BaseModel):
     text: str
 
 
-def _api(channel: PanelChannel, store: Store, prompts: Prompts, github: GitHub | None) -> FastAPI:
+def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts) -> None:
     # Every route is async: sync ones run on a thread pool, and the store's SQLite connection belongs to this thread.
-    app = FastAPI(title="Archangel control panel")
-    if github:
-        protect(app, github)
-    else:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS)
-
-    @app.get("/health")
-    async def health() -> dict:
-        return {"ok": True}
 
     @app.get("/api/transcript")
     async def transcript(after: int = 0) -> list[Line]:
@@ -130,10 +100,6 @@ def _api(channel: PanelChannel, store: Store, prompts: Prompts, github: GitHub |
     @app.delete("/api/prompts/{name}")
     async def reset_prompt(name: str) -> dict:
         return _prompt(_edit(prompts, name, None))
-
-    if DIST.is_dir():  # built for deploying; locally, `just panel` serves the app
-        app.mount("/", StaticFiles(directory=DIST, html=True))
-    return app
 
 
 async def _events(channel: PanelChannel) -> AsyncIterator[str]:

@@ -19,6 +19,7 @@ from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
+from agent.web import Web
 
 
 def main() -> None:
@@ -43,14 +44,21 @@ def main() -> None:
     )
     tasks = Tasks(store, Pilot(model, kit, prompts.live("pilot")))
 
-    channels = [PanelChannel(store, prompts, config.github(), config.port())]
+    web = Web(config.github(), config.port())
+    channels = [PanelChannel(store, prompts, web)]
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
     orchestrator = Orchestrator(model, store, tasks, gateway, prompts.live("orchestrator"))
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(gateway.run(orchestrator.handle))
+        asyncio.run(_run(web, gateway, orchestrator))
     print()
+
+
+async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator) -> None:
+    async with asyncio.TaskGroup() as group:
+        group.create_task(web.serve())
+        group.create_task(gateway.run(orchestrator.handle))
 
 
 main()
