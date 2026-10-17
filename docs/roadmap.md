@@ -11,12 +11,20 @@ Each milestone ships something usable and proves one idea.
 | M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
 | M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
 | M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
-| M7 | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
+| M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
 | M8 | Telegram | message Archangel from Telegram | new channel, no orchestrator change |
 | M9 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
 | M10 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M11 | Voice | call your Twilio number | LiveKit SIP as a channel |
 | M12 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+
+## M7 (done)
+
+- **Railway project `archangel`:** `relay` and `agent` services, deployed from `main` on push. Settings live on the services; Railway deprecated `railway.json`. The agent's Dockerfile builds the panel and serves it beside the API: one origin. A volume keeps `data/`.
+- **Sign-in:** a GitHub OAuth App used directly (`channels/login.py`), no auth platform. Only `ARCHANGEL_OWNER` gets in; a signed session cookie lasts 30 days. The panel only listens publicly when sign-in is configured, so it can't be public by mistake.
+- **Headless:** no terminal on Railway, so the panel is the only channel.
+- **Phone:** the bridge keeps a Dev and a Prod relay; one tap switches.
+- **Open:** the cockpit once went blank in the cloud after a phone task started; not reproduced locally.
 
 ## M6 (done)
 
