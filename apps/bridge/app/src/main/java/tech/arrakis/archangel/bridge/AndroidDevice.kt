@@ -13,6 +13,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import java.io.ByteArrayOutputStream
@@ -92,23 +93,31 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
         if (!completed) throw CommandException(ErrorCode.FAILED, "Gesture was cancelled")
     }
 
-    override fun type(text: String) {
+    override suspend fun type(text: String) {
         val field = focusedInput()
         val arguments = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
-        if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) return
-        // Some custom editors (X's compose box) reject SET_TEXT but accept a paste over a full selection.
-        val clipboard = service.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("archangel", text))
+        // Some editors (X's compose box) refuse SET_TEXT, or accept it and ignore it; check, then paste instead.
+        if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments) && field.holds(text)) return
+        Log.i(TAG, "SET_TEXT didn't take; pasting")
+        service.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("archangel", text))
         val all = Bundle().apply {
             putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
             putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, field.text?.length ?: 0)
         }
         field.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, all)
-        if (!field.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
+        val pasted = field.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        if (!pasted || !field.holds(text)) {
+            Log.i(TAG, "paste ${if (pasted) "ignored" else "refused"}; field has '${field.text}'")
             throw CommandException(ErrorCode.FAILED, "Focused field rejected the text")
         }
+    }
+
+    /** Editors update asynchronously; give them a moment before reading back. */
+    private suspend fun AccessibilityNodeInfo.holds(text: String): Boolean {
+        delay(TEXT_SETTLE_MS)
+        return refresh() && this.text?.toString() == text
     }
 
     override fun key(key: GlobalKey) {
@@ -178,5 +187,7 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
         const val JPEG_QUALITY = 80
         const val SCREENSHOT_ATTEMPTS = 3
         const val SCREENSHOT_RETRY_MS = 400L
+        const val TEXT_SETTLE_MS = 200L
+        const val TAG = "Archangel"
     }
 }

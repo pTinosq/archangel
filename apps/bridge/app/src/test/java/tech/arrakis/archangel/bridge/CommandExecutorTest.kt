@@ -95,7 +95,7 @@ private class FakeDevice : Device {
         calls += "swipe $x1,$y1 -> $x2,$y2 in ${durationMs}ms"
     }
 
-    override fun type(text: String) {
+    override suspend fun type(text: String) {
         calls += "type $text"
     }
 
