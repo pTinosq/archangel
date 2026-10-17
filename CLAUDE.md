@@ -14,6 +14,7 @@ channels ──▶ gateway ──▶ orchestrator ──▶ tasks ──▶ pilo
 | `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, phone pilot. |
 | `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
 | `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
+| `apps/panel/` | Control panel, React + Vite + plain CSS. Polls the agent's local API every second. |
 | `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
 | `docs/roadmap.md` | Milestones. Tick them off as they land. |
 | `justfile` | All dev tasks. `just` lists them. |
@@ -22,7 +23,8 @@ channels ──▶ gateway ──▶ orchestrator ──▶ tasks ──▶ pilo
 ## Commands
 
 ```sh
-just agent            # chat in the terminal
+just agent            # chat in the terminal; also serves the panel API on 127.0.0.1:8765
+just panel            # control panel on http://localhost:5173
 just relay            # relay on :8080, reload
 just reverse          # phone localhost:8080 → Mac (USB)
 just bridge-install   # build, install, enable the service
@@ -41,11 +43,12 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | File | Role |
 |---|---|
 | `messages.py` | `Message(conversation, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
-| `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. |
+| `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. `panel.py`: the control panel's chat plus its API (tasks, steps, screenshots, answers, prompts); 127.0.0.1 only, Host-checked, all routes async (SQLite). |
 | `gateway.py` | Routes channels ⇄ orchestrator. Never blocks a channel. |
 | `orchestrator.py` | The agent the owner talks to. Never touches the phone: `start_task`, `answer_task`, `cancel_task`. Sees the task list every turn. Runs on owner messages and task updates, one at a time per conversation. Approvals only count in turns the owner triggered. Attaches the screenshot when a task waits on the owner. |
-| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. |
-| `store.py` | SQLite at `apps/agent/data/archangel.db`: each conversation's history (continuous, no expiry) and tasks. |
+| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued. Resumes waiting tasks with the owner's answer; cancels. Saves each step the pilot reports, with its screen. |
+| `store.py` | SQLite at `apps/agent/data/archangel.db`: each conversation's history (continuous, no expiry), tasks and their steps with screenshots, the panel chat, edited prompts. |
+| `prompts.py` | Every prompt by name. Defaults live in code beside their agents; panel edits live in the store and win from the agent's next run. Agents take `instructions` as a string or `Prompts.live(name)`. |
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | System prompt. |
 | `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |

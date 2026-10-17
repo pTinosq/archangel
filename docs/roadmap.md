@@ -9,7 +9,7 @@ Each milestone ships something usable and proves one idea.
 | M2 ✅ | Phone hands | "open WhatsApp and read my last message" | phone sub-agent: screenshot → act → verify, retries, step budget |
 | M3 ✅ | Orchestrator + human-in-the-loop + escape hatches + durable state | talk while tasks run in the background; "Post this? [screenshot]" → "yes"; tasks stop when stuck; answer an approval after a restart | orchestrator/sub-agent split; approvals enforced in code; deferred, resumable runs |
 | M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
-| M5 | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
+| M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
 | M6 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
 | M7 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
 | M8 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
@@ -30,6 +30,14 @@ Each milestone ships something usable and proves one idea.
 - **Locator fallback:** Jev first; if it can't find the target or fails, Luna (`openai/gpt-6-luna`) looks at the same screenshot.
 - **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too.
 - **Still open:** a cheap text model (DeepSeek) for the orchestrator. DeepSeek can't see images, and the orchestrator gets approval screenshots, so it needs them stripped first.
+
+## M5 (done)
+
+- **Panel:** `apps/panel`, React + Vite + plain CSS, polling the agent's local API (`channels/panel.py`, 127.0.0.1:8765).
+- **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
+- **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
+- **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
+- **Not yet:** images from the panel chat; connectors and MCP setup (M7).
 
 ## M5 requirements (from the owner)
 

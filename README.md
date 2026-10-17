@@ -23,6 +23,15 @@ Phone work runs as background tasks, so you can keep talking, ask for status, or
 
 Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Settings: [CLAUDE.md](CLAUDE.md#agent).
 
+## Control panel
+
+```sh
+just agent               # keep running
+just panel               # open http://localhost:5173
+```
+
+Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, and edit the prompts. Local only.
+
 ## Drive the phone
 
 ```sh

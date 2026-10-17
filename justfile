@@ -3,6 +3,7 @@ set dotenv-load
 bridge := "apps/bridge"
 relay := "apps/relay"
 agent := "apps/agent"
+panel := "apps/panel"
 port := "8080"
 service := "tech.arrakis.archangel.bridge/.BridgeService"
 
@@ -12,6 +13,10 @@ default:
 # Chat with Archangel in the terminal
 agent:
     cd {{agent}} && uv run python -m agent
+
+# The control panel on http://localhost:5173; needs `just agent` running
+panel:
+    cd {{panel}} && npm install --silent && npm run dev
 
 # Run the relay locally, reloading on change
 relay:
@@ -55,6 +60,7 @@ screenshot device="pixel-6":
 test:
     cd {{agent}} && uv run pytest -q
     cd {{relay}} && uv run pytest -q
+    cd {{panel}} && npm install --silent && npx tsc --noEmit
     cd {{bridge}} && ./gradlew testDebugUnitTest -q
 
 # Follow the bridge's logs on the phone
