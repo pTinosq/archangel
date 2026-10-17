@@ -41,7 +41,7 @@ class OwnerMessage(Event):
         return [f"(via {self.message.address.channel})", *self.message.parts]
 
     def fallback(self, error: Exception) -> str:
-        return f"Something went wrong ({type(error).__name__}). Try again."
+        return "Sorry, something went wrong on my side. Could you say that again?"  # the error is in the log
 
 
 @dataclass(frozen=True)
@@ -63,4 +63,4 @@ class TaskUpdate(Event):
         return (self.screen,) if self.screen and self.task.status.waiting else ()
 
     def fallback(self, error: Exception) -> str:
-        return f"Task #{self.task.id} {self.task.status}: {self.task.report} ({type(error).__name__})"
+        return f"An update on \"{self.task.goal}\": {self.task.report}"

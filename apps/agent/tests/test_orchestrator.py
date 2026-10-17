@@ -208,4 +208,4 @@ def test_failures_reach_the_owner(store):
     def broken(messages, info):
         raise RuntimeError("boom")
 
-    assert Owner(store, broken).says(Text("hi"))[-1].text == "Something went wrong (RuntimeError). Try again."
+    assert Owner(store, broken).says(Text("hi"))[-1].text == "Sorry, something went wrong on my side. Could you say that again?"
