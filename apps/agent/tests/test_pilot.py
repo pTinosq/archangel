@@ -50,8 +50,8 @@ class FakePhone:
         self.actions.append("swipe")
 
 
-class FakeLocator:
-    async def locate(self, screen: Image, target: str) -> Box | None:
+class FakeVision:
+    async def find(self, screen: Image, target: str) -> Box | None:
         return Box(0.2, 0.4, 0.4, 0.6) if "button" in target else None
 
 
@@ -95,7 +95,7 @@ def scripted(*calls: tuple[str, dict]):
 def run(
     model, phone: FakePhone, guard: FakeGuard | None = None, investigator: FakeInvestigator | None = None, **kwargs
 ) -> Outcome:
-    kit = Kit(phone, FakeLocator(), guard or FakeGuard(), investigator or FakeInvestigator(None))
+    kit = Kit(phone, FakeVision(), guard or FakeGuard(), investigator or FakeInvestigator(None))
     record = kwargs.pop("record", lambda text, screen: None)
     return asyncio.run(Pilot(model, kit).run("do it", record, **kwargs))
 

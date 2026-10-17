@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 VISIBLE_THRESHOLD = 0.5
-LOCATOR_INSTRUCTIONS = """\
+INSTRUCTIONS = """\
 You locate UI elements in phone screenshots. Return the tightest box around the described element as fractions \
 (0-1) of the image's width and height, measured from the top-left. If it isn't on the screen, return found=false.\
 """
@@ -35,27 +35,27 @@ class Box:
         return (self.left + self.right) / 2, (self.top + self.bottom) / 2
 
 
-class Locator(Protocol):
-    async def locate(self, screen: Image, target: str) -> Box | None:
+class Vision(Protocol):
+    async def find(self, screen: Image, target: str) -> Box | None:
         """The box around `target`, or None if it isn't on the screen."""
 
 
-def create_locator(model: str, instructions: Instructions = LOCATOR_INSTRUCTIONS) -> Locator:
+def create_vision(model: str, instructions: Instructions = INSTRUCTIONS) -> Vision:
     """Jev for TypeSafe models (`instructions` don't apply); any other vision model is asked for a box."""
     if model.startswith("typesafe/"):
         key = config.openrouter_api_key()
-        return JevLocator(httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30), model)
-    return LlmLocator(openrouter(model), instructions)
+        return JevVision(httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30), model)
+    return ModelVision(openrouter(model), instructions)
 
 
-class JevLocator:
+class JevVision:
     """TypeSafe Jev: a Noul for "is it there?" and a Box for "where?", in one request."""
 
     def __init__(self, client: httpx.AsyncClient, model: str):
         self._client = client
         self._model = model
 
-    async def locate(self, screen: Image, target: str) -> Box | None:
+    async def find(self, screen: Image, target: str) -> Box | None:
         image = f"data:{screen.media_type};base64," + base64.b64encode(screen.data).decode()
         with activity.call(short_name(self._model), "model", f"find {target}") as reply:
             response = await self._client.post(
@@ -88,34 +88,34 @@ class Located:
     bottom: float = 0
 
 
-class LlmLocator:
+class ModelVision:
     """Any vision model, asked for a bounding box as structured output."""
 
-    def __init__(self, model: Model, instructions: Instructions = LOCATOR_INSTRUCTIONS):
-        self._agent = Agent(model, name="locator", output_type=Located, instructions=instructions)
+    def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
+        self._agent = Agent(model, name="vision", output_type=Located, instructions=instructions)
 
-    async def locate(self, screen: Image, target: str) -> Box | None:
+    async def find(self, screen: Image, target: str) -> Box | None:
         located = (await logs.run(self._agent, [f"Find: {target}", content(screen)])).output
         return Box(located.left, located.top, located.right, located.bottom) if located.found else None
 
 
-class FallbackLocator:
-    """The primary locator first; when it can't find the target or fails, a second model has a look.
+class FallbackVision:
+    """The primary vision model first; when it can't find the target or fails, a second model has a look.
 
     A miss costs the pilot a step and often sends it hunting for another route, so a second look is cheap.
     """
 
-    def __init__(self, primary: Locator, fallback: Locator):
+    def __init__(self, primary: Vision, fallback: Vision):
         self._primary = primary
         self._fallback = fallback
 
-    async def locate(self, screen: Image, target: str) -> Box | None:
+    async def find(self, screen: Image, target: str) -> Box | None:
         try:
-            if box := await self._primary.locate(screen, target):
+            if box := await self._primary.find(screen, target):
                 return box
-            log.info("Couldn't find %s; asking the fallback locator", target)
+            log.info("Couldn't find %s; asking the fallback vision model", target)
         except Exception as error:
-            log.warning("Locator failed (%s); asking the fallback locator", error)
-        box = await self._fallback.locate(screen, target)
+            log.warning("Vision failed (%s); asking the fallback vision model", error)
+        box = await self._fallback.find(screen, target)
         log.debug("fallback %r: %s", target, box)
         return box

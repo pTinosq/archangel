@@ -17,14 +17,14 @@ def hops():
 
 
 def test_a_call_and_its_reply_nest_under_the_actor():
-    with activity.acting("pilot"), activity.call("locator", "agent", "the Send button") as reply:
+    with activity.acting("pilot"), activity.call("vision", "agent", "the Send button") as reply:
         activity.hop("jev", "model", "find it")
         reply("found")
 
     assert hops() == [
-        ("pilot", "locator", "tx", "the Send button", True),
-        ("locator", "jev", "tx", "find it", True),
-        ("locator", "pilot", "rx", "found", True),
+        ("pilot", "vision", "tx", "the Send button", True),
+        ("vision", "jev", "tx", "find it", True),
+        ("vision", "pilot", "rx", "found", True),
     ]
 
 

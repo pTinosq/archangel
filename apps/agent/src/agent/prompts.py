@@ -14,7 +14,7 @@ DEFAULTS = {
     "pilot": pilot.INSTRUCTIONS,
     "guard": guard.INSTRUCTIONS,
     "investigator": investigator.INSTRUCTIONS,
-    "locator": vision.LOCATOR_INSTRUCTIONS,
+    "vision": vision.INSTRUCTIONS,
 }
 
 

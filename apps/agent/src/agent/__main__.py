@@ -14,7 +14,7 @@ from agent.phone.guard import ModelGuard
 from agent.phone.investigator import ModelInvestigator
 from agent.phone.pilot import Kit, Pilot
 from agent.phone.relay import Phone
-from agent.phone.vision import FallbackLocator, LlmLocator, create_locator
+from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
@@ -23,7 +23,7 @@ from agent.tasks import Tasks
 def main() -> None:
     pydantic_ai.BANNER_ENABLED = False
     logs.start()
-    model, fallback = openrouter(config.model()), openrouter(config.fallback_model())
+    model, fallback = openrouter(config.model()), openrouter(config.fallback_vision_model())
     store = Store()
     store.interrupt_running()
     prompts = Prompts(store)
@@ -33,9 +33,9 @@ def main() -> None:
     )
     kit = Kit(
         phone=Phone(relay, config.device()),
-        locator=FallbackLocator(
-            create_locator(config.vision_model(), prompts.live("locator")),
-            LlmLocator(fallback, prompts.live("locator")),
+        vision=FallbackVision(
+            create_vision(config.vision_model(), prompts.live("vision")),
+            ModelVision(fallback, prompts.live("vision")),
         ),
         guard=ModelGuard(model, prompts.live("guard")),
         investigator=ModelInvestigator(fallback, prompts.live("investigator")),

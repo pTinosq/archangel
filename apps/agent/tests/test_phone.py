@@ -8,7 +8,7 @@ import pytest
 from agent.messages import Image
 from agent.phone import relay
 from agent.phone.relay import Phone, PhoneError
-from agent.phone.vision import Box, JevLocator
+from agent.phone.vision import Box, JevVision
 
 HELLO = [{"device": "pixel-6", "screen": {"width": 1000, "height": 2000}}]
 
@@ -138,12 +138,12 @@ def test_taps_follow_the_latest_screenshot_when_the_phone_rotates():
     assert sent[-1] == {"type": "tap", "x": 1000, "y": 500, "durationMs": 50}
 
 
-def jev(answers: dict, requests: list) -> JevLocator:
+def jev(answers: dict, requests: list) -> JevVision:
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json={"answers": answers})
 
-    return JevLocator(httpx.AsyncClient(transport=httpx.MockTransport(handler)), "typesafe/jev-1.14")
+    return JevVision(httpx.AsyncClient(transport=httpx.MockTransport(handler)), "typesafe/jev-1.14")
 
 
 SCREEN = Image(b"jpg", "image/jpeg")
@@ -152,7 +152,7 @@ BOX = {"type": "box", "box": {"top": 0.18, "bottom": 0.26, "left": 0.31, "right"
 
 def test_jev_finds_a_box():
     requests = []
-    box = asyncio.run(jev({"visible": {"noul": 0.9}, "box": BOX}, requests).locate(SCREEN, "the WhatsApp icon"))
+    box = asyncio.run(jev({"visible": {"noul": 0.9}, "box": BOX}, requests).find(SCREEN, "the WhatsApp icon"))
 
     assert box == Box(left=0.31, top=0.18, right=0.46, bottom=0.26)
     assert box.center == pytest.approx((0.385, 0.22))
@@ -163,5 +163,5 @@ def test_jev_finds_a_box():
 
 
 def test_jev_reports_missing_targets():
-    box = asyncio.run(jev({"visible": {"noul": 0.1}, "box": BOX}, []).locate(SCREEN, "a unicorn"))
+    box = asyncio.run(jev({"visible": {"noul": 0.1}, "box": BOX}, []).find(SCREEN, "a unicorn"))
     assert box is None

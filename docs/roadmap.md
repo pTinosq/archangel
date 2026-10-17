@@ -21,7 +21,7 @@ Each milestone ships something usable and proves one idea.
 
 - **Announcing:** `agent/activity.py`, used like logging. `hop` for one-way messages, `call` for a request and its reply. No handles are passed and no signatures changed; deleting the calls removes the cockpit.
 - **Ids in context:** context variables carry the request (set by the gateway per owner message), the task (set by `Tasks`) and the actor (set by each agent run). Everything a request leads to, including its tasks and their updates, carries its id.
-- **Seams:** gateway, `logs.run` (each model call and tool call of every agent; guard, investigator and locator now run through it too), tasks, the pilot's calls to guard, locator and investigator, Jev, and `Phone._command`.
+- **Seams:** gateway, `logs.run` (each model call and tool call of every agent; guard, investigator and vision now run through it too), tasks, the pilot's calls to guard, vision and investigator, Jev, and `Phone._command`.
 - **Lossy:** announcing never waits or raises. Each listener has a bounded queue and misses notices when it's full. The last 200 are kept for new listeners. Nothing is stored.
 - **Stream:** `GET /api/activity` uses server-sent events, not a WebSocket. It's one-way by construction, needs no new dependency, and the browser reconnects it. A heartbeat lets open streams end on shutdown.
 - **Cockpit tab:** a React Flow graph laid out by dagre, left to right in calling order, so each model sits beside its callers. It re-lays out only when a new part or link appears, so nothing moves while you watch.

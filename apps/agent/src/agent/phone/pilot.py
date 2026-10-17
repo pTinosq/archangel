@@ -34,7 +34,7 @@ from agent.models import Instructions, content
 from agent.phone.guard import Guard
 from agent.phone.investigator import Investigator
 from agent.phone.relay import Phone, PhoneError
-from agent.phone.vision import Locator
+from agent.phone.vision import Vision
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class Kit:
     """What a pilot works with: the phone, and the models that find things on it, keep it safe and unstick it."""
 
     phone: Phone
-    locator: Locator
+    vision: Vision
     guard: Guard
     investigator: Investigator
 
@@ -294,10 +294,10 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
     Set `hold` to long-press.
     """
     try:
-        with activity.call("locator", "agent", target) as reply:
-            box = await ctx.deps.kit.locator.locate(ctx.deps.screen, target)
+        with activity.call("vision", "agent", target) as reply:
+            box = await ctx.deps.kit.vision.find(ctx.deps.screen, target)
             reply(box or "not found")
-    except Exception as error:  # the locators are remote models: any failure is one failed step, not a failed task
+    except Exception as error:  # vision is remote models: any failure is one failed step, not a failed task
         return await ctx.deps.failed(f"Couldn't search the screen: {error}")
     log.debug("located %r: %s", target, box)
     if not box:

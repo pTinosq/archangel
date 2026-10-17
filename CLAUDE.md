@@ -58,19 +58,19 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `instructions.md` | Orchestrator prompt. |
 | `logs.py` | `logs/<time>/agent.log` at DEBUG (`logs/latest` → newest, last 20 kept). `logs.run(agent, …)` logs each tool call, result and invalid call. |
 | `activity.py` | Live activity for the cockpit, announced like logging: `hop(target, kind, text)`, `call(...)` for a request and its reply. Request, task and actor ids ride in context variables, so nothing passes them along. Never waits or raises; a slow listener misses notices; nothing is stored. |
-| `phone/pilot.py` | Sub-agent for one task: act → screenshot → decide. `Pilot(model, Kit(phone, locator, guard, investigator))`. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) as `needs_approval` or `needs_answer`. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion, at most 2 per run. |
+| `phone/pilot.py` | Sub-agent for one task: act → screenshot → decide. `Pilot(model, Kit(phone, vision, guard, investigator))`. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) as `needs_approval` or `needs_answer`. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion, at most 2 per run. |
 | `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval. Fails closed. |
 | `phone/investigator.py` | The fallback model reads the last 3 screens and recent steps of a task going nowhere: what's in the way, how past it. Also explains stuck reports. |
-| `phone/vision.py` | `Locator.locate(screen, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API), `LlmLocator` (any vision model), `FallbackLocator` (second locator on a miss or failure). |
+| `phone/vision.py` | Finds things on the screen: `Vision.find(screen, target) → Box \| None`. `JevVision` (TypeSafe Jev via OpenRouter decisions API), `ModelVision` (any vision model), `FallbackVision` (the fallback vision model on a miss or failure). |
 | `phone/relay.py` | `Phone`: relay client. Positions are screen fractions, turned into pixels with the latest screenshot's size (so rotation is fine); screenshots are half-scale JPEG at quality 30 (Jev rejects WebP; 30 locates as well as 80). Phone offline (503): waits up to 60 s, then resends. Lost mid-command (502): resends only read-only commands. |
 
-The pilot never handles coordinates: it describes what to tap, the locator finds the box, the centre gets tapped.
+The pilot never handles coordinates: it describes what to tap, vision finds the box, the centre gets tapped.
 
 | Env | Default |
 |---|---|
 | `ARCHANGEL_MODEL` | `anthropic/claude-sonnet-5.5` (orchestrator, pilot, guard) |
-| `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `LlmLocator` |
-| `ARCHANGEL_FALLBACK_MODEL` | `openai/gpt-6-luna` (locator fallback, investigator). Vision required. |
+| `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `ModelVision` |
+| `ARCHANGEL_FALLBACK_VISION_MODEL` | `openai/gpt-6-luna` (when vision misses, and the investigator). Must see images. |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | unset: the one phone connected to the relay. Set it only to choose between several. |
 
