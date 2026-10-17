@@ -7,6 +7,7 @@ from typing import Protocol
 
 import httpx
 from pydantic_ai import Agent, BinaryContent
+from pydantic_ai.models import Model
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
@@ -83,7 +84,7 @@ class Located:
 class LlmLocator:
     """Any vision model, asked for a bounding box as structured output."""
 
-    def __init__(self, model: OpenRouterModel):
+    def __init__(self, model: Model):
         self._agent = Agent(
             model,
             output_type=Located,
@@ -98,3 +99,25 @@ class LlmLocator:
         image = BinaryContent(data=screenshot.jpeg, media_type="image/jpeg")
         located = (await self._agent.run([f"Find: {target}", image])).output
         return Box(located.left, located.top, located.right, located.bottom) if located.found else None
+
+
+class FallbackLocator:
+    """The primary locator first; when it can't find the target or fails, a second model has a look.
+
+    A miss costs the pilot a step and often sends it hunting for another route, so a second look is cheap.
+    """
+
+    def __init__(self, primary: Locator, fallback: Locator):
+        self._primary = primary
+        self._fallback = fallback
+
+    async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
+        try:
+            if box := await self._primary.locate(screenshot, target):
+                return box
+            log.info("Couldn't find %s; asking the fallback locator", target)
+        except Exception as error:
+            log.warning("Locator failed (%s); asking the fallback locator", error)
+        box = await self._fallback.locate(screenshot, target)
+        log.debug("fallback %r: %s", target, box)
+        return box

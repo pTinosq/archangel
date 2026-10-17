@@ -1,11 +1,11 @@
 import asyncio
 import logging
+from collections import deque
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-import httpx
 import pydantic_ai
 from pydantic_ai import (
     Agent,
@@ -29,6 +29,7 @@ from pydantic_ai.models import Model
 from agent import logs
 from agent.history import forget_old_screenshots
 from agent.phone.guard import Guard
+from agent.phone.investigator import Investigator
 from agent.phone.relay import Phone, PhoneError, Screenshot
 from agent.phone.vision import Locator
 
@@ -37,6 +38,11 @@ log = logging.getLogger(__name__)
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 MAX_STEPS = 40
 MAX_FAILURES = 5
+RECENT_STEPS = 6
+LOOP_REPEATS = 3
+"""The same step this many times in the last RECENT_STEPS means the pilot is going round in circles."""
+MAX_SECOND_OPINIONS = 2
+SCREENS_INVESTIGATED = 3
 TOOL_RETRIES = 3
 SETTLE_SECONDS = 1.0
 SCROLLS = {
@@ -74,36 +80,62 @@ class _Session:
     phone: Phone
     locator: Locator
     guard: Guard
+    investigator: Investigator
     goal: str
     screen: Screenshot | None = None
     failures: list[str] = field(default_factory=list)
+    steps: list[str] = field(default_factory=list)
+    screens: deque[Screenshot] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
+    second_opinions: int = 0
 
     async def act(self, action: Awaitable[None], note: str) -> ToolReturn | str:
         """Run `action`, then show the model the result. Failures go back to the model to work around."""
         try:
             await action
         except PhoneError as error:
-            return self.failed(f"Failed: {error}")
+            return await self.failed(f"Failed: {error}")
         log.info(note)
         self.failures.clear()
         return await self.look(note)
 
-    def failed(self, problem: str) -> str:
+    async def failed(self, problem: str) -> str:
         """Report a failed action, nudging the model off a repeated mistake and ending runs that are going nowhere."""
         log.info(problem)
         self.failures.append(problem)
+        self.steps.append(problem)
         if len(self.failures) >= MAX_FAILURES:
             raise Stuck(f"{len(self.failures)} actions in a row failed. The last: {problem}")
         if len(self.failures) >= 2 and self.failures[-1] == self.failures[-2]:
-            return f"{problem}\nThat failed the same way twice. Try something different, ask_owner, or give_up."
+            nudge = "That failed the same way twice. Try something different, ask_owner, or give_up."
+            return f"{problem}\n{nudge}{await self.second_opinion()}"
         return problem
 
     async def look(self, note: str) -> ToolReturn:
         """Let the screen settle, then show it to the model with `note`."""
         await asyncio.sleep(SETTLE_SECONDS)
         self.screen = await self.phone.screenshot()
+        self.screens.append(self.screen)
         log.debug("screenshot %s", logs.save_screenshot(self.screen.jpeg))
+        self.steps.append(note)
+        if self.looping(note):
+            note += await self.second_opinion()
         return ToolReturn(note, content=[_image(self.screen)])
+
+    def looping(self, note: str) -> bool:
+        # Scrolling the same way several times is how lists get searched, not a loop.
+        return not note.startswith("Scrolled") and self.steps[-RECENT_STEPS:].count(note) >= LOOP_REPEATS
+
+    async def second_opinion(self) -> str:
+        """Advice from the investigator for a pilot going in circles, a few times per run at most."""
+        if self.second_opinions >= MAX_SECOND_OPINIONS:
+            return ""
+        self.second_opinions += 1
+        advice = await self.diagnose()
+        self.steps.clear()  # a fresh start: only a new loop earns another opinion
+        return f"\nSecond opinion, from a model that looked at the recent screens: {advice}" if advice else ""
+
+    async def diagnose(self) -> str | None:
+        return await self.investigator.investigate(self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens))
 
 
 @dataclass(frozen=True)
@@ -128,10 +160,11 @@ class Pilot:
     Pauses, resumably, when the owner must answer a question or approve a consequential tap.
     """
 
-    def __init__(self, model: Model, phone: Phone, locator: Locator, guard: Guard):
+    def __init__(self, model: Model, phone: Phone, locator: Locator, guard: Guard, investigator: Investigator):
         self._phone = phone
         self._locator = locator
         self._guard = guard
+        self._investigator = investigator
         self._agent = Agent(
             model,
             instructions=INSTRUCTIONS,
@@ -157,10 +190,11 @@ class Pilot:
     ) -> Outcome:
         """Start `goal`, or continue a `paused` run with the owner's `answer`."""
         log.info("Phone task: %s", goal)
-        session = _Session(self._phone, self._locator, self._guard, goal)
+        session = _Session(self._phone, self._locator, self._guard, self._investigator, goal)
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             session.screen = await self._phone.screenshot()
+            session.screens.append(session.screen)
             log.debug("screenshot %s", logs.save_screenshot(session.screen.jpeg))
             if paused:
                 prompt, resume = None, dict(conversation=paused, deferred_tool_results=_results(paused, answer))
@@ -174,10 +208,10 @@ class Pilot:
             return Outcome("failed", f"Couldn't use the phone: {error}", screen=session.screen)
         except Stuck as error:
             log.warning("Stuck: %s", error)
-            return Outcome("stuck", f"Stopped, stuck: {error}", screen=session.screen)
+            return await _stuck(session, f"Stopped, stuck: {error}")
         except UsageLimitExceeded:
             log.warning("Gave up after %d steps", MAX_STEPS)
-            return Outcome("stuck", f"Gave up after {MAX_STEPS} steps without finishing.", screen=session.screen)
+            return await _stuck(session, f"Gave up after {MAX_STEPS} steps without finishing.")
         except Exception as error:
             # Hand the failure back to decide what to do, rather than ending the conversation.
             log.exception("Phone task failed")
@@ -189,6 +223,13 @@ class Pilot:
             return Outcome("waiting", _question(output), result.conversation, session.screen)
         log.debug("Phone task result: %s", output)
         return Outcome("done" if output.finished else "gave_up", output.report, screen=session.screen)
+
+
+async def _stuck(session: _Session, report: str) -> Outcome:
+    # Whoever decides what next (the orchestrator, then the owner) needs to know why, not just that it stopped.
+    if diagnosis := await session.diagnose():
+        report += f"\nWhat seems to be in the way: {diagnosis}"
+    return Outcome("stuck", report, screen=session.screen)
 
 
 def _question(requests: DeferredToolRequests) -> str:
@@ -212,7 +253,7 @@ async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     apps = await ctx.deps.phone.apps()
     package = next((p for label, p in apps.items() if label.lower() == name.lower()), None)
     if not package:
-        return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
+        return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
     return await ctx.deps.act(ctx.deps.phone.launch(package), f"Opened {name}.")
 
 
@@ -223,11 +264,11 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
     """
     try:
         box = await ctx.deps.locator.locate(ctx.deps.screen, target)
-    except httpx.HTTPError as error:
-        return ctx.deps.failed(f"Couldn't search the screen: {error}")
+    except Exception as error:  # the locators are remote models: any failure is one failed step, not a failed task
+        return await ctx.deps.failed(f"Couldn't search the screen: {error}")
     log.debug("located %r: %s", target, box)
     if not box:
-        return ctx.deps.failed(f"Couldn't find {target} on the screen.")
+        return await ctx.deps.failed(f"Couldn't find {target} on the screen.")
     return await ctx.deps.act(ctx.deps.phone.tap(*box.center, hold=hold), f"Tapped {target}.")
 
 

@@ -43,6 +43,9 @@ class FakePhone:
     async def launch(self, package: str) -> None:
         self.actions.append(f"launch {package}")
 
+    async def swipe(self, *positions: float) -> None:
+        self.actions.append("swipe")
+
 
 class FakeLocator:
     async def locate(self, screenshot: Screenshot, target: str) -> Box | None:
@@ -58,6 +61,16 @@ class FakeGuard:
     async def check(self, screen: Screenshot, target: str, task: str) -> str | None:
         self.checked.append(target)
         return "send the message" if "Send" in target else None
+
+
+class FakeInvestigator:
+    def __init__(self, advice: str | None = "A dialog is covering it; close it first."):
+        self.advice = advice
+        self.asked: list[list[str]] = []
+
+    async def investigate(self, goal: str, steps: list[str], screens: list[Screenshot]) -> str | None:
+        self.asked.append(steps)
+        return self.advice
 
 
 def scripted(*calls: tuple[str, dict]):
@@ -76,8 +89,10 @@ def scripted(*calls: tuple[str, dict]):
     return FunctionModel(respond)
 
 
-def run(model, phone: FakePhone, guard: FakeGuard | None = None, **kwargs) -> Outcome:
-    pilot = Pilot(model, phone, FakeLocator(), guard or FakeGuard())
+def run(
+    model, phone: FakePhone, guard: FakeGuard | None = None, investigator: FakeInvestigator | None = None, **kwargs
+) -> Outcome:
+    pilot = Pilot(model, phone, FakeLocator(), guard or FakeGuard(), investigator or FakeInvestigator(None))
     return asyncio.run(pilot.run("do it", **kwargs))
 
 
@@ -115,14 +130,50 @@ def test_a_repeated_failure_gets_a_nudge():
     assert "failed the same way twice" in outcome.report.split(" | ")[1]
 
 
+def test_a_repeated_failure_gets_a_second_opinion():
+    outcome = run(
+        scripted(("type_text", {"text": "hi"}), ("type_text", {"text": "hi"})),
+        FakePhone(),
+        investigator=FakeInvestigator(),
+    )
+    assert outcome.report.split(" | ")[1].endswith(
+        "Second opinion, from a model that looked at the recent screens: A dialog is covering it; close it first."
+    )
+
+
+def test_going_in_circles_gets_a_second_opinion():
+    investigator = FakeInvestigator()
+    outcome = run(scripted(*[("tap", {"target": "the Post button"})] * 3), FakePhone(), investigator=investigator)
+
+    results = outcome.report.split(" | ")
+    assert results[:2] == ["Tapped the Post button."] * 2
+    assert "Second opinion" in results[2]
+    assert investigator.asked == [["Tapped the Post button."] * 3]
+
+
+def test_second_opinions_are_limited():
+    investigator = FakeInvestigator()
+    run(scripted(*[("look", {})] * 12), FakePhone(), investigator=investigator)
+    assert len(investigator.asked) == 2
+
+
+def test_scrolling_through_a_list_is_not_a_loop():
+    investigator = FakeInvestigator()
+    run(scripted(*[("scroll", {"direction": "down"})] * 4), FakePhone(), investigator=investigator)
+    assert investigator.asked == []
+
+
 def test_consecutive_failures_end_the_task_as_stuck():
-    outcome = run(scripted(*[("type_text", {"text": "hi"})] * 5), FakePhone())
+    outcome = run(scripted(*[("type_text", {"text": "hi"})] * 5), FakePhone(), investigator=FakeInvestigator())
     assert outcome.status == "stuck"
     assert "5 actions in a row failed" in outcome.report
+    assert outcome.report.endswith("What seems to be in the way: A dialog is covering it; close it first.")
 
 
 def test_the_model_can_give_up():
-    model = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("give_up", {"reason": "No signal"})]))
+    model = FunctionModel(
+        lambda messages, info: ModelResponse(parts=[ToolCallPart("give_up", {"reason": "No signal"})])
+    )
     assert run(model, FakePhone()).status == "gave_up"
 
 
@@ -133,7 +184,9 @@ def test_gives_up_after_the_step_limit(monkeypatch):
 
 
 def test_unexpected_failures_are_reported_not_raised():
-    invalid = FunctionModel(lambda messages, info: ModelResponse(parts=[ToolCallPart("scroll", {"direction": "sideways"})]))
+    invalid = FunctionModel(
+        lambda messages, info: ModelResponse(parts=[ToolCallPart("scroll", {"direction": "sideways"})])
+    )
     outcome = run(invalid, FakePhone())
     assert outcome.status == "failed"
     assert outcome.report.startswith("Failed unexpectedly (UnexpectedModelBehavior")

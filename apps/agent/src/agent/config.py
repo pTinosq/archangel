@@ -2,6 +2,7 @@ import os
 
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 DEFAULT_VISION_MODEL = "typesafe/jev-1.14"
+DEFAULT_FALLBACK_MODEL = "openai/gpt-6-luna"
 DEFAULT_RELAY_URL = "http://localhost:8080"
 DEFAULT_DEVICE = "pixel-6"
 
@@ -12,6 +13,10 @@ def model() -> str:
 
 def vision_model() -> str:
     return os.environ.get("ARCHANGEL_VISION_MODEL", DEFAULT_VISION_MODEL)
+
+
+def fallback_model() -> str:
+    return os.environ.get("ARCHANGEL_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL)
 
 
 def relay_url() -> str:
