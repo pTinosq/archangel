@@ -41,3 +41,9 @@ def test_a_failing_channel_doesnt_break_sending(store):
     gateway = Gateway([Broken("sms")], store)
     asyncio.run(gateway.send(Message(Address("sms", "owner"), (Text("hi"),))))
     asyncio.run(gateway.send(Message(Address("fax", "owner"), (Text("hi"),))))
+
+
+def test_nothing_to_say_sends_nothing(store):
+    panel = FakeChannel("panel")
+    asyncio.run(Gateway([panel], store).send(Message(panel.owner, (Text(" "),))))
+    assert panel.sent == [] and store.lines() == []

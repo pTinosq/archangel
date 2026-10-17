@@ -51,6 +51,8 @@ class Gateway:
         await asyncio.gather(*self._running)
 
     async def send(self, message: Message) -> None:
+        if not message.text.strip() and not message.images:  # a model with nothing to say; Twilio rejects empties
+            return
         self._store.add_line(message, "archangel")
         activity.hop("gateway", "message", message.text)
         activity.hop(message.address.channel, "message", message.text, source="gateway")
