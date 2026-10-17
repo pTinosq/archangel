@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 
+from agent.phone import relay
 from agent.phone.relay import Phone, PhoneError, Screenshot
 from agent.phone.vision import Box, JevLocator
 
@@ -40,13 +41,51 @@ def test_screenshot_is_scaled_and_decoded():
 @pytest.mark.parametrize(
     "response, message",
     [
-        (httpx.Response(503, json={"code": "offline", "message": "Device is not connected"}), "Device is not connected"),
+        (httpx.Response(504, json={"code": "timeout", "message": "Device did not reply"}), "Device did not reply"),
         (httpx.Response(200, json={"id": "1", "ok": False, "error": {"code": "not_found", "message": "No focused input field"}}), "No focused input field"),
     ],
 )
 def test_failures_become_phone_errors(response, message):
     with pytest.raises(PhoneError, match=message):
         asyncio.run(phone(lambda _: response).type("hi"))
+
+
+OFFLINE = httpx.Response(503, json={"code": "offline", "message": "Device is not connected"})
+DONE = httpx.Response(200, json={"id": "1", "ok": True})
+
+
+def test_commands_wait_for_an_offline_phone(monkeypatch):
+    monkeypatch.setattr(relay, "POLL_SECONDS", 0)
+    replies = [OFFLINE, DONE]
+    devices = [[], HELLO]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/devices":
+            return httpx.Response(200, json=devices.pop(0))
+        return replies.pop(0)
+
+    asyncio.run(phone(handler).type("hi"))
+    assert replies == devices == []
+
+
+def test_a_phone_that_stays_offline_fails_the_command(monkeypatch):
+    monkeypatch.setattr(relay, "OFFLINE_WAIT_SECONDS", 0)
+    with pytest.raises(PhoneError, match="offline for 0 s"):
+        asyncio.run(phone(lambda _: OFFLINE).type("hi"))
+
+
+def test_only_read_only_commands_are_resent_after_a_lost_connection():
+    lost = httpx.Response(502, json={"code": "disconnected", "message": "Device disconnected"})
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["type"])
+        return lost if len(sent) == 1 else httpx.Response(200, json={"id": "1", "ok": True, "data": {"apps": []}})
+
+    asyncio.run(phone(handler).apps())
+    assert sent == ["apps", "apps"]
+    with pytest.raises(PhoneError, match="Device disconnected"):
+        asyncio.run(phone(lambda _: lost).type("hi"))
 
 
 def jev(answers: dict, requests: list) -> JevLocator:

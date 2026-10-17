@@ -1,10 +1,15 @@
+import asyncio
 import base64
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 SCREENSHOT_SCALE = 0.5
+OFFLINE_WAIT_SECONDS = 60
+POLL_SECONDS = 2
+READ_ONLY = {"screenshot", "apps", "ui_tree"}
 
 
 @dataclass(frozen=True)
@@ -54,22 +59,47 @@ class Phone:
 
     async def _pixels(self, x: float, y: float) -> tuple[int, int]:
         if not self._size:
-            response = await self._client.get("/devices")
-            hello = next((d for d in response.json() if d["device"] == self._device), None)
+            hello = await self._hello()
             if not hello:
                 raise PhoneError("Phone is not connected")
             self._size = hello["screen"]["width"], hello["screen"]["height"]
         width, height = self._size
         return round(x * width), round(y * height)
 
+    async def _hello(self) -> dict[str, Any] | None:
+        response = await self._client.get("/devices")
+        return next((d for d in response.json() if d["device"] == self._device), None)
+
     async def _command(self, type: str, **params: Any) -> dict[str, Any]:
-        try:
-            response = await self._client.post(f"/devices/{self._device}/commands", json={"type": type, **params})
-        except httpx.HTTPError as error:
-            raise PhoneError(f"Relay unreachable: {error}") from error
+        response = await self._send(type, params)
+        if response.status_code == 503:
+            # Never reached the phone, so resending can't repeat anything. Phones drop off briefly (network
+            # switches, the service restarting); wait for it rather than failing the task.
+            await self._wait_online()
+            response = await self._send(type, params)
+        elif response.status_code == 502 and type in READ_ONLY:
+            # Lost mid-command: only safe to resend what doesn't change anything.
+            response = await self._send(type, params)
         if response.status_code != 200:
             raise PhoneError(response.json().get("message", f"Relay returned {response.status_code}"))
         reply = response.json()
         if not reply["ok"]:
             raise PhoneError(reply["error"]["message"])
         return reply.get("data") or {}
+
+    async def _send(self, type: str, params: dict[str, Any]) -> httpx.Response:
+        try:
+            return await self._client.post(f"/devices/{self._device}/commands", json={"type": type, **params})
+        except httpx.HTTPError as error:
+            raise PhoneError(f"Relay unreachable: {error}") from error
+
+    async def _wait_online(self) -> None:
+        deadline = time.monotonic() + OFFLINE_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            await asyncio.sleep(POLL_SECONDS)
+            try:
+                if await self._hello():
+                    return
+            except httpx.HTTPError:
+                pass  # relay down too; keep waiting
+        raise PhoneError(f"Phone has been offline for {OFFLINE_WAIT_SECONDS} s")

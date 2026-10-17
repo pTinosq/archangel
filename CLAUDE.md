@@ -52,7 +52,7 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) for questions and approvals. |
 | `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for the owner's approval. Fails closed. |
 | `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API) or `LlmLocator` (any vision model). |
-| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. |
+| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. Phone offline (503): waits up to 60 s, then resends (it never arrived). Lost mid-command (502): resends only read-only commands. |
 
 The pilot never handles coordinates: it describes what to tap, the locator finds the box, the centre gets tapped.
 
@@ -63,7 +63,7 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | `pixel-6` |
 
-Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls.
+Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by the OpenAI SDK under Pydantic AI.
 
 Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalRequired` from the guard, `CallDeferred` from `ask_owner`). The paused run is saved with the task, so an answer works even after a restart. Tasks running at shutdown come back `interrupted`.
 
