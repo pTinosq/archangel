@@ -25,6 +25,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     headers: body === undefined ? {} : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if (response.status === 401) location.reload(); // signed out: the page load goes to sign in
   if (!response.ok) throw new Error(`${method} ${path}: ${response.status}`);
   return response.json();
 }

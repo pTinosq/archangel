@@ -49,6 +49,7 @@ header { display: flex; align-items: center; gap: 24px; padding: 10px 16px; bord
 nav { display: flex; gap: 4px; }
 nav button { background: none; color: var(--quiet); }
 nav button.active { background: var(--line); color: var(--text); }
+.sign-out { margin-left: auto; color: var(--quiet); }
 
 main { flex: 1; display: grid; min-height: 0; }
 main.tasks { grid-template-columns: 260px 1fr 340px; }
