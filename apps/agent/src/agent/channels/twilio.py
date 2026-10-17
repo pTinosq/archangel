@@ -9,6 +9,8 @@ import hashlib
 import hmac
 import json
 import logging
+import time
+from collections import deque
 from dataclasses import dataclass
 from urllib.parse import parse_qsl
 from xml.sax.saxutils import escape, quoteattr
@@ -31,6 +33,9 @@ HANG_UP = "<Response><Hangup/></Response>"
 UNANSWERED = {"busy", "no-answer", "failed", "canceled"}
 MISSED = "Tried to call you. "
 GREETING = "Archangel."
+RING_SECONDS = 120  # a call Archangel makes is answered or given up on well within this
+RINGS = 3  # at most this many calls Archangel makes…
+RINGS_SECONDS = 600  # …in this long; beyond that, it texts
 
 
 @dataclass(frozen=True)
@@ -120,9 +125,10 @@ class VoiceChannel(Channel):
     over a WebSocket.
 
     While the owner's on a call, everything is said on it. Otherwise Archangel rings only if they asked for a call back
-    (the message is addressed to them, not to a call). A voicemail gets the message after the beep, then a hang-up,
-    so a recording is never taken for the owner; voicemails and missed calls get a text too. Updates for a call that has ended are texted, but replies to what was said on it
-    aren't: hanging up after "bye" shouldn't bring a text saying "Goodbye."
+    (the message is addressed to them, not to a call), a few times in ten minutes at most. A voicemail gets the message
+    after the beep, then a hang-up, so a recording is never taken for the owner; voicemails and missed calls get a text
+    too. News for a call that has ended is texted, but replies to what was said on it aren't: hanging up after "bye"
+    shouldn't bring a text saying "Goodbye."
     """
 
     name = "voice"
@@ -135,8 +141,9 @@ class VoiceChannel(Channel):
         # The URL Twilio signs the handshake with is the one we give it; behind a proxy, request.url isn't that.
         self._relay = public_url.replace("https://", "wss://", 1) + "/twilio/voice/relay"
         self._calls: dict[str, WebSocket] = {}  # live, by call id
-        self._unanswered: dict[str, int] = {}  # things the owner said on each call that haven't been replied to
-        self._ringing: dict[str, list[str]] = {}  # what to say on calls Archangel is making, once they're answered
+        # Calls Archangel is making, from ringing until they're live: when each started, and what's still to say.
+        self._ringing: dict[str, tuple[float, list[str]]] = {}
+        self._rung: deque[float] = deque(maxlen=RINGS)
         self._deliver: Deliver | None = None
 
         @web.app.post("/twilio/voice")
@@ -152,11 +159,13 @@ class VoiceChannel(Channel):
         async def answered(request: Request) -> Response:
             if (form := await twilio.signed(request)) is None:
                 return Response(status_code=403)
-            said = " ".join(self._ringing.pop(form.get("CallSid", ""), [])) or GREETING
+            call = form.get("CallSid", "")
+            said = " ".join(self._ringing.pop(call, (0, []))[1]) or GREETING
             if form.get("AnsweredBy", "unknown") in ("human", "unknown"):
+                self._ringing[call] = (time.monotonic(), [])  # until it's live, more is said once it is
                 return _xml(self._twiml(said))
             log.info("Voicemail picked up; leaving a message and texting too")
-            await twilio.send_sms(twilio.account.owner, MISSED + said)
+            await self._text(MISSED + said)
             if form.get("AnsweredBy", "").startswith("machine_end"):  # after the beep
                 return _xml(f'<Response><Say language="en-GB">{escape(said)}</Say><Hangup/></Response>')
             return _xml(HANG_UP)  # a fax, or a machine it couldn't wait out
@@ -165,10 +174,10 @@ class VoiceChannel(Channel):
         async def ended(request: Request) -> Response:
             if (form := await twilio.signed(request)) is None:
                 return Response(status_code=403)
-            missed = self._ringing.pop(form.get("CallSid", ""), None)
-            if missed and form.get("CallStatus") in UNANSWERED:
-                log.info("Call %s; texting instead", form.get("CallStatus"))
-                await twilio.send_sms(twilio.account.owner, MISSED + " ".join(missed))
+            if left := self._ringing.pop(form.get("CallSid", ""), (0, []))[1]:
+                missed = form.get("CallStatus") in UNANSWERED
+                log.info("Call %s with things unsaid; texting them", form.get("CallStatus"))
+                await self._text((MISSED if missed else "") + " ".join(left))
             return _xml(EMPTY)
 
         @web.app.websocket("/twilio/voice/relay")
@@ -185,9 +194,10 @@ class VoiceChannel(Channel):
                     if event.get("type") == "setup":
                         call = event.get("callSid", "")
                         self._calls[call] = websocket
+                        for text in self._ringing.pop(call, (0, []))[1]:  # what came up while it connected
+                            await self._say(websocket, text)
                     elif event.get("type") == "prompt" and (said := event.get("voicePrompt", "").strip()):
                         if self._deliver:
-                            self._unanswered[call] = self._unanswered.get(call, 0) + 1
                             await self._deliver(Message(Address(self.name, call), (Text(said),)))
                     elif event.get("type") == "error":
                         log.warning("Call %s: %s", call, event.get("description"))
@@ -208,18 +218,15 @@ class VoiceChannel(Channel):
 
     async def send(self, message: Message) -> None:
         text = message.text + (" The screenshot is in the panel." if message.images else "")
-        to, owner = message.address.id, self._twilio.account.owner
-        replying = self._unanswered.get(to, 0) > 0
-        if replying:
-            self._unanswered[to] -= 1
+        to = message.address.id
         if (call := self._calls.get(to) or next(iter(self._calls.values()), None)) and await self._say(call, text):
             return
-        if to == owner:
+        if to == self.owner.id:
             await self._ring(text)
-        elif replying:
+        elif message.answering:
             log.info("Not texting a reply to a call that has ended: %s", text)
         else:
-            await self._twilio.send_sms(owner, text)
+            await self._text(text)
 
     async def _say(self, call: WebSocket, text: str) -> bool:
         try:
@@ -230,18 +237,33 @@ class VoiceChannel(Channel):
             return False
 
     async def _ring(self, text: str) -> None:
+        now = time.monotonic()
+        # A call whose end Twilio never told us about (a deploy at the wrong moment) mustn't swallow what comes next.
+        self._ringing = {call: entry for call, entry in self._ringing.items() if now - entry[0] < RING_SECONDS}
         if self._ringing:  # already ringing them: say it on that call too
-            next(iter(self._ringing.values())).append(text)
+            next(iter(self._ringing.values()))[1].append(text)
             return
-        said = self._ringing[""] = [text]  # held under "" until Twilio gives the call an id
+        if len(self._rung) == RINGS and now - self._rung[0] < RINGS_SECONDS:
+            log.warning("Rung %d times in %d s; texting instead", RINGS, RINGS_SECONDS)
+            return await self._text(text)
+        self._rung.append(now)
+        said = [text]
+        self._ringing[""] = (now, said)  # held under "" until Twilio gives the call an id
         url = self._url + "/twilio/voice"
         try:
-            self._ringing[await self._twilio.call(self._twilio.account.owner, url + "/answered", url + "/ended")] = said
+            call = await self._twilio.call(self.owner.id, url + "/answered", url + "/ended")
+            self._ringing[call] = (now, said)
         except httpx.HTTPError:
             log.warning("Couldn't ring; texting instead", exc_info=True)
-            await self._twilio.send_sms(self._twilio.account.owner, " ".join(said))
+            await self._text(" ".join(said))
         finally:
             del self._ringing[""]
+
+    async def _text(self, text: str) -> None:
+        try:
+            await self._twilio.send_sms(self.owner.id, text)
+        except httpx.HTTPError:  # e.g. the owner texted STOP; nowhere left to say it but the panel's transcript
+            log.exception("Couldn't text the owner: %s", text)
 
 
 def _xml(twiml: str) -> Response:

@@ -80,7 +80,7 @@ def say(text: str) -> ModelResponse:
 def test_replies_go_back_where_the_owner_wrote(store):
     owner = Owner(store, ok)
     owner.says(Text("hi"), via=owner.email)
-    assert (owner.cli.sent, owner.email.sent) == ([], [Message(owner.email.owner, (Text("ok"),))])
+    assert (owner.cli.sent, owner.email.sent) == ([], [Message(owner.email.owner, (Text("ok"),), answering=True)])
 
 
 def test_the_model_sees_the_channel_text_and_images(store):

@@ -29,6 +29,8 @@ Part = Text | Image
 class Message:
     address: Address
     parts: tuple[Part, ...]
+    answering: bool = False
+    """A reply to what the owner just said, not news: a channel they've since left (a call) may drop it."""
 
     @property
     def text(self) -> str:

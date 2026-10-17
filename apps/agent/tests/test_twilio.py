@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from urllib.parse import parse_qs
 from xml.etree import ElementTree
 
@@ -8,7 +9,17 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from agent.channels.twilio import MORE, SMS_LIMIT, Account, SmsChannel, Twilio, VoiceChannel, signature
+from agent.channels.twilio import (
+    MORE,
+    RING_SECONDS,
+    RINGS,
+    SMS_LIMIT,
+    Account,
+    SmsChannel,
+    Twilio,
+    VoiceChannel,
+    signature,
+)
 from agent.messages import Address, Image, Message, Text
 from agent.web import Web
 
@@ -118,8 +129,8 @@ class Voice:
     def ring(self, caller: str, forged: bool = False) -> httpx.Response:
         return self.twilio_posts("/twilio/voice", forged, From=caller, To=ACCOUNT.number, CallSid="CA1")
 
-    def says(self, text: str, to: Address | None = None) -> None:
-        asyncio.run(self.channel.send(Message(to or self.channel.owner, (Text(text),))))
+    def says(self, text: str, to: Address | None = None, answering: bool = False) -> None:
+        asyncio.run(self.channel.send(Message(to or self.channel.owner, (Text(text),), answering)))
 
     def relay(self, forged: bool = False):
         sig = signature("not the token" if forged else ACCOUNT.token, RELAY, {})
@@ -170,10 +181,7 @@ def test_after_a_hang_up_it_texts_rather_than_ringing():
 
 def test_after_saying_goodbye_and_hanging_up_the_goodbye_isnt_texted():
     voice = Voice()
-    with voice.relay() as ws:
-        ws.send_json({"type": "setup", "callSid": "CA1"})
-        ws.send_json({"type": "prompt", "voicePrompt": "thanks, bye", "last": True})
-    voice.says("Goodbye.", Address("voice", "CA1"))
+    voice.says("Goodbye.", Address("voice", "CA1"), answering=True)
     voice.says("Uber's closed.", Address("voice", "CA1"))  # a task finishing afterwards still gets through
 
     assert [t["Body"] for t in voice.texts] == [["Uber's closed."]]
@@ -215,3 +223,33 @@ def test_a_missed_call_becomes_a_text():
     voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")  # once only
 
     assert [t["Body"] for t in voice.texts] == [["Tried to call you. Your basket's ready."]]
+
+
+def test_said_while_the_call_connects_is_said_once_its_live():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="human")
+    voice.says("Also, Alex replied.")  # answered, not live yet: no second call
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA101"})
+        assert json.loads(ws.receive_text())["token"] == "Also, Alex replied."
+    assert len(voice.calls) == 1 and voice.texts == []
+
+
+def test_a_call_never_heard_of_again_doesnt_swallow_the_next(monkeypatch):
+    voice = Voice()
+    voice.says("First.")
+    clock = time.monotonic() + RING_SECONDS
+    monkeypatch.setattr(time, "monotonic", lambda: clock)
+    voice.says("Second.")
+    assert len(voice.calls) == 2
+
+
+def test_it_rings_a_few_times_at_most_then_texts():
+    voice = Voice()
+    for n in range(RINGS + 1):
+        voice.says(f"Update {n}.")
+        voice.twilio_posts("/twilio/voice/answered", CallSid=f"CA{101 + n}", AnsweredBy="human")
+        voice.twilio_posts("/twilio/voice/ended", CallSid=f"CA{101 + n}", CallStatus="completed")
+    assert len(voice.calls) == RINGS
+    assert [t["Body"] for t in voice.texts] == [[f"Update {RINGS}."]]

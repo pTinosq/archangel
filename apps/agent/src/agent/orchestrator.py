@@ -109,7 +109,7 @@ class Orchestrator:
                 except Exception as error:
                     log.exception("Failed to handle: %s", describe(event.prompt()))
                     parts = (Text(event.fallback(error)),)
-                await self._gateway.send(Message(event.reply_to, parts))
+                await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner))
 
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]

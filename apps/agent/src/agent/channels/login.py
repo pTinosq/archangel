@@ -63,7 +63,7 @@ def protect(app: FastAPI, github: GitHub, client: httpx.AsyncClient | None = Non
             return _page("That sign-in link has expired.", 400)
         try:
             login = await _github_login(client, github, code)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):  # down, or an error page instead of JSON
             return _page("Couldn't reach GitHub. Try again.", 502)
         if login is None:
             return _page("GitHub didn't sign you in.", 400)
