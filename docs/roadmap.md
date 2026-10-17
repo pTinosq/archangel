@@ -24,7 +24,7 @@ Each milestone ships something usable and proves one idea.
 - **Seams:** gateway, `logs.run` (each model call and tool call of every agent; guard, investigator and locator now run through it too), tasks, the pilot's calls to guard, locator and investigator, Jev, and `Phone._command`.
 - **Lossy:** announcing never waits or raises. Each listener has a bounded queue and misses notices when it's full. The last 200 are kept for new listeners. Nothing is stored.
 - **Stream:** `GET /api/activity` uses server-sent events, not a WebSocket. It's one-way by construction, needs no new dependency, and the browser reconnects it. A heartbeat lets open streams end on shutdown.
-- **Cockpit tab:** an SVG graph of the parts, with channels on the left and models placed above their callers.
+- **Cockpit tab:** a React Flow graph laid out by dagre, left to right in calling order, so each model sits beside its callers. It re-lays out only when a new part or link appears, so nothing moves while you watch.
   - Pulses travel each hop: blue for tx, green for rx, red for failures.
   - A node glows while a call to it is open.
   - A timeline sits beside the graph. "Follow latest", or clicking a notice, lights that request's path and rings the node holding it now.

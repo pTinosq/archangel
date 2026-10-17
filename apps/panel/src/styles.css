@@ -53,7 +53,7 @@ nav button.active { background: var(--line); color: var(--text); }
 main { flex: 1; display: grid; min-height: 0; }
 main.tasks { grid-template-columns: 260px 1fr 340px; }
 main.prompts { grid-template-columns: 220px 1fr 340px; }
-main.cockpit { grid-template-columns: 1fr 380px 340px; }
+main.cockpit { grid-template-columns: 1fr 320px 280px; }
 main > section { padding: 16px; overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); }
 main > section:last-child { border-right: none; }
 
@@ -103,43 +103,51 @@ main > section:last-child { border-right: none; }
 .editor textarea { flex: 1; min-height: 300px; resize: none; font: 13px/1.5 ui-monospace, Menlo, monospace; }
 .actions { display: flex; gap: 8px; }
 
-.cockpit { display: flex; padding: 8px; overflow: hidden; }
-.cockpit svg { width: 100%; height: 100%; }
-.edge { stroke: var(--line); stroke-width: 1.5; }
-.edge.path { stroke: var(--accent); stroke-opacity: 0.6; stroke-width: 2.5; }
-.node rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: stroke 0.2s; }
-.node text { fill: var(--text); font-size: 13px; text-anchor: middle; }
-.node .doing { fill: var(--quiet); font-size: 11px; }
-.node.agent rect { stroke: #3a4a7a; }
-.node.model rect { stroke: #5b3f7a; }
-.node.channel rect, .node.device rect { stroke: #2f5a4a; }
-.node.busy rect { stroke: var(--warn); animation: glow 1.2s ease-in-out infinite; }
-.node.flash rect { stroke: var(--accent); }
-.node.here rect { stroke: var(--accent); stroke-width: 4; }
-@keyframes glow { 50% { filter: drop-shadow(0 0 8px var(--warn)); } }
+.cockpit { padding: 0; overflow: hidden; }
+.cockpit .react-flow { --xy-background-color: var(--bg); --xy-edge-stroke: var(--line); --xy-edge-stroke-width: 1.5; }
+.cockpit .react-flow__handle { opacity: 0; pointer-events: none; }
+.cockpit .react-flow__node { transition: transform 0.4s ease; }
+.cockpit .react-flow__edge-path.lit { stroke: var(--accent); stroke-opacity: 0.7; stroke-width: 2.5; }
 
-.pulse { fill: var(--accent); animation: travel 0.9s ease-in-out forwards; filter: drop-shadow(0 0 4px currentColor); }
-.pulse.rx { fill: var(--good); }
+.part {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 120px; height: 44px; padding: 0 8px;
+  background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.part .name { font-weight: 600; font-size: 13px; color: var(--text); }
+.part .doing { font-size: 11px; color: var(--quiet); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part.agent { border-color: #3a4a7a; }
+.part.model { border-color: #5b3f7a; }
+.part.channel, .part.device { border-color: #2f5a4a; }
+.part.busy { border-color: var(--warn); box-shadow: 0 0 14px -2px var(--warn); }
+.part.flash { border-color: var(--accent); }
+.part.here { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.35); }
+
+/* Each dot rides its edge's path; tx, rx and failures in their colours. */
+.pulse { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); offset-rotate: 0deg; animation: travel 0.9s linear forwards; }
+.pulse.back { animation-name: travel-back; }
+.pulse.rx { fill: var(--good); filter: drop-shadow(0 0 4px var(--good)); }
 .pulse.failed { fill: var(--bad); }
 .pulse.dim { opacity: 0.25; }
-@keyframes travel {
-  from { transform: translate(0, 0); }
-  85% { opacity: 1; }
-  to { transform: translate(var(--dx), var(--dy)); opacity: 0; }
-}
+@keyframes travel { from { offset-distance: 0%; } 80% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+@keyframes travel-back { from { offset-distance: 100%; } 80% { opacity: 1; } to { offset-distance: 0%; opacity: 0; } }
 
 .timeline .follow { display: flex; gap: 6px; align-items: center; margin-bottom: 12px; }
 .timeline .follow h2 { margin: 0 auto 0 0; }
-.timeline .follow button { padding: 3px 8px; font-size: 12px; background: none; color: var(--quiet); }
+.timeline .follow button { padding: 3px 10px; font-size: 12px; background: none; color: var(--quiet); }
 .timeline .follow button.active { background: var(--line); color: var(--text); }
-.timeline li { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; padding: 6px 8px; border-left: 2px solid var(--accent); margin-bottom: 4px; border-radius: 0 6px 6px 0; cursor: pointer; font-size: 12px; }
+/* One fixed-height line per notice, so new ones never make the list jump about. */
+.timeline li {
+  display: grid; grid-template-columns: 58px auto 1fr auto; gap: 8px; align-items: center;
+  height: 26px; padding: 0 8px; margin-bottom: 2px; font-size: 12px; white-space: nowrap;
+  border-left: 2px solid var(--accent); border-radius: 0 4px 4px 0; cursor: pointer;
+}
 .timeline li:hover { background: var(--panel); }
 .timeline li.rx { border-left-color: var(--good); }
 .timeline li.failed { border-left-color: var(--bad); }
 .timeline li.dim { opacity: 0.35; }
 .timeline time { color: var(--quiet); font-variant-numeric: tabular-nums; }
 .timeline .hop { font-weight: 600; }
-.timeline .request { color: var(--quiet); }
-.timeline .dir { font-weight: 400; font-size: 10px; text-transform: uppercase; color: var(--accent); }
-.timeline li.rx .dir { color: var(--good); }
-.timeline .text { grid-column: 1 / -1; color: var(--quiet); overflow-wrap: anywhere; }
+.timeline .text { color: var(--quiet); overflow: hidden; text-overflow: ellipsis; }
+.timeline .request { color: var(--quiet); font-variant-numeric: tabular-nums; }

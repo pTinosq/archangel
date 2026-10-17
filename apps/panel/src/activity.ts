@@ -19,7 +19,8 @@ export type Notice = {
 
 const KEPT = 400;
 const RETRY_MS = 2000;
-const CALLS = new Set(["agent", "model", "phone"]);
+/** Kinds that are always calls: a tx from the caller, then an rx back. */
+export const CALLS = new Set(["agent", "model", "phone"]);
 const CALL_GIVEN_UP_SECONDS = 120; // a reply lost in the stream mustn't leave a node busy forever
 
 /** The latest notices, oldest first. On reconnecting, the agent replays its recent ones. */
@@ -28,12 +29,19 @@ export function useActivity(): Notice[] {
   useEffect(() => {
     let stream: EventSource;
     let retry: number;
+    let frame = 0;
+    const pending: Notice[] = [];
     const connect = () => {
       stream = new EventSource("/api/activity");
       stream.onopen = () => setNotices([]);
       stream.onmessage = (e) => {
-        const notice: Notice = JSON.parse(e.data);
-        setNotices((old) => [...old.slice(1 - KEPT), notice]);
+        // Notices come in bursts; one render per frame, however many arrived.
+        pending.push(JSON.parse(e.data));
+        frame ||= requestAnimationFrame(() => {
+          const fresh = pending.splice(0);
+          frame = 0;
+          setNotices((old) => [...old, ...fresh].slice(-KEPT));
+        });
       };
       // The browser retries a dropped stream by itself, but gives up for good on an error response, which is
       // what the dev proxy sends while the agent is down.
@@ -44,6 +52,7 @@ export function useActivity(): Notice[] {
     connect();
     return () => {
       clearTimeout(retry);
+      cancelAnimationFrame(frame);
       stream.close();
     };
   }, []);

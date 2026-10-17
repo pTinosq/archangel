@@ -1,21 +1,25 @@
-import { type CSSProperties, useEffect, useState } from "react";
-import { type Notice, openCalls, useActivity } from "./activity";
+import dagre from "@dagrejs/dagre";
+import {
+  Background,
+  BaseEdge,
+  type Edge,
+  type EdgeProps,
+  getBezierPath,
+  Handle,
+  type Node,
+  type NodeProps,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { CALLS, type Notice, openCalls, useActivity } from "./activity";
 
-// Where the usual parts sit. Only layout: what each node is comes from the activity itself, and new parts
-// (channels, models, agents) are placed as they turn up.
-const PLACES: Record<string, [number, number]> = {
-  gateway: [230, 300],
-  orchestrator: [400, 300],
-  tasks: [560, 300],
-  pilot: [720, 300],
-  phone: [900, 300],
-  guard: [600, 470],
-  locator: [760, 470],
-  investigator: [910, 470],
-};
-const MODEL_GAP = 170;
+const NODE = { width: 120, height: 44 }; // as in styles.css
 const PULSE_SECONDS = 1.2;
-const TICK_MS = 250;
+const TICK_MS = 400;
 const SHOWN = 150;
 
 type Follow = number | "live" | null;
@@ -30,16 +34,18 @@ export function Cockpit() {
   return (
     <>
       <section className="cockpit">
-        <Graph notices={notices} now={now} inRequest={inRequest} following={request !== null} />
+        <ReactFlowProvider>
+          <Graph notices={notices} now={now} inRequest={inRequest} following={request !== null} />
+        </ReactFlowProvider>
       </section>
       <section className="timeline">
         <div className="follow">
           <h2>Activity</h2>
           <button className={follow === "live" ? "active" : ""} onClick={() => setFollow("live")}>
-            Follow latest
+            Latest
           </button>
           <button className={follow === null ? "active" : ""} onClick={() => setFollow(null)}>
-            Everything
+            All
           </button>
         </div>
         {notices.length === 0 && <p className="quiet">Quiet. Say something to Archangel and watch it travel.</p>}
@@ -50,15 +56,16 @@ export function Cockpit() {
             .map((n) => (
               <li
                 key={n.id}
+                title={n.text}
                 className={`${n.dir} ${n.ok ? "" : "failed"} ${inRequest(n) ? "" : "dim"}`}
                 onClick={() => n.request !== null && setFollow(n.request === follow ? "live" : n.request)}
               >
                 <time>{new Date(n.time * 1000).toLocaleTimeString([], { hour12: false })}</time>
                 <span className="hop">
-                  {n.source} → {n.target} <span className="dir">{n.dir}</span>
+                  {n.source} → {n.target}
                 </span>
-                {n.request !== null && <span className="request">#{n.request}</span>}
                 <span className="text">{n.text}</span>
+                <span className="request">{n.request !== null && `#${n.request}`}</span>
               </li>
             ))}
         </ol>
@@ -66,6 +73,13 @@ export function Cockpit() {
     </>
   );
 }
+
+type PartData = { name: string; kind: string; doing?: string; here: boolean; flash: boolean };
+type Pulse = { id: number; back: boolean; dir: Notice["dir"]; ok: boolean; dim: boolean };
+type HopData = { lit: boolean; pulses: Pulse[] };
+
+const nodeTypes = { part: Part };
+const edgeTypes = { hop: Hop };
 
 function Graph({
   notices,
@@ -78,94 +92,129 @@ function Graph({
   inRequest: (n: Notice) => boolean;
   following: boolean;
 }) {
-  const kindsOf = kinds(notices);
-  const places = layout(notices, kindsOf);
+  const kindOf = kinds(notices);
+  const { names, links } = useTopology(notices, kindOf);
+  const shape = names.join() + "|" + links.map((l) => l.join(">")).join();
+  // Laid out again only when a part or a link first appears, so nothing moves while you watch.
+  const spots = useMemo(() => layout(names, links), [shape]);
+
   const open = openCalls(notices, now);
   const followed = notices.filter(inRequest);
   const here = following ? followed[followed.length - 1]?.target : undefined;
-  const path = new Set(following ? followed.map((n) => edge(n.source, n.target)) : []);
-  const edges = new Set(notices.filter((n) => n.source !== n.target).map((n) => edge(n.source, n.target)));
+  const lit = new Set(following ? followed.map((n) => pair(n.source, n.target)) : []);
   const fresh = notices.filter((n) => now - n.time < PULSE_SECONDS);
-  const flashing = new Set(fresh.filter((n) => n.source === n.target).map((n) => n.source));
+
+  const nodes: Node<PartData>[] = names.map((name) => ({
+    id: name,
+    type: "part",
+    position: spots.get(name)!,
+    data: {
+      name,
+      kind: kindOf.get(name) ?? "part",
+      doing: open.get(name)?.text,
+      here: name === here,
+      flash: fresh.some((n) => n.source === name && n.target === name),
+    },
+  }));
+  const edges: Edge<HopData>[] = links.map(([from, to]) => {
+    const key = pair(from, to);
+    const pulses = fresh
+      .filter((n) => n.source !== n.target && pair(n.source, n.target) === key)
+      .map((n) => ({ id: n.id, back: n.source !== from, dir: n.dir, ok: n.ok, dim: !inRequest(n) }));
+    return { id: key, source: from, target: to, type: "hop", data: { lit: lit.has(key), pulses } };
+  });
+
+  const flow = useReactFlow();
+  useEffect(() => {
+    requestAnimationFrame(() => flow.fitView({ padding: 0.06, duration: 400 }));
+  }, [shape]);
 
   return (
-    <svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
-      {[...edges].map((key) => {
-        const [a, b] = key.split("|").map((name) => places.get(name)!);
-        return (
-          <line key={key} className={`edge ${path.has(key) ? "path" : ""}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
-        );
-      })}
-      {fresh
-        .filter((n) => n.source !== n.target)
-        .map((n) => {
-          const [x1, y1] = places.get(n.source)!;
-          const [x2, y2] = places.get(n.target)!;
-          // Requests and replies travel either side of the line, so a call and its answer don't collide.
-          const length = Math.hypot(x2 - x1, y2 - y1) || 1;
-          const side = n.dir === "tx" ? -5 : 5;
-          const [ox, oy] = [(-(y2 - y1) / length) * side, ((x2 - x1) / length) * side];
-          const style = { "--dx": `${x2 - x1}px`, "--dy": `${y2 - y1}px` } as CSSProperties;
-          return (
-            <g key={n.id} transform={`translate(${x1 + ox} ${y1 + oy})`}>
-              <circle
-                className={`pulse ${n.dir} ${n.ok ? "" : "failed"} ${inRequest(n) ? "" : "dim"}`}
-                r={6}
-                style={style}
-              />
-            </g>
-          );
-        })}
-      {[...places].map(([name, [x, y]]) => {
-        const call = open.get(name);
-        const classes = [
-          "node",
-          kindsOf.get(name) ?? "part",
-          call && "busy",
-          name === here && "here",
-          flashing.has(name) && "flash",
-        ];
-        return (
-          <g key={name} className={classes.filter(Boolean).join(" ")} transform={`translate(${x} ${y})`}>
-            <rect x={-width(name) / 2} y={-18} width={width(name)} height={36} rx={18} />
-            <text dy={4}>{name}</text>
-            {call && (
-              <text className="doing" dy={36}>
-                {clip(call.text, 28)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      nodeOrigin={[0.5, 0.5]}
+      colorMode="dark"
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable={false}
+      fitView
+      minZoom={0.3}
+    >
+      <Background gap={28} size={1} />
+    </ReactFlow>
   );
 }
 
-/** Where every node seen so far goes: the usual parts in place, channels down the left, the rest along the top. */
-function layout(notices: Notice[], kinds: Map<string, string>): Map<string, [number, number]> {
-  const channels: string[] = [];
-  const others: string[] = [];
+function Part({ data }: NodeProps<Node<PartData>>) {
+  const classes = ["part", data.kind, data.doing && "busy", data.here && "here", data.flash && "flash"];
+  return (
+    <div className={classes.filter(Boolean).join(" ")}>
+      <Handle type="target" position={Position.Left} isConnectable={false} />
+      <Handle type="source" position={Position.Right} isConnectable={false} />
+      <span className="name">{data.name}</span>
+      <span className="doing">{data.doing ?? " "}</span>
+    </div>
+  );
+}
+
+function Hop({ id, data, ...ends }: EdgeProps<Edge<HopData>>) {
+  const [path] = getBezierPath(ends);
+  return (
+    <>
+      <BaseEdge id={id} path={path} className={data?.lit ? "lit" : ""} />
+      {data?.pulses.map((p) => (
+        <circle
+          key={p.id}
+          r={5}
+          className={["pulse", p.dir, p.back && "back", !p.ok && "failed", p.dim && "dim"].filter(Boolean).join(" ")}
+          style={{ offsetPath: `path("${path}")` } as CSSProperties}
+        />
+      ))}
+    </>
+  );
+}
+
+/** Every part and link seen since the cockpit opened, each link pointing from caller to callee. Calls say
+ * who's calling; channels always feed the gateway; for other messages, the first one in a request we saw begin
+ * (a page opened mid-request sees replies before what they answer). */
+function useTopology(notices: Notice[], kindOf: Map<string, string>): { names: string[]; links: [string, string][] } {
+  const seen = useRef({
+    names: new Set<string>(),
+    links: new Map<string, [string, string]>(),
+    whole: new Map<number, boolean>(), // requests, by whether we saw them begin
+  }).current;
   for (const n of notices) {
-    for (const name of [n.source, n.target]) {
-      if (name in PLACES || channels.includes(name) || others.includes(name)) continue;
-      (kinds.get(name) === "channel" ? channels : others).push(name);
+    seen.names.add(n.source).add(n.target);
+    if (n.request !== null && !seen.whole.has(n.request)) seen.whole.set(n.request, kindOf.get(n.source) === "channel");
+    if (n.source === n.target || n.dir !== "tx") continue;
+    const key = pair(n.source, n.target);
+    if (kindOf.get(n.target) === "channel") seen.links.set(key, [n.target, n.source]);
+    else if (CALLS.has(n.kind) || kindOf.get(n.source) === "channel") seen.links.set(key, [n.source, n.target]);
+    else if (!seen.links.has(key) && n.request !== null && seen.whole.get(n.request)) {
+      seen.links.set(key, [n.source, n.target]);
     }
   }
-  const places = new Map<string, [number, number]>(Object.entries(PLACES));
-  channels.forEach((name, i) => places.set(name, [70, 300 + (i - (channels.length - 1) / 2) * 90]));
-  // Each model sits above the parts that call it, spread out so none overlap.
-  const callers = (name: string) =>
-    notices.flatMap((n) => (n.target === name ? [n.source] : n.source === name ? [n.target] : []));
-  const xs = others.map((name) => {
-    const near = callers(name).flatMap((c) => (places.has(c) ? [places.get(c)![0]] : []));
-    return [name, near.length ? near.reduce((a, b) => a + b) / near.length : 500] as const;
-  });
-  let previous = -Infinity;
-  for (const [name, x] of xs.sort((a, b) => a[1] - b[1])) {
-    previous = Math.max(x, previous + MODEL_GAP);
-    places.set(name, [previous, 120]);
+  // A link with no direction yet still belongs in the picture.
+  for (const n of notices) {
+    const key = pair(n.source, n.target);
+    if (n.source !== n.target && !seen.links.has(key)) seen.links.set(key, [n.source, n.target]);
   }
-  return places;
+  return { names: [...seen.names].sort(), links: [...seen.links.values()] };
+}
+
+/** Left to right in the order things call each other: channels, gateway, orchestrator, tasks, pilot, and each
+ * model or helper beside whatever calls it. */
+function layout(names: string[], links: [string, string][]): Map<string, { x: number; y: number }> {
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({ rankdir: "LR", nodesep: 18, ranksep: 44 });
+  graph.setDefaultEdgeLabel(() => ({}));
+  for (const name of names) graph.setNode(name, { ...NODE });
+  for (const [from, to] of links) graph.setEdge(from, to);
+  dagre.layout(graph);
+  return new Map(names.map((name) => [name, { x: graph.node(name).x, y: graph.node(name).y }]));
 }
 
 /** What each node is, judged by how it's called: whatever asks a model is an agent, and so on. */
@@ -178,18 +227,16 @@ function kinds(notices: Notice[]): Map<string, string> {
     else if (n.kind === "phone") kinds.set(n.target, "device");
   }
   for (const n of notices) {
-    // A message to or from the gateway whose other end isn't one of the usual parts: a channel.
+    // The far end of a message to or from the gateway, if it's nothing else: a channel.
     const other = n.source === "gateway" ? n.target : n.target === "gateway" ? n.source : null;
-    if (n.kind === "message" && other && !(other in PLACES) && !kinds.has(other)) kinds.set(other, "channel");
+    if (n.kind === "message" && other && !kinds.has(other)) kinds.set(other, "channel");
   }
   return kinds;
 }
 
-const width = (name: string) => name.length * 7.5 + 32;
-const edge = (a: string, b: string) => [a, b].sort().join("|");
-const clip = (text: string, length: number) => (text.length > length ? `${text.slice(0, length)}…` : text);
+const pair = (a: string, b: string) => [a, b].sort().join("|");
 
-/** The time now, in seconds, updated a few times a second so pulses come and go. */
+/** The time now, in seconds, updated a few times a second so pulses and busy marks come and go. */
 function useNow(): number {
   const [now, setNow] = useState(Date.now() / 1000);
   useEffect(() => {
