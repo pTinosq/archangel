@@ -44,7 +44,8 @@ class CommandExecutor(private val device: Device) {
         when (command) {
             is Command.Screenshot -> {
                 require(command.scale > 0f && command.scale <= 1f) { "scale must be in (0, 1]" }
-                return BridgeJson.encodeToJsonElement(device.screenshot(command.scale))
+                require(command.quality in 1..100) { "quality must be in 1..100" }
+                return BridgeJson.encodeToJsonElement(device.screenshot(command.scale, command.quality))
             }
             is Command.UiTree -> return BridgeJson.encodeToJsonElement(device.uiTree())
             is Command.Apps -> return BridgeJson.encodeToJsonElement(device.apps())

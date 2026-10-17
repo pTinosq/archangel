@@ -39,7 +39,7 @@ Error codes: `invalid_command`, `not_found`, `failed`, `internal`.
 
 | type         | params                                       | data                                         |
 |--------------|----------------------------------------------|----------------------------------------------|
-| `screenshot` | `scale`? in (0, 1] (default 1)               | `{"width", "height", "jpeg": "<base64>"}`    |
+| `screenshot` | `scale`? in (0, 1] (default 1), `quality`? JPEG 1–100 (80) | `{"width", "height", "jpeg": "<base64>"}`    |
 | `tap`        | `x`, `y`, `durationMs`? (default 50)         |                                              |
 | `swipe`      | `x1`, `y1`, `x2`, `y2`, `durationMs`? (300)  |                                              |
 | `type`       | `text` (replaces the focused field's text; pastes if the field refuses) |                                              |

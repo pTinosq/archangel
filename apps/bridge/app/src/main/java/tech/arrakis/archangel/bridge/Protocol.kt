@@ -18,7 +18,7 @@ sealed interface Command {
 
     @Serializable
     @SerialName("screenshot")
-    data class Screenshot(override val id: String, val scale: Float = 1f) : Command
+    data class Screenshot(override val id: String, val scale: Float = 1f, val quality: Int = 80) : Command
 
     @Serializable
     @SerialName("tap")

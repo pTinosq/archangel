@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 class AndroidDevice(private val service: AccessibilityService) : Device {
 
-    override suspend fun screenshot(scale: Float): Screenshot {
+    override suspend fun screenshot(scale: Float, quality: Int): Screenshot {
         val result = captureScreen()
         return withContext(Dispatchers.Default) {
             result.hardwareBuffer.use { buffer ->
@@ -41,7 +41,7 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
                     (full.height * scale).roundToInt(),
                     true,
                 ).also { full.recycle() }
-                val jpeg = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+                val jpeg = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
                 Screenshot(bitmap.width, bitmap.height, Base64.encodeToString(jpeg.toByteArray(), Base64.NO_WRAP))
                     .also { bitmap.recycle() }
             }
@@ -184,7 +184,6 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
     }
 
     private companion object {
-        const val JPEG_QUALITY = 80
         const val SCREENSHOT_ATTEMPTS = 3
         const val SCREENSHOT_RETRY_MS = 400L
         const val TEXT_SETTLE_MS = 200L

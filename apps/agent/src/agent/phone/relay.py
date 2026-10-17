@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 SCREENSHOT_SCALE = 0.5
+SCREENSHOT_QUALITY = 30  # half the bytes of 80; Jev and Luna locate just as well (tested on Settings)
 OFFLINE_WAIT_SECONDS = 60
 POLL_SECONDS = 2
 READ_ONLY = {"screenshot", "apps", "ui_tree"}
@@ -32,7 +33,7 @@ class Phone:
         self._size: tuple[int, int] | None = None
 
     async def screenshot(self) -> Screenshot:
-        data = await self._command("screenshot", scale=SCREENSHOT_SCALE)
+        data = await self._command("screenshot", scale=SCREENSHOT_SCALE, quality=SCREENSHOT_QUALITY)
         return Screenshot(base64.b64decode(data["jpeg"]), data["width"], data["height"])
 
     async def tap(self, x: float, y: float, hold: bool = False) -> None:

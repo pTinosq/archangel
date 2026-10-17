@@ -22,18 +22,19 @@ class CommandExecutorTest {
 
     @Test
     fun `screenshot returns its data`() = runTest {
-        val reply = executor.execute("""{"id":"1","type":"screenshot"}""")
+        val reply = executor.execute("""{"id":"1","type":"screenshot","quality":30}""")
 
-        assertEquals("abc", reply.data!!.jsonObject["jpeg"]!!.jsonPrimitive.content)
+        assertEquals("q30", reply.data!!.jsonObject["jpeg"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `screenshot scale is passed through and validated`() = runTest {
+    fun `screenshot scale and quality are validated`() = runTest {
         val reply = executor.execute("""{"id":"1","type":"screenshot","scale":0.5}""")
         assertEquals("50", reply.data!!.jsonObject["width"]!!.jsonPrimitive.content)
 
         assertError("invalid_command", executor.execute("""{"id":"2","type":"screenshot","scale":0}"""))
         assertError("invalid_command", executor.execute("""{"id":"3","type":"screenshot","scale":1.5}"""))
+        assertError("invalid_command", executor.execute("""{"id":"4","type":"screenshot","quality":0}"""))
     }
 
     @Test
@@ -89,7 +90,8 @@ class CommandExecutorTest {
 private class FakeDevice : Device {
     val calls = mutableListOf<String>()
 
-    override suspend fun screenshot(scale: Float) = Screenshot((100 * scale).toInt(), (200 * scale).toInt(), "abc")
+    override suspend fun screenshot(scale: Float, quality: Int) =
+        Screenshot((100 * scale).toInt(), (200 * scale).toInt(), "q$quality")
 
     override suspend fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
         calls += "swipe $x1,$y1 -> $x2,$y2 in ${durationMs}ms"
