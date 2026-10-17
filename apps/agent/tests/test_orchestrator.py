@@ -138,6 +138,28 @@ def test_task_results_can_go_to_another_channel(store):
     assert owner.email.sent[0].text.startswith("Relayed: [Update on task #1")
 
 
+def test_a_started_task_can_report_elsewhere(store):
+    def redirects(prompt):
+        if "not from the owner" in prompt:
+            return say("Done.")
+        if "email" in prompt:
+            return call("redirect_task", id=1, channel="email")
+        return call("start_task", goal="Book a taxi")
+
+    owner = Owner(store, tool_result_or(redirects))
+    owner.pilot.hold = asyncio.Event()
+
+    async def scenario():
+        await owner.orchestrator.handle(OwnerMessage(Message(owner.cli.owner, (Text("book a taxi"),))))
+        await owner.orchestrator.handle(OwnerMessage(Message(owner.cli.owner, (Text("email me when it's done"),))))
+        owner.pilot.hold.set()
+        await owner.tasks.idle()
+
+    asyncio.run(scenario())
+    assert [r.text for r in owner.cli.sent] == ["Started task #1.", "Task #1 will report via email."]
+    assert [m.text for m in owner.email.sent] == ["Done."]
+
+
 def test_the_model_can_message_another_channel(store):
     owner = Owner(store, tool_result_or(lambda prompt: call("send", channel="email", text="Your summary")))
     replies = owner.says(Text("email me a summary"))

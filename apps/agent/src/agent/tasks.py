@@ -54,6 +54,14 @@ class Tasks:
         self._launch(task, paused, answer)
         return f"Task #{id} continues."
 
+    def redirect(self, id: int, to: Address) -> str:
+        """Send a task's updates somewhere else from now on."""
+        task = self._store.task(id)
+        if not task or not task.status.open:
+            return f"Task #{id} isn't running."
+        self._store.report_task_to(id, to)
+        return f"Task #{id} will report via {to.channel}."
+
     def cancel(self, id: int) -> str:
         task = self._store.task(id)
         if not task or not task.status.open:
@@ -94,6 +102,7 @@ class Tasks:
         finally:
             del self._running[task.id]
         task.run = outcome.run
+        task.report_to = self._store.task(task.id).report_to  # the owner may have asked for it elsewhere meanwhile
         self._settle(task, _STATUSES[outcome.status], outcome.report)
         if self.notify:
             activity.hop("orchestrator", "task", f"#{task.id} {task.status}: {task.report}")

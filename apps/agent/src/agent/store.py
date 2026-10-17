@@ -150,6 +150,10 @@ class Store:
                 (task.status, task.report, run and ConversationTypeAdapter.dump_json(run), task.id),
             )
 
+    def report_task_to(self, id: int, to: Address) -> None:
+        with self._db:
+            self._db.execute("UPDATE tasks SET channel = ?, address = ? WHERE id = ?", (to.channel, to.id, id))
+
     def task(self, id: int) -> Task | None:
         row = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks WHERE id = ?", (id,)).fetchone()
         return _task(row) if row else None

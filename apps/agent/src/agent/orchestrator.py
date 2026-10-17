@@ -71,6 +71,13 @@ class Orchestrator:
             return tasks.answer(id, Answer(answer, approve))
 
         @self._agent.tool_plain
+        async def redirect_task(id: int, channel: str) -> str:
+            """Send a started task's updates to another channel, e.g. "text me when it's done" (sms)."""
+            if not (to := gateway.owner(channel)):
+                return f"No channel {channel!r}. Channels: {', '.join(gateway.channels)}."
+            return tasks.redirect(id, to)
+
+        @self._agent.tool_plain
         async def cancel_task(id: int) -> str:
             """Stop a task."""
             return tasks.cancel(id)
