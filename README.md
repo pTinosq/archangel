@@ -30,7 +30,7 @@ just agent               # keep running
 just panel               # open http://localhost:5173
 ```
 
-Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, and edit the prompts. The Cockpit tab shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing. Local only.
+Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, and edit the prompts. The Cockpit tab shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing. Local, until you deploy it.
 
 ## Drive the phone
 
@@ -51,5 +51,16 @@ GET  /devices/<device>/screenshot.jpg
 Or `just send '{"type":"key","key":"home"}'`. Commands: [docs/protocol.md](docs/protocol.md).
 
 Without the cable: `just tunnel`, then set the app's URL to `wss://<ngrok-host>/ws/device`.
+
+## Deploy
+
+Archangel on Railway, the phone on your desk, the laptop closed.
+
+1. A Railway project with two services from this repo: `relay` (root dir `apps/relay`) and `agent` (root dir `/`, config `apps/agent/railway.json`, a volume at `/app/apps/agent/data`). Give both a domain.
+2. A GitHub OAuth App with callback `https://<agent-domain>/auth/callback`.
+3. Variables: [CLAUDE.md](CLAUDE.md#deploy).
+4. On the phone: URL `wss://<relay-domain>/ws/device`, and the relay's token. Keep it charging, on Wi-Fi, unlocked ("Stay awake"), battery optimisation off.
+
+Then open `https://<agent-domain>` and continue with GitHub. Only `ARCHANGEL_OWNER` gets in.
 
 Details: [CLAUDE.md](CLAUDE.md).

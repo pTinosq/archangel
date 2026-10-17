@@ -1,0 +1,8 @@
+.env
+**/.venv
+**/node_modules
+**/dist
+**/data
+**/logs
+**/__pycache__
+apps/bridge

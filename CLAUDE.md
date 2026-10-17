@@ -121,7 +121,12 @@ minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.version
 
 ## Deploy
 
-- **Relay → Railway:** root dir `apps/relay`, set `ARCHANGEL_TOKEN`. Phone URL becomes `wss://<domain>/ws/device`.
+One Railway project, two services, both deployed from `main` on push.
+
+- **relay:** root dir `apps/relay` (its `railway.json`). `ARCHANGEL_TOKEN`: a long random one, not the dev token. Phone URL becomes `wss://<relay-domain>/ws/device`.
+- **agent:** root dir `/`, config `apps/agent/railway.json` (Dockerfile: builds the panel, serves it with the API). Volume at `/app/apps/agent/data`. Variables: `ARCHANGEL_TOKEN` (`${{relay.ARCHANGEL_TOKEN}}`), `OPENROUTER_API_KEY`, `ARCHANGEL_RELAY_URL=https://<relay-domain>`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ARCHANGEL_OWNER`.
+- **GitHub OAuth App** (github.com/settings/developers): homepage `https://<agent-domain>`, callback `https://<agent-domain>/auth/callback`.
+- No terminal there, so the panel is the only channel. `logs/` doesn't survive a deploy; Railway's log view has the console lines.
 - **Bridge:** `just bridge-install`. Later: signed APK from CI via GitHub Releases.
 
 ## Limits

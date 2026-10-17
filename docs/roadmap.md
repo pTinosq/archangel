@@ -11,11 +11,12 @@ Each milestone ships something usable and proves one idea.
 | M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
 | M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
 | M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
-| M7 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
-| M8 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
-| M9 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
-| M10 | Voice | call your Twilio number | LiveKit SIP as a channel |
-| M11 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+| M7 | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
+| M8 | Telegram | message Archangel from Telegram | new channel, no orchestrator change |
+| M9 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
+| M10 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
+| M11 | Voice | call your Twilio number | LiveKit SIP as a channel |
+| M12 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
 
 ## M6 (done)
 
@@ -85,7 +86,7 @@ The owner also tests across channels and reports changes.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M8).
+- **Not yet:** images from the panel chat; connectors and MCP setup (M9).
 
 ## M5 requirements (from the owner)
 
@@ -93,12 +94,12 @@ The owner also tests across channels and reports changes.
 - **Monitoring.** Task status, live progress, each run's steps and screenshots.
 - **A channel.** Chat with Archangel from it, approvals included.
 - **Prompts in the database.** The defaults stay in the code; edited versions are saved in the store and edited from the panel.
-- **Setup.** Later: connectors and MCP servers (M8) are configured here.
+- **Setup.** Later: connectors and MCP servers (M9) are configured here.
 
-## M9 requirements (from the owner)
+## M10 requirements (context twin) (from the owner)
 
 - **Learns as it goes.** Standing instructions said in any channel become memories with no extra step. Examples: "never return sponsored results for restaurant recommendations"; "Uber: always the cheapest ride, rate drivers 5 stars, no tip".
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 
-Temporal waits for M11: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+Temporal waits for M12: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
