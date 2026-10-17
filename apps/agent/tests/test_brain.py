@@ -1,6 +1,6 @@
 import asyncio
 
-from pydantic_ai import BinaryContent, ModelMessage, ModelResponse, TextPart
+from pydantic_ai import BinaryContent, ModelMessage, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.brain import Brain
@@ -22,6 +22,19 @@ class Recorder:
         return ModelResponse(parts=[TextPart("ok")])
 
 
+class FakePilot:
+    def __init__(self):
+        self.tasks: list[str] = []
+
+    async def run(self, task: str) -> str:
+        self.tasks.append(task)
+        return "WhatsApp is open."
+
+
+def brain(model) -> Brain:
+    return Brain(model, Threads(), FakePilot())
+
+
 def send(brain: Brain, *parts) -> list[Message]:
     replies: list[Message] = []
 
@@ -33,13 +46,12 @@ def send(brain: Brain, *parts) -> list[Message]:
 
 
 def test_replies_with_model_output():
-    brain = Brain(Recorder().model, Threads())
-    assert send(brain, Text("hi")) == [Message(CONVERSATION, (Text("ok"),))]
+    assert send(brain(Recorder().model), Text("hi")) == [Message(CONVERSATION, (Text("ok"),))]
 
 
 def test_text_and_images_reach_the_model():
     recorder = Recorder()
-    send(Brain(recorder.model, Threads()), Image(b"png", "image/png"), Text("what is this?"))
+    send(brain(recorder.model), Image(b"png", "image/png"), Text("what is this?"))
 
     prompt = recorder.requests[0][-1].parts[-1].content
     assert prompt == [BinaryContent(data=b"png", media_type="image/png"), "what is this?"]
@@ -47,8 +59,23 @@ def test_text_and_images_reach_the_model():
 
 def test_history_carries_over():
     recorder = Recorder()
-    brain = Brain(recorder.model, Threads())
-    send(brain, Text("first"))
-    send(brain, Text("second"))
+    agent = brain(recorder.model)
+    send(agent, Text("first"))
+    send(agent, Text("second"))
 
     assert len(recorder.requests[1]) == 3  # first request, its response, second request
+
+
+def test_phone_tasks_go_to_the_pilot():
+    pilot = FakePilot()
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        last = messages[-1].parts[-1]
+        if isinstance(last, ToolReturnPart):
+            return ModelResponse(parts=[TextPart(f"Done: {last.content}")])
+        return ModelResponse(parts=[ToolCallPart("use_phone", {"task": "Open WhatsApp"})])
+
+    replies = send(Brain(FunctionModel(respond), Threads(), pilot), Text("open whatsapp"))
+
+    assert pilot.tasks == ["Open WhatsApp"]
+    assert replies[0].text == "Done: WhatsApp is open."

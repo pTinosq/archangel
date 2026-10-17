@@ -16,9 +16,10 @@ cp .env.example .env     # set ARCHANGEL_TOKEN and OPENROUTER_API_KEY
 just agent
 › hi
 › /image ~/Desktop/shot.png what's this?
+› what's my battery level?      # uses the phone; needs the relay and bridge running
 ```
 
-Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`.
+Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Settings: [CLAUDE.md](CLAUDE.md#agent).
 
 ## Drive the phone
 
