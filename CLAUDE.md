@@ -1,26 +1,28 @@
 # Archangel
 
-AI agent that operates a real Android phone. No cable, ADB or root at runtime. v1: the device interface; agent not built yet.
+AI agent that operates a real Android phone. No cable, ADB or root at runtime. Progress: `docs/roadmap.md`.
 
 ```
-caller ──HTTP──▶ relay ◀──WebSocket── bridge (phone)
+channels ──▶ gateway ──▶ brain ──tools──▶ relay ◀──WebSocket── bridge (phone)
+ (comms)                (agentic)        (action)
 ```
 
 ## Layout
 
 | Path | What |
 |---|---|
+| `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, brain. |
 | `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
 | `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
-| `docs/protocol.md` | Wire contract. Change it first, then both apps. |
+| `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
+| `docs/roadmap.md` | Milestones. Tick them off as they land. |
 | `justfile` | All dev tasks. `just` lists them. |
-| `.env` | `ARCHANGEL_TOKEN` only. |
-
-Future `apps/agent/` calls the relay over HTTP.
+| `.env` | `ARCHANGEL_TOKEN`, `OPENROUTER_API_KEY`. |
 
 ## Commands
 
 ```sh
+just agent            # chat in the terminal
 just relay            # relay on :8080, reload
 just reverse          # phone localhost:8080 → Mac (USB)
 just bridge-install   # build, install, enable the service
@@ -28,11 +30,25 @@ just bridge-enable    # re-enable the service only
 just send '<json>'    # POST a command
 just screenshot       # → screenshot.jpg
 just tunnel           # ngrok, for running without the cable
-just test             # pytest + Kotlin unit tests
+just test             # all tests
 just logs             # bridge logcat
 ```
 
 Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
+
+## Agent
+
+| File | Role |
+|---|---|
+| `messages.py` | `Message(conversation, parts)`, `Part = Text \| Image`. Medium- and model-independent. |
+| `channels/` | `Channel`: `start(deliver)`, `send(message)`. One class per medium. `cli.py`: terminal, `/image <path> [text]`. |
+| `gateway.py` | Routes channels ⇄ brain. Never blocks a channel; one run at a time per conversation. |
+| `brain.py` | Pydantic AI agent. `handle(message, reply)`; may reply any number of times. |
+| `threads.py` | History per conversation; resets after 2 h idle. In memory until M3. |
+| `instructions.md` | System prompt. |
+
+Model via OpenRouter: `ARCHANGEL_MODEL` (default `anthropic/claude-sonnet-5.5`). Tests use `FunctionModel`, no API calls.
+New channel = one `Channel` subclass registered in `__main__.py`; the brain never knows which channel it serves.
 
 ## Bridge
 
@@ -61,11 +77,12 @@ minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.version
 
 ## Conventions
 
-- Small, flat, obvious. No abstraction until needed.
+- Small, flat, obvious. Deep modules, small interfaces (Ousterhout). No abstraction until needed.
+- Agent follows 12-Factor Agents: own the prompt, context and control flow.
 - Defaults over config. New env vars need a real reason.
 - Comments say *why*, not *what*.
 - Caller-facing errors use codes from `docs/protocol.md`. The bridge must never crash: Android disables crashing accessibility services.
-- Update README.md, this file and `docs/protocol.md` in the same commit as the change. Short, direct.
+- Update README.md, this file and `docs/` in the same commit as the change. Short, direct.
 
 ## Deploy
 

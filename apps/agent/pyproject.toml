@@ -1,0 +1,19 @@
+[project]
+name = "archangel-agent"
+version = "0.1.0"
+description = "The Archangel brain and the channels you talk to it through."
+requires-python = ">=3.12"
+dependencies = ["pydantic-ai-slim[openrouter]>=2.57"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

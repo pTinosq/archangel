@@ -2,11 +2,16 @@ set dotenv-load
 
 bridge := "apps/bridge"
 relay := "apps/relay"
+agent := "apps/agent"
 port := "8080"
 service := "tech.arrakis.archangel.bridge/.BridgeService"
 
 default:
     @just --list
+
+# Chat with Archangel in the terminal
+agent:
+    cd {{agent}} && uv run python -m agent
 
 # Run the relay locally, reloading on change
 relay:
@@ -48,6 +53,7 @@ screenshot device="pixel-6":
         -H "Authorization: Bearer $ARCHANGEL_TOKEN" && echo "screenshot.jpg"
 
 test:
+    cd {{agent}} && uv run pytest -q
     cd {{relay}} && uv run pytest -q
     cd {{bridge}} && ./gradlew testDebugUnitTest -q
 
