@@ -56,9 +56,9 @@ Without the cable: `just tunnel`, then set the app's URL to `wss://<ngrok-host>/
 
 Archangel on Railway, the phone on your desk, the laptop closed.
 
-1. A Railway project with two services from this repo: `relay` (root dir `apps/relay`) and `agent` (root dir `/`, config `apps/agent/railway.json`, a volume at `/app/apps/agent/data`). Give both a domain.
+1. A Railway project with two services from this repo, `relay` and `agent`, each with a domain. Their settings: [CLAUDE.md](CLAUDE.md#deploy).
 2. A GitHub OAuth App with callback `https://<agent-domain>/auth/callback`.
-3. Variables: [CLAUDE.md](CLAUDE.md#deploy).
+3. Its client ID and secret go in the agent's variables as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 4. On the phone: URL `wss://<relay-domain>/ws/device`, and the relay's token. Keep it charging, on Wi-Fi, unlocked ("Stay awake"), battery optimisation off.
 
 Then open `https://<agent-domain>` and continue with GitHub. Only `ARCHANGEL_OWNER` gets in.
