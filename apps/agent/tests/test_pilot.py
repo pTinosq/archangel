@@ -49,6 +49,12 @@ class FakePhone:
     async def swipe(self, *positions: float) -> None:
         self.actions.append("swipe")
 
+    async def key(self, key: str) -> None:
+        self.actions.append(f"key {key}")
+
+    async def close(self, package: str) -> None:
+        self.actions.append(f"close {package}")
+
 
 class FakeVision:
     async def find(self, screen: Image, target: str) -> Box | None:
@@ -104,7 +110,7 @@ def test_taps_the_centre_of_the_located_box():
     phone = FakePhone()
     outcome = run(scripted(("tap", {"target": "the WhatsApp button"})), phone)
 
-    assert phone.actions == ["tap 0.30,0.50"]
+    assert phone.actions == ["tap 0.30,0.50", "key home"]
     assert outcome == Outcome("done", "Tapped the WhatsApp button.", screen=SCREEN)
 
 
@@ -126,7 +132,7 @@ def test_problems_are_reported_back_to_the_model():
         "No app called 'Snapchat'. Installed: WhatsApp.",
         "Opened whatsapp.",
     ]
-    assert phone.actions == ["launch com.whatsapp"]
+    assert phone.actions == ["launch com.whatsapp", "key home"]
 
 
 def test_a_repeated_failure_gets_a_nudge():
@@ -206,7 +212,7 @@ def test_consequential_taps_wait_for_approval_then_tap_once():
     assert phone.actions == []
 
     resumed = run(model, phone, guard, paused=waiting.run, answer=Answer("yes", approved=True))
-    assert phone.actions == ["tap 0.30,0.50"]
+    assert phone.actions == ["tap 0.30,0.50", "key home"]
     assert resumed.status == "done"
     assert guard.checked == ["tap the Send button"]  # approved calls aren't re-checked
 
@@ -218,7 +224,7 @@ def test_a_declined_tap_never_happens():
 
     resumed = run(model, phone, paused=waiting.run, answer=Answer("not yet"))
 
-    assert phone.actions == []
+    assert phone.actions == ["key home"]  # the declined tap never happened
     assert resumed.report == "The owner said no: not yet"
 
 
@@ -255,3 +261,17 @@ def test_every_step_is_recorded_with_its_screen():
         ("Tapped the WhatsApp button.", True),
         ("Couldn't find a unicorn on the screen.", False),
     ]
+
+
+def test_done_goes_home_unless_asked_to_leave_it_open():
+    phone = FakePhone()
+    model = FunctionModel(
+        lambda m, i: ModelResponse(parts=[ToolCallPart("done", {"report": "Open.", "leave_open": True})])
+    )
+    assert run(model, phone).status == "done" and phone.actions == []
+
+
+def test_close_app_closes_it_by_name():
+    phone = FakePhone()
+    run(scripted(("close_app", {"name": "whatsapp"})), phone)
+    assert phone.actions == ["close com.whatsapp", "key home"]

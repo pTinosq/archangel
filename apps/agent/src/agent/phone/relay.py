@@ -12,6 +12,7 @@ SCREENSHOT_SCALE = 0.5
 SCREENSHOT_QUALITY = 30  # half the bytes of 80; Jev and Luna locate just as well (tested on Settings)
 OFFLINE_WAIT_SECONDS = 60
 POLL_SECONDS = 2
+CLOSE_PAUSE_SECONDS = 1.0  # for an app to open, and recents to animate in
 READ_ONLY = {"screenshot", "apps", "ui_tree"}
 
 
@@ -53,6 +54,16 @@ class Phone:
 
     async def launch(self, package: str) -> None:
         await self._command("launch", package=package)
+
+    async def close(self, package: str) -> None:
+        """Close an app for good, as swiping it away in recents does, so it starts afresh next time."""
+        await self.launch(package)
+        await asyncio.sleep(CLOSE_PAUSE_SECONDS)
+        await self.key("recents")  # its card, frontmost, is in the middle of the screen
+        await asyncio.sleep(CLOSE_PAUSE_SECONDS)
+        await self.swipe(0.5, 0.5, 0.5, 0.02)
+        await asyncio.sleep(CLOSE_PAUSE_SECONDS / 2)
+        await self.key("home")
 
     async def apps(self) -> dict[str, str]:
         """Launchable apps, label → package."""

@@ -1,6 +1,7 @@
 """The phone sub-agent: carries out one task by looking at the screen, acting, and checking the result."""
 
 import asyncio
+import contextlib
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -168,11 +169,15 @@ class _Session:
 class _Ending:
     finished: bool
     report: str
+    leave_open: bool = False
 
 
-def done(report: str) -> _Ending:
-    """Finish: the task is complete. `report` says what you did and anything the task asked you to find out."""
-    return _Ending(True, report)
+def done(report: str, leave_open: bool = False) -> _Ending:
+    """Finish: the task is complete. `report` says what you did and anything the task asked you to find out.
+
+    The phone then goes to the home screen; set `leave_open` only if the task asked for the screen to stay as it is.
+    """
+    return _Ending(True, report, leave_open)
 
 
 def give_up(reason: str) -> _Ending:
@@ -199,6 +204,7 @@ class Pilot:
             model_settings=ModelSettings(parallel_tool_calls=False),
             tools=[
                 open_app,
+                close_app,
                 Tool(tap, args_validator=_check_tap),
                 type_text,
                 scroll,
@@ -246,6 +252,9 @@ class Pilot:
             status = "needs_approval" if output.approvals else "needs_answer"
             return Outcome(status, _question(output), result.conversation, session.screen)
         log.debug("Phone task result: %s", output)
+        if output.finished and not output.leave_open:
+            with contextlib.suppress(PhoneError):  # tidying up; the task's done either way
+                await self._kit.phone.key("home")
         return Outcome("done" if output.finished else "gave_up", output.report, screen=session.screen)
 
 
@@ -280,12 +289,22 @@ def _results(paused: pydantic_ai.Conversation, answer: Answer | None) -> Deferre
 
 async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Open an installed app by its name, e.g. "WhatsApp"."""
-    phone = ctx.deps.kit.phone
-    apps = await phone.apps()
-    package = next((p for label, p in apps.items() if label.lower() == name.lower()), None)
-    if not package:
+    apps = await ctx.deps.kit.phone.apps()
+    if not (package := _package(apps, name)):
         return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
-    return await ctx.deps.act(phone.launch(package), f"Opened {name}.")
+    return await ctx.deps.act(ctx.deps.kit.phone.launch(package), f"Opened {name}.")
+
+
+async def close_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
+    """Close an app completely (as swiping it away in recents does), so it starts afresh next time."""
+    apps = await ctx.deps.kit.phone.apps()
+    if not (package := _package(apps, name)):
+        return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
+    return await ctx.deps.act(ctx.deps.kit.phone.close(package), f"Closed {name}.")
+
+
+def _package(apps: dict[str, str], name: str) -> str | None:
+    return next((package for label, package in apps.items() if label.lower() == name.lower()), None)
 
 
 async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> ToolReturn | str:
