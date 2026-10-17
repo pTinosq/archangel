@@ -18,6 +18,11 @@ Each milestone ships something usable and proves one idea.
 | M11 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
+## M8 (in progress)
+
+- **SMS (done, live):** `channels/twilio.py`. Twilio posts the owner's texts to `/twilio/sms`; each is checked against Twilio's signature, and other numbers are ignored. Replies go by Twilio's API. Screenshots are a link to the panel (UK numbers can't send pictures). `web.py` is now the one server every HTTP channel adds routes to.
+- **Voice (next):** ConversationRelay. Twilio does speech and turn-taking; Archangel trades text over a WebSocket. With no call live, it rings the owner. Caller ID is trusted (the owner's choice).
+
 ## M7 (done)
 
 - **Railway project `archangel`:** `relay` and `agent` services, deployed from `main` on push. Settings live on the services; Railway deprecated `railway.json`. The agent's Dockerfile builds the panel and serves it beside the API: one origin. A volume keeps `data/`.
