@@ -8,8 +8,8 @@ Each milestone ships something usable and proves one idea.
 | M1 ✅ | Comms layer + CLI + brain | chat in the terminal, send images; idle conversations expire | channel abstraction, model-agnostic brain |
 | M2 ✅ | Phone hands | "open WhatsApp and read my last message" | phone sub-agent: screenshot → act → verify, retries, step budget |
 | M3 ✅ | Orchestrator + human-in-the-loop + escape hatches + durable state | talk while tasks run in the background; "Post this? [screenshot]" → "yes"; tasks stop when stuck; answer an approval after a restart | orchestrator/sub-agent split; approvals enforced in code; deferred, resumable runs |
-| M4 | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
-| M5 | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | cheap models by default, an investigator model only when needed |
+| M4 ✅ | Fallback intelligence | a frozen or looping task gets diagnosed and unstuck without you | a second vision model only when the first misses or the pilot goes in circles |
+| M5 | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
 | M6 | Deploy + Telegram | message Archangel from anywhere | new channel, no orchestrator change; agent on Railway |
 | M7 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
 | M8 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
@@ -25,19 +25,19 @@ Each milestone ships something usable and proves one idea.
 - **Failures:** the phone gets 60 s to come back online; failed tasks go back to the orchestrator, which retries once or tells the owner.
 - **Typing:** the bridge checks the text landed, else pastes.
 
-## M4 requirements (from the owner)
+## M4 (done)
+
+- **Locator fallback:** Jev first; if it can't find the target or fails, Luna (`openai/gpt-6-luna`) looks at the same screenshot.
+- **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too.
+- **Still open:** a cheap text model (DeepSeek) for the orchestrator. DeepSeek can't see images, and the orchestrator gets approval screenshots, so it needs them stripped first.
+
+## M5 requirements (from the owner)
 
 - **Local web app, simple.** React with plain CSS; runs locally beside the agent.
 - **Monitoring.** Task status, live progress, each run's steps and screenshots.
 - **A channel.** Chat with Archangel from it, approvals included.
 - **Prompts in the database.** The defaults stay in the code; edited versions are saved in the store and edited from the panel.
 - **Setup.** Later: connectors and MCP servers (M7) are configured here.
-
-## M5 requirements (from the owner)
-
-- **Cheap by default.** Everyday work runs on cheap models (DeepSeek for text). Expensive vision models are fallbacks only.
-- **Investigator.** When a task looks frozen or looping (same screens, no progress), a stronger vision model looks at the recent screenshots and steps, diagnoses the problem and suggests a way out.
-- **Vision fallbacks.** If Jev can't find a target, or keeps missing it, fall back to another locator.
 
 ## M8 requirements (from the owner)
 

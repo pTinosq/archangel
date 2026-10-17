@@ -49,9 +49,10 @@ Debug builds default to `ws://localhost:8080/ws/device` and the `.env` token.
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | System prompt. |
 | `logs.py` | Per-run folder `apps/agent/logs/<time>/` (`logs/latest` → newest, last 20 kept): `agent.log` at DEBUG plus every screenshot the pilot saw (`001.jpg`…). `logs.run(agent, …)` logs each tool call, result and invalid call. |
-| `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) for questions and approvals. |
+| `phone/pilot.py` | Sub-agent for one phone task: act → screenshot → decide. Tools: `open_app`, `tap(target)`, `type_text`, `scroll`, `press`, `look`, `ask_owner`. Ends with `done` or `give_up`; 5 failures in a row or 40 steps end it as stuck. Pauses (resumably) for questions and approvals. Going in circles (a step 3 times in 6, scrolls aside; or the same failure twice) gets a second opinion from the investigator, at most 2 per run. |
 | `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for the owner's approval. Fails closed. |
-| `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API) or `LlmLocator` (any vision model). |
+| `phone/investigator.py` | Fallback model looks at the last 3 screenshots and recent steps of a task going nowhere: what's in the way, how to get past it. Also explains stuck reports. Optional: failures return None. |
+| `phone/vision.py` | `Locator.locate(screenshot, target) → Box \| None`. `JevLocator` (TypeSafe Jev via OpenRouter decisions API), `LlmLocator` (any vision model), `FallbackLocator` (second locator when the first misses or fails). |
 | `phone/relay.py` | `Phone`: relay client. Positions are screen fractions; screenshots at half scale. Phone offline (503): waits up to 60 s, then resends (it never arrived). Lost mid-command (502): resends only read-only commands. |
 
 The pilot never handles coordinates: it describes what to tap, the locator finds the box, the centre gets tapped.
@@ -60,10 +61,11 @@ The pilot never handles coordinates: it describes what to tap, the locator finds
 |---|---|
 | `ARCHANGEL_MODEL` | `anthropic/claude-sonnet-5.5` (orchestrator, pilot, guard) |
 | `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `LlmLocator` |
+| `ARCHANGEL_FALLBACK_MODEL` | `openai/gpt-6-luna` (locator fallback, investigator). Vision required. |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
 | `ARCHANGEL_DEVICE` | `pixel-6` |
 
-Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by the OpenAI SDK under Pydantic AI.
+Errors: a failed task (phone offline, stuck, model misbehaving) is a task update; the orchestrator retries once or tells the owner. Only orchestrator failures reach the owner raw, as "Something went wrong (<Error>)". Tools get 3 retries for invalid calls. Model API errors (429, 5xx, network) are retried by Pydantic AI's OpenRouter client (it uses the `openai` package as its HTTP client; every call goes to OpenRouter).
 
 Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalRequired` from the guard, `CallDeferred` from `ask_owner`). The paused run is saved with the task, so an answer works even after a restart. Tasks running at shutdown come back `interrupted`.
 
