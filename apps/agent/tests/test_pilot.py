@@ -135,49 +135,10 @@ def test_problems_are_reported_back_to_the_model():
     assert phone.actions == ["launch com.whatsapp", "key home"]
 
 
-def test_a_repeated_failure_gets_a_nudge():
-    outcome = run(scripted(("type_text", {"text": "hi"}), ("type_text", {"text": "hi"})), FakePhone())
-    assert "failed the same way twice" in outcome.report.split(" | ")[1]
-
-
-def test_a_repeated_failure_gets_a_second_opinion():
-    outcome = run(
-        scripted(("type_text", {"text": "hi"}), ("type_text", {"text": "hi"})),
-        FakePhone(),
-        investigator=FakeInvestigator(),
-    )
-    assert outcome.report.split(" | ")[1].endswith(
-        "Second opinion, from a model that looked at the recent screens: A dialog is covering it; close it first."
-    )
-
-
-def test_going_in_circles_gets_a_second_opinion():
-    investigator = FakeInvestigator()
-    outcome = run(scripted(*[("tap", {"target": "the Post button"})] * 3), FakePhone(), investigator=investigator)
-
-    results = outcome.report.split(" | ")
-    assert results[:2] == ["Tapped the Post button."] * 2
-    assert "Second opinion" in results[2]
-    assert investigator.asked == [["Tapped the Post button."] * 3]
-
-
-def test_second_opinions_are_limited():
-    investigator = FakeInvestigator()
-    run(scripted(*[("look", {})] * 12), FakePhone(), investigator=investigator)
-    assert len(investigator.asked) == 2
-
-
 def test_scrolling_through_a_list_is_not_a_loop():
     investigator = FakeInvestigator()
     run(scripted(*[("scroll", {"direction": "down"})] * 4), FakePhone(), investigator=investigator)
     assert investigator.asked == []
-
-
-def test_consecutive_failures_end_the_task_as_stuck():
-    outcome = run(scripted(*[("type_text", {"text": "hi"})] * 5), FakePhone(), investigator=FakeInvestigator())
-    assert outcome.status == "stuck"
-    assert "5 actions in a row failed" in outcome.report
-    assert outcome.report.endswith("What seems to be in the way: A dialog is covering it; close it first.")
 
 
 def test_the_model_can_give_up():
@@ -283,8 +244,7 @@ def test_unlock_swipes_instead_of_pressing_a_key():
     assert phone.actions == ["swipe", "key home"]
 
 
-def test_near_the_step_limit_it_is_told_to_wrap_up(monkeypatch):
-    monkeypatch.setattr(pilot_module, "MAX_STEPS", 7)
-    outcome = run(scripted(*[("press", {"key": "back"})] * 2), FakePhone())
-    assert "steps left" not in outcome.report.split(" | ")[0]
-    assert "5 steps left: finish now" in outcome.report.split(" | ")[1]
+def test_a_second_opinion_when_the_pilot_asks():
+    investigator = FakeInvestigator("Close the dialog first.")
+    outcome = run(scripted(("second_opinion", {})), FakePhone(), investigator=investigator)
+    assert outcome.report == "Close the dialog first."

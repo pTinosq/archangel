@@ -40,14 +40,10 @@ from agent.phone.vision import Vision
 log = logging.getLogger(__name__)
 
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
-MAX_STEPS = 40
-WRAP_UP_STEPS = 5
-"""With this many steps left, the pilot is told to finish with what it has, rather than lose it all."""
-MAX_FAILURES = 5
-RECENT_STEPS = 6
-LOOP_REPEATS = 3
-"""The same step this many times in the last RECENT_STEPS means the pilot is going round in circles."""
-MAX_SECOND_OPINIONS = 2
+MAX_STEPS = 120
+"""Only for a runaway: the pilot itself judges when it's stuck, going in circles, or should stop."""
+RECENT_STEPS = 12
+"""How many recent steps the investigator reads."""
 SCREENS_INVESTIGATED = 3
 TOOL_RETRIES = 3
 SETTLE_SECONDS = 1.0
@@ -92,21 +88,14 @@ Record = Callable[[str, Image | None], None]
 """Hears each step of a run as it happens, with the screen it left, for watching the task live."""
 
 
-class Stuck(Exception):
-    pass
-
-
 @dataclass
 class _Session:
     kit: Kit
     goal: str
     record: Record
     screen: Image | None = None
-    failures: list[str] = field(default_factory=list)
     steps: list[str] = field(default_factory=list)
     screens: deque[Image] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
-    second_opinions: int = 0
-    taken: int = 0  # steps, for the wrap-up warning (`steps` is cleared for second opinions)
 
     async def shoot(self) -> Image:
         self.screen = await self.kit.phone.screenshot()
@@ -118,23 +107,14 @@ class _Session:
         try:
             await action
         except PhoneError as error:
-            return await self.failed(f"Failed: {error}")
+            return self.failed(f"Failed: {error}")
         log.info(note)
-        self.failures.clear()
         return await self.look(note)
 
-    async def failed(self, problem: str) -> str:
-        """Report a failed action, nudging the model off a repeated mistake and ending runs that are going nowhere."""
+    def failed(self, problem: str) -> str:
+        """Report a failed action back to the model, to work around."""
         log.info(problem)
-        self.failures.append(problem)
         self.steps.append(problem)
-        self.taken += 1
-        if len(self.failures) >= MAX_FAILURES:
-            self.record(problem, None)
-            raise Stuck(f"{len(self.failures)} actions in a row failed. The last: {problem}")
-        if len(self.failures) >= 2 and self.failures[-1] == self.failures[-2]:
-            nudge = "That failed the same way twice. Try something different, ask_owner, or give_up."
-            problem = f"{problem}\n{nudge}{await self.second_opinion()}"
         self.record(problem, None)
         return problem
 
@@ -143,32 +123,12 @@ class _Session:
         await asyncio.sleep(SETTLE_SECONDS)
         await self.shoot()
         self.steps.append(note)
-        if self.looping(note):
-            note += await self.second_opinion()
-        self.taken += 1
-        if (left := MAX_STEPS - self.taken) <= WRAP_UP_STEPS:
-            note += f"\n{left} steps left: finish now with done (with what you've found) or give_up."
         self.record(note, self.screen)
         return ToolReturn(note, content=[content(self.screen)])
 
-    def looping(self, note: str) -> bool:
-        # Scrolling the same way several times is how lists get searched, not a loop.
-        return not note.startswith("Scrolled") and self.steps[-RECENT_STEPS:].count(note) >= LOOP_REPEATS
-
-    async def second_opinion(self) -> str:
-        """Advice from the investigator for a pilot going in circles, a few times per run at most."""
-        if self.second_opinions >= MAX_SECOND_OPINIONS:
-            return ""
-        self.second_opinions += 1
-        advice = await self.diagnose()
-        self.steps.clear()  # a fresh start: only a new loop earns another opinion
-        return f"\nSecond opinion, from a model that looked at the recent screens: {advice}" if advice else ""
-
     async def diagnose(self) -> str | None:
         with activity.call("investigator", "agent", self.goal) as reply:
-            advice = await self.kit.investigator.investigate(
-                self.goal, self.steps[-RECENT_STEPS * 2 :], list(self.screens)
-            )
+            advice = await self.kit.investigator.investigate(self.goal, self.steps[-RECENT_STEPS:], list(self.screens))
             reply(advice or "no opinion")
         return advice
 
@@ -218,6 +178,7 @@ class Pilot:
                 scroll,
                 Tool(press, args_validator=_check_press),
                 look,
+                second_opinion,
                 ask_owner,
             ],
             capabilities=[ProcessHistory(forget_old_screenshots)],
@@ -243,9 +204,6 @@ class Pilot:
         except PhoneError as error:
             log.warning("Phone unavailable: %s", error)
             return Outcome("failed", f"Couldn't use the phone: {error}", screen=session.screen)
-        except Stuck as error:
-            log.warning("Stuck: %s", error)
-            return await _stuck(session, f"Stopped, stuck: {error}")
         except UsageLimitExceeded:
             log.warning("Gave up after %d steps", MAX_STEPS)
             return await _stuck(session, f"Gave up after {MAX_STEPS} steps without finishing.")
@@ -299,7 +257,7 @@ async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Open an installed app by its name, e.g. "WhatsApp"."""
     apps = await ctx.deps.kit.phone.apps()
     if not (package := _package(apps, name)):
-        return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
+        return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
     return await ctx.deps.act(ctx.deps.kit.phone.launch(package), f"Opened {name}.")
 
 
@@ -307,7 +265,7 @@ async def close_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Close an app completely (as swiping it away in recents does), so it starts afresh next time."""
     apps = await ctx.deps.kit.phone.apps()
     if not (package := _package(apps, name)):
-        return await ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
+        return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
     return await ctx.deps.act(ctx.deps.kit.phone.close(package), f"Closed {name}.")
 
 
@@ -325,10 +283,10 @@ async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> Too
             box = await ctx.deps.kit.vision.find(ctx.deps.screen, target)
             reply(box or "not found")
     except Exception as error:  # vision is remote models: any failure is one failed step, not a failed task
-        return await ctx.deps.failed(f"Couldn't search the screen: {error}")
+        return ctx.deps.failed(f"Couldn't search the screen: {error}")
     log.debug("located %r: %s", target, box)
     if not box:
-        return await ctx.deps.failed(f"Couldn't find {target} on the screen.")
+        return ctx.deps.failed(f"Couldn't find {target} on the screen.")
     return await ctx.deps.act(ctx.deps.kit.phone.tap(*box.center, hold=hold), f"Tapped {target}.")
 
 
@@ -356,6 +314,13 @@ async def look(ctx: RunContext[_Session], reason: str = "") -> ToolReturn:
     """Take a fresh screenshot, e.g. while something loads."""
     # `reason` because models like to say why, and a refused call three times over ends the task.
     return await ctx.deps.look(f"Current screen{f' ({reason})' if reason else ''}.")
+
+
+async def second_opinion(ctx: RunContext[_Session]) -> str:
+    """Ask a fresh model, which reads your recent screens and steps, what's in the way and how past it."""
+    advice = await ctx.deps.diagnose()
+    ctx.deps.record(f"Second opinion: {advice or 'none'}", None)
+    return advice or "No opinion: decide for yourself."
 
 
 async def ask_owner(ctx: RunContext[_Session], question: str) -> str:
