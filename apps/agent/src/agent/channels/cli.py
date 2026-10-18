@@ -16,6 +16,7 @@ class CliChannel(Channel):
     """Talk to Archangel in the terminal. `/image <path> [text]` attaches an image."""
 
     name = "cli"
+    shows = "text; pictures as file paths"
     owner = Address(name, "local")
 
     async def start(self, deliver: Deliver) -> None:

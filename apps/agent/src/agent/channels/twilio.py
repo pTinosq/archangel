@@ -19,6 +19,7 @@ import httpx
 from fastapi import Request, Response, WebSocket, WebSocketDisconnect
 
 from agent.channels import Channel, Deliver
+from agent.links import Links
 from agent.messages import Address, Message, Text
 from agent.web import Web
 
@@ -86,12 +87,13 @@ class SmsChannel(Channel):
     """Text messages with the owner. UK numbers can't send pictures, so screenshots are a link to the panel."""
 
     name = "sms"
+    shows = "short texts; screenshots as a link"
 
-    def __init__(self, twilio: Twilio, web: Web, panel_url: str | None):
+    def __init__(self, twilio: Twilio, web: Web, links: Links | None):
         self.owner = Address(self.name, twilio.account.owner)
         self._twilio = twilio
         self._web = web
-        self._panel_url = panel_url
+        self._links = links
         self._deliver: Deliver | None = None
 
         @web.app.post("/twilio/sms")
@@ -111,10 +113,8 @@ class SmsChannel(Channel):
 
     async def send(self, message: Message) -> None:
         text = message.text
-        if message.images:
-            text += (
-                f"\n\nScreenshot in the panel: {self._panel_url}" if self._panel_url else "\n\nScreenshot in the panel."
-            )
+        for image in message.images:
+            text += f"\n\nScreenshot: {self._links.to(image)}" if self._links else "\n\nScreenshot in the panel."
         if len(text) > SMS_LIMIT:
             text = text[: SMS_LIMIT - len(MORE)] + MORE
         await self._twilio.send_sms(message.address.id, text)
@@ -132,12 +132,14 @@ class VoiceChannel(Channel):
     """
 
     name = "voice"
+    shows = "speech; screenshots are texted as a link"
 
-    def __init__(self, twilio: Twilio, web: Web, public_url: str):
+    def __init__(self, twilio: Twilio, web: Web, public_url: str, links: Links):
         self.owner = Address(self.name, twilio.account.owner)
         self._twilio = twilio
         self._web = web
         self._url = public_url
+        self._links = links
         # The URL Twilio signs the handshake with is the one we give it; behind a proxy, request.url isn't that.
         self._relay = public_url.replace("https://", "wss://", 1) + "/twilio/voice/relay"
         self._calls: dict[str, WebSocket] = {}  # live, by call id
@@ -217,7 +219,10 @@ class VoiceChannel(Channel):
         await self._web.closed()
 
     async def send(self, message: Message) -> None:
-        text = message.text + (" The screenshot is in the panel." if message.images else "")
+        text = message.text
+        if message.images:  # pictures can't be heard: text them, and say so
+            await self._text("\n".join(f"Screenshot: {self._links.to(image)}" for image in message.images))
+            text += " I've texted you a screenshot."
         to = message.address.id
         if (call := self._calls.get(to) or next(iter(self._calls.values()), None)) and await self._say(call, text):
             return

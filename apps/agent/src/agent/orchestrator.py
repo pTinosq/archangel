@@ -82,15 +82,19 @@ class Orchestrator:
             """Stop a task."""
             return tasks.cancel(id)
 
-        @self._agent.tool_plain
-        async def send(channel: str, text: str) -> str:
+        @self._agent.tool
+        async def send(ctx: RunContext[Event], channel: str, text: str, screenshot: bool = False) -> str:
             """Message the owner on another channel, e.g. results they asked to get by email.
 
-            Your reply goes where you're talking now regardless; use this only for elsewhere.
+            Your reply goes where you're talking now regardless; use this only for elsewhere. `screenshot` attaches
+            the screen you were just shown, e.g. texting it to the owner while on a call.
             """
             if not (to := gateway.owner(channel)):
                 return f"No channel {channel!r}. Channels: {', '.join(gateway.channels)}."
-            await gateway.send(Message(to, (Text(text),)))
+            images = ctx.deps.attachments() if screenshot else ()
+            if screenshot and not images:
+                return "There's no screenshot to send."
+            await gateway.send(Message(to, (Text(text), *images)))
             return f"Sent via {channel}."
 
     async def handle(self, event: Event) -> None:
@@ -117,7 +121,7 @@ class Orchestrator:
         lines = [f"#{t.id} [{t.status}] {t.goal}" + (f" → {t.report[:300]}" if t.report else "") for t in shown]
         return "\n".join(
             [
-                f"Channels the owner can be reached on: {', '.join(self._gateway.channels)}.",
+                f"Channels the owner can be reached on: {self._gateway.describe()}.",
                 "Tasks when this arrived (open, then recently finished):"
                 if lines
                 else "Tasks when this arrived: none.",

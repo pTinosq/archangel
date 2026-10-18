@@ -13,6 +13,8 @@ class Channel(ABC):
     """
 
     name: str
+    shows = "text"
+    """What the owner sees through it, so the orchestrator knows, e.g. that a call can't show a picture."""
     owner: Address
     """Where the owner is reached on this channel, for messages Archangel starts rather than answers."""
 

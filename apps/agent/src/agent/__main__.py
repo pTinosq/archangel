@@ -11,6 +11,7 @@ from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.events import TaskUpdate
 from agent.gateway import Gateway
+from agent.links import Links
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
 from agent.phone.guard import ModelGuard
@@ -50,9 +51,11 @@ def main() -> None:
     channels = [PanelChannel(store, prompts, web)]
     if account := config.twilio():
         twilio = Twilio(account)
-        channels.append(SmsChannel(twilio, web, config.public_url()))
-        if public_url := config.public_url():  # ConversationRelay needs a wss:// URL to reach
-            channels.append(VoiceChannel(twilio, web, public_url))
+        public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots with it
+        links = public_url and Links(store, web, config.relay_token(), public_url)
+        channels.append(SmsChannel(twilio, web, links))
+        if public_url:
+            channels.append(VoiceChannel(twilio, web, public_url, links))
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)

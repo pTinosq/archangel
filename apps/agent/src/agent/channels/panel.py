@@ -31,6 +31,7 @@ HEARTBEAT_SECONDS = 1
 
 class PanelChannel(Channel):
     name = "panel"
+    shows = "text and pictures"
     owner = Address(name, "owner")
 
     def __init__(self, store: Store, prompts: Prompts, web: Web):

@@ -55,7 +55,9 @@ class TaskUpdate(Event):
         return self.task.report_to
 
     def prompt(self) -> list[Part | str]:
-        update = f"[Update on task #{self.task.id}, not from the owner] {self.task.status}: {self.task.report}"
+        task = self.task
+        update = f"[Update on task #{task.id}, not from the owner; your reply goes via {task.report_to.channel}]"
+        update += f" {task.status}: {task.report}"
         return [update, *self.attachments()]
 
     def attachments(self) -> tuple[Part, ...]:

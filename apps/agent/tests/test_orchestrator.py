@@ -116,7 +116,7 @@ def test_tasks_run_in_the_background_and_report_back(store):
     assert owner.pilot.calls == [("Open WhatsApp", None)]
     assert [r.text for r in replies] == [
         "Started task #1.",
-        "Relayed: [Update on task #1, not from the owner] done: WhatsApp is open.",
+        "Relayed: [Update on task #1, not from the owner; your reply goes via cli] done: WhatsApp is open.",
     ]
 
 
@@ -231,3 +231,17 @@ def test_failures_reach_the_owner(store):
         raise RuntimeError("boom")
 
     assert Owner(store, broken).says(Text("hi"))[-1].text == "Sorry, something went wrong on my side. Could you say that again?"
+
+
+def test_a_screenshot_can_be_sent_elsewhere_and_channels_say_what_they_show(store):
+    def texts_the_screen(prompt):
+        if "not from the owner" in prompt:
+            return call("send", channel="email", text="Here's the screen.", screenshot=True)
+        return call("start_task", goal="Post hello")
+
+    waiting = Outcome("needs_approval", "Approve: post?", pydantic_ai.Conversation(), SCREEN)
+    owner = Owner(store, tool_result_or(texts_the_screen), waiting)
+    owner.says(Text("post hello"))
+
+    assert owner.email.sent[0].parts == (Text("Here's the screen."), SCREEN)
+    assert "email (text)" in owner.requests[0][-1].instructions

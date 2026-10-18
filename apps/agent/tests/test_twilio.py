@@ -20,6 +20,7 @@ from agent.channels.twilio import (
     VoiceChannel,
     signature,
 )
+from agent.links import Links
 from agent.messages import Address, Image, Message, Text
 from agent.web import Web
 
@@ -36,7 +37,7 @@ def test_signature_matches_twilios():
 class Sms:
     """An SmsChannel on a local web server, with Twilio's API faked."""
 
-    def __init__(self, panel_url: str | None = "https://archangel.example"):
+    def __init__(self, store=None):
         self.sent: list[dict[str, list[str]]] = []
         self.delivered: list[Message] = []
 
@@ -47,7 +48,8 @@ class Sms:
 
         self.web = Web()
         twilio = Twilio(ACCOUNT, httpx.AsyncClient(transport=httpx.MockTransport(api)))
-        self.channel = SmsChannel(twilio, self.web, panel_url)
+        links = store and Links(store, self.web, "secret", "https://archangel.example")
+        self.channel = SmsChannel(twilio, self.web, links)
 
         async def deliver(message):
             self.delivered.append(message)
@@ -81,22 +83,34 @@ def test_unsigned_texts_are_refused_and_strangers_ignored():
     assert sms.delivered == []
 
 
-def test_replies_go_through_twilio_capped_with_a_link_for_screenshots():
-    sms = Sms()
+def test_replies_go_through_twilio_capped_with_a_link_for_screenshots(store):
+    sms = Sms(store)
     screen = Image(b"jpeg", "image/jpeg")
     asyncio.run(sms.channel.send(Message(Address("sms", ACCOUNT.owner), (Text("Post this?"), screen))))
     asyncio.run(sms.channel.send(Message(Address("sms", ACCOUNT.owner), (Text("x" * 2000),))))
 
     first, long = sms.sent
-    assert first == {
-        "To": [ACCOUNT.owner],
-        "From": [ACCOUNT.number],
-        "Body": ["Post this?\n\nScreenshot in the panel: https://archangel.example"],
-    }
+    assert first["To"] == [ACCOUNT.owner] and first["From"] == [ACCOUNT.number]
+    text, link = first["Body"][0].split("\n\nScreenshot: ")
+    assert text == "Post this?" and link.startswith("https://archangel.example/screenshots/")
+
+    # The link opens without signing in, but only as given and only until it expires.
+    with TestClient(sms.web.finish(), base_url="http://localhost") as client:
+        path = link.removeprefix("https://archangel.example")
+        opened = client.get(path)
+        assert opened.status_code == 200 and opened.content == b"jpeg"
+        assert client.get(path.replace("sig=", "sig=0")).status_code == 404
+        expires = int(path.split("expires=")[1].split("&")[0])
+        assert client.get(path.replace(f"expires={expires}", f"expires={expires + 1}")).status_code == 404
     assert len(long["Body"][0]) == SMS_LIMIT and long["Body"][0].endswith(MORE)
 
 
 RELAY = "wss://archangel.example/twilio/voice/relay"
+
+
+class FakeLinks:
+    def to(self, image: Image) -> str:
+        return "https://archangel.example/screenshots/1"
 
 
 class Voice:
@@ -114,7 +128,7 @@ class Voice:
 
         web = Web()
         twilio = Twilio(ACCOUNT, httpx.AsyncClient(transport=httpx.MockTransport(api)))
-        self.channel = VoiceChannel(twilio, web, "https://archangel.example")
+        self.channel = VoiceChannel(twilio, web, "https://archangel.example", FakeLinks())
         self.client = TestClient(web.finish(), base_url="http://localhost")
 
         async def deliver(message):
@@ -253,3 +267,14 @@ def test_it_rings_a_few_times_at_most_then_texts():
         voice.twilio_posts("/twilio/voice/ended", CallSid=f"CA{101 + n}", CallStatus="completed")
     assert len(voice.calls) == RINGS
     assert [t["Body"] for t in voice.texts] == [[f"Update {RINGS}."]]
+
+
+def test_on_a_call_a_screenshot_is_texted_and_mentioned():
+    voice = Voice()
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA1"})
+        ws.send_json({"type": "interrupt"})
+        message = Message(Address("voice", "CA1"), (Text("Send it to Alex?"), Image(b"jpeg", "image/jpeg")))
+        asyncio.run(voice.channel.send(message))
+        assert json.loads(ws.receive_text())["token"] == "Send it to Alex? I've texted you a screenshot."
+    assert [t["Body"] for t in voice.texts] == [["Screenshot: https://archangel.example/screenshots/1"]]

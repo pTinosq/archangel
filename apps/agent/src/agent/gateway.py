@@ -31,6 +31,10 @@ class Gateway:
     def channels(self) -> list[str]:
         return list(self._channels)
 
+    def describe(self) -> str:
+        """Each channel and what it can show, e.g. "panel (text and pictures), voice (speech only…)"."""
+        return ", ".join(f"{name} ({channel.shows})" for name, channel in self._channels.items())
+
     def owner(self, channel: str) -> Address | None:
         """The owner's address on `channel`, if Archangel has that channel."""
         found = self._channels.get(channel)
