@@ -5,6 +5,7 @@ import httpx
 from pydantic_ai import ModelResponse, TextPart
 from pydantic_ai.models.function import FunctionModel
 
+from agent import activity
 from agent.research import TAVILY, Researcher
 
 ESSAY = FunctionModel(
@@ -27,7 +28,7 @@ def test_research_cites_its_sources():
 
 def test_quick_searches_return_web_results():
     def tavily(request: httpx.Request) -> httpx.Response:
-        assert (str(request.url), json.loads(request.content)) == (TAVILY, {"query": "Tesco hours"})
+        assert (str(request.url), json.loads(request.content)) == (f"{TAVILY}/search", {"query": "Tesco hours"})
         return httpx.Response(200, json={"results": [{"title": "Tesco", "url": "https://tesco.com", "content": "8–5"}]})
 
     researcher = Researcher(ESSAY, ESSAY, httpx.AsyncClient(transport=httpx.MockTransport(tavily)))
@@ -36,3 +37,16 @@ def test_quick_searches_return_web_results():
 
 def test_no_quick_search_without_a_key():
     assert asyncio.run(Researcher(ESSAY, ESSAY, None).search("Tesco hours")).startswith("Web search isn't set up")
+
+
+def test_pages_a_search_points_to_are_read_in_full():
+    page = "Letterboxd's Top 500 Films: 1. Harakiri"
+
+    def tavily(request: httpx.Request) -> httpx.Response:
+        assert (str(request.url), json.loads(request.content)) == (f"{TAVILY}/extract", {"urls": ["https://boxd.it/x"]})
+        return httpx.Response(200, json={"results": [{"url": "https://boxd.it/x", "raw_content": page}]})
+
+    researcher = Researcher(ESSAY, ESSAY, httpx.AsyncClient(transport=httpx.MockTransport(tavily)))
+    assert asyncio.run(researcher.read("https://boxd.it/x")) == page
+    calls = [(n.source, n.target, n.target_role) for n in activity._recent if n.kind == "service"]
+    assert calls == [("archangel", "tavily", "service"), ("tavily", "archangel", "part")]  # in the cockpit

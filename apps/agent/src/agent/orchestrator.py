@@ -107,6 +107,15 @@ class Orchestrator:
                 return f"Search failed: {error}"
 
         @self._agent.tool_plain
+        async def read_page(url: str) -> str:
+            """Read a web page in full, in seconds: e.g. the list or page a search result only points to."""
+            try:
+                return await researcher.read(url)
+            except Exception as error:  # Tavily; the conversation goes on
+                log.exception("Reading a page failed")
+                return f"Couldn't read it: {error}"
+
+        @self._agent.tool_plain
         async def phone_apps() -> str:
             """The apps installed on the phone."""
             try:

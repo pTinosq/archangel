@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
-from pydantic_ai import BinaryContent, UserContent
+from pydantic_ai import BinaryContent, ModelSettings, UserContent
 from pydantic_ai.models import Model
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -14,9 +14,16 @@ Instructions = str | Callable[[], str]
 """A fixed prompt, or one read at the start of each run so edits apply without a restart."""
 
 
-def openrouter(name: str) -> Model:
-    """Every model goes through OpenRouter, so any of its models works by name."""
-    return OpenRouterModel(name, provider=OpenRouterProvider(api_key=config.openrouter_api_key()))
+TIMEOUT = 120
+"""Seconds for one model call. A stalled one otherwise waits the client's 10 minutes (then is retried twice), and
+the orchestrator answers one message at a time: everything the owner says waits behind it."""
+
+
+def openrouter(name: str, timeout: float = TIMEOUT) -> Model:
+    """Every model goes through OpenRouter, so any of its models works by name. A call taking over `timeout` seconds
+    is abandoned and retried."""
+    provider = OpenRouterProvider(api_key=config.openrouter_api_key())
+    return OpenRouterModel(name, provider=provider, settings=ModelSettings(timeout=timeout))
 
 
 def content(image: Image) -> BinaryContent:

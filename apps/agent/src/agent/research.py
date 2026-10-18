@@ -1,5 +1,5 @@
 """Answers from the web, never the phone: a quick search while the owner waits (Tavily: results the orchestrator
-answers from), or research as a background task: Perplexity's Pro Search via OpenRouter (several searches, many
+answers from, and pages it reads in full when a result only points to the answer), or research as a background task: Perplexity's Pro Search via OpenRouter (several searches, many
 sources, under a minute, a few pence) or, when the owner agrees to the cost, its Deep Research (~4 minutes, ~60p, an
 80k-character essay whatever it's told).
 """
@@ -8,11 +8,13 @@ import httpx
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from agent import logs
+from agent import activity, logs
 
 RESEARCH = "perplexity/sonar-pro-search"
 DEEP = "perplexity/sonar-deep-research"
-TAVILY = "https://api.tavily.com/search"
+DEEP_TIMEOUT = 900  # seconds: it researches for minutes before answering at all
+TAVILY = "https://api.tavily.com"
+PAGE_CHARACTERS = 30_000  # a long page's first part: where lists and answers usually are
 
 
 class Researcher:
@@ -26,10 +28,23 @@ class Researcher:
         """Web results for `question`, in seconds."""
         if not self._tavily:
             return "Web search isn't set up (TAVILY_API_KEY)."
-        response = await self._tavily.post(TAVILY, json={"query": question})
-        response.raise_for_status()
-        results = response.json()["results"]
+        with activity.call("tavily", "service", question) as reply:
+            response = await self._tavily.post(f"{TAVILY}/search", json={"query": question})
+            response.raise_for_status()
+            results = response.json()["results"]
+            reply(f"{len(results)} results")
         return "\n\n".join(f"{r['title']} ({r['url']})\n{r['content']}" for r in results) or "Nothing found."
+
+    async def read(self, url: str) -> str:
+        """The page at `url`, as text, in seconds."""
+        if not self._tavily:
+            return "Reading pages isn't set up (TAVILY_API_KEY)."
+        with activity.call("tavily", "service", f"read {url}") as reply:
+            response = await self._tavily.post(f"{TAVILY}/extract", json={"urls": [url]})
+            response.raise_for_status()
+            pages = response.json()["results"]
+            reply(f"{len(pages[0]['raw_content'])} characters" if pages else "couldn't read it")
+        return pages[0]["raw_content"][:PAGE_CHARACTERS] if pages else f"Couldn't read {url}."
 
     async def research(self, question: str, deep: bool = False) -> str:
         """A cited answer, in under a minute; `deep`, an exhaustive one, in minutes."""

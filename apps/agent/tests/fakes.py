@@ -57,6 +57,9 @@ class FakeResearcher:
     async def search(self, question: str) -> str:
         return f"Quick answer to {question}."
 
+    async def read(self, url: str) -> str:
+        return f"The page at {url}."
+
     async def research(self, question: str, deep: bool = False) -> str:
         if self.hold:
             await self.hold.wait()
