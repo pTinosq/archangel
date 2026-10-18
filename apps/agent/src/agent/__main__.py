@@ -20,6 +20,7 @@ from agent.phone.pilot import Kit, Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
+from agent.reports import Reporter
 from agent.research import DEEP, Researcher, tavily
 from agent.store import Store, Task
 from agent.tasks import Tasks
@@ -47,9 +48,11 @@ def main() -> None:
         investigator=ModelInvestigator(fallback, prompts.live("investigator")),
     )
     search = (key := config.tavily_api_key()) and tavily(key)
-    researcher = Researcher(openrouter(DEEP), model, search, prompts.live("writer"))
+    researcher = Researcher(openrouter(DEEP), search)
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
-    tasks = Tasks(store, Pilot(model, kit, prompts.live("pilot")), researcher, site)
+    tasks = Tasks(
+        store, Pilot(model, kit, prompts.live("pilot")), researcher, Reporter(model, prompts.live("reporter")), site
+    )
 
     web = Web(config.github(), config.port())
     channels = [PanelChannel(store, prompts, web)]

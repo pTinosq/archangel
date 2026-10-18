@@ -7,7 +7,7 @@ import pydantic_ai
 from agent.channels import Channel, Deliver
 from agent.messages import Address, Image, Message, Text
 from agent.phone.pilot import Outcome
-from agent.research import Report
+from agent.reports import Report
 
 SCREEN = Image(b"jpg", "image/jpeg")
 
@@ -57,10 +57,15 @@ class FakeResearcher:
     async def search(self, question: str) -> str:
         return f"Quick answer to {question}."
 
-    async def research(self, question: str) -> Report:
+    async def research(self, question: str) -> str:
         if self.hold:
             await self.hold.wait()
-        return Report(f"All about {question}.", f"Report on {question}.", "<p>Report</p>")
+        return f"All about {question}."
+
+
+class FakeReporter:
+    async def write(self, topic: str, material: str) -> Report:
+        return Report(tldr=f"{topic}: the gist.", html=f"<p>{material}</p>")
 
 
 async def apps() -> dict[str, str]:

@@ -1,6 +1,7 @@
 """Tasks running in the background, so the conversation carries on while they work: on the phone, or researching.
 
-One phone, so one phone task drives it at a time; the rest queue. Research doesn't touch the phone, so runs beside. Every change is saved, each step the pilot reports
+One phone, so one phone task drives it at a time; the rest queue. Research doesn't touch the phone, so runs beside;
+the reporter writes it up as a page. Every change is saved, each step the pilot reports
 is recorded for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
 """
 
@@ -14,6 +15,7 @@ from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
 from agent.phone.pilot import Answer, Outcome, Pilot, Record
+from agent.reports import Reporter
 from agent.research import Researcher
 from agent.store import Kind, Status, Store, Task
 
@@ -30,9 +32,10 @@ _STATUSES = {
 
 
 class Tasks:
-    def __init__(self, store: Store, pilot: Pilot, researcher: Researcher, site: str = ""):
-        """`site`: where Archangel's web server is, for links to research reports."""
+    def __init__(self, store: Store, pilot: Pilot, researcher: Researcher, reporter: Reporter, site: str = ""):
+        """`site`: where Archangel's web server (and the panel) is, for links to reports."""
         self._site = site
+        self._reporter = reporter
         self._store = store
         self._pilot = pilot
         self._researcher = researcher
@@ -133,16 +136,22 @@ class Tasks:
         self._store.add_step(task.id, "Researching.")
         with activity.call("research", "agent", task.goal) as reply:
             try:
-                report = await self._researcher.research(task.goal)
+                essay = await self._researcher.research(task.goal)
             except Exception as error:  # the model or OpenRouter: the orchestrator decides whether to retry
                 log.exception("Research failed")
                 return Outcome("failed", f"Research failed: {error}")
-            reply(report.summary)
-        self._store.add_step(task.id, report.research)
-        if not report.page:
-            return Outcome("done", report.summary)
-        self._store.save_page(task.id, report.page)
-        return Outcome("done", f"{report.summary}\n\nThe report: {self._site}/reports/{task.id}")
+            reply(essay)
+        self._store.add_step(task.id, essay)
+        self._store.add_step(task.id, "Writing the report.")
+        try:
+            with activity.call("reporter", "agent", task.goal) as reply:
+                report = await self._reporter.write(task.goal, essay)
+                reply(report.tldr)
+        except Exception:  # the research is what matters; pass it on as it is
+            log.exception("Couldn't write the report")
+            return Outcome("done", essay)
+        self._store.save_page(task.id, report.html)
+        return Outcome("done", f"Report: {self._site}/reports/{task.id}\ntldr: {report.tldr}")
 
     def _started(self, task: Task) -> None:
         task.status = Status.RUNNING

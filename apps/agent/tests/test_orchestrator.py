@@ -1,7 +1,7 @@
 import asyncio
 
 import pydantic_ai
-from fakes import SCREEN, FakeChannel, FakePilot, FakeResearcher, apps
+from fakes import SCREEN, FakeChannel, FakePilot, FakeReporter, FakeResearcher, apps
 from pydantic_ai import (
     BinaryContent,
     ModelMessage,
@@ -27,7 +27,7 @@ class Owner:
     def __init__(self, store, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
         self.requests: list[list[ModelMessage]] = []
         self.pilot = FakePilot(outcome)
-        self.tasks = Tasks(store, self.pilot, FakeResearcher())
+        self.tasks = Tasks(store, self.pilot, FakeResearcher(), FakeReporter())
         self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
         self.store = store
 
@@ -284,8 +284,8 @@ def test_research_and_quick_answers_come_from_the_web(store):
     assert [r.text for r in replies[-2:]] == [
         "Started task #1.",
         (
-            "Relayed: [Update on task #1, not from the owner; your reply goes via cli] done: Report on The best "
-            "funds in 2026.\n\nThe report: /reports/1"
+            "Relayed: [Update on task #1, not from the owner; your reply goes via cli] done: Report: /reports/1\n"
+            "tldr: The best funds in 2026: the gist."
         ),
     ]
     assert owner.pilot.calls == []  # never the phone

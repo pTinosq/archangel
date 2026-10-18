@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import httpx
-from fakes import FakePilot, FakeResearcher
+from fakes import FakePilot, FakeReporter, FakeResearcher
 
 from agent import activity, web
 from agent.channels import panel
@@ -53,7 +53,7 @@ def test_transcript_and_its_images(store):
 
 def test_tasks_steps_and_screens(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher())
+        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter())
         tasks.start("post hello", Address("cli", "local"))
         await tasks.idle()
 
@@ -122,7 +122,7 @@ def test_activity_streams_as_server_sent_events():
 
 def test_research_reports_are_pages_that_run_nothing(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher())
+        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter())
         tasks.start("the best funds", Address("cli", "local"), "research")
         await tasks.idle()
 
@@ -132,6 +132,6 @@ def test_research_reports_are_pages_that_run_nothing(store):
     [task] = panel.call("GET", "/api/tasks").json()
     assert (task["kind"], task["page"]) == ("research", True)
     page = panel.call("GET", "/reports/1")
-    assert page.text == "<p>Report</p>"
+    assert page.text == "<p>All about the best funds.</p>"
     assert page.headers["content-security-policy"].startswith("default-src 'none'")
     assert panel.call("GET", "/reports/2").status_code == 404
