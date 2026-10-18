@@ -281,3 +281,10 @@ def test_unlock_swipes_instead_of_pressing_a_key():
     phone = FakePhone()
     run(scripted(("press", {"key": "unlock"})), phone)
     assert phone.actions == ["swipe", "key home"]
+
+
+def test_near_the_step_limit_it_is_told_to_wrap_up(monkeypatch):
+    monkeypatch.setattr(pilot_module, "MAX_STEPS", 7)
+    outcome = run(scripted(*[("press", {"key": "back"})] * 2), FakePhone())
+    assert "steps left" not in outcome.report.split(" | ")[0]
+    assert "5 steps left: finish now" in outcome.report.split(" | ")[1]

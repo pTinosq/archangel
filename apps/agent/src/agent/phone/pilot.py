@@ -41,6 +41,8 @@ log = logging.getLogger(__name__)
 
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 MAX_STEPS = 40
+WRAP_UP_STEPS = 5
+"""With this many steps left, the pilot is told to finish with what it has, rather than lose it all."""
 MAX_FAILURES = 5
 RECENT_STEPS = 6
 LOOP_REPEATS = 3
@@ -104,6 +106,7 @@ class _Session:
     steps: list[str] = field(default_factory=list)
     screens: deque[Image] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
     second_opinions: int = 0
+    taken: int = 0  # steps, for the wrap-up warning (`steps` is cleared for second opinions)
 
     async def shoot(self) -> Image:
         self.screen = await self.kit.phone.screenshot()
@@ -125,6 +128,7 @@ class _Session:
         log.info(problem)
         self.failures.append(problem)
         self.steps.append(problem)
+        self.taken += 1
         if len(self.failures) >= MAX_FAILURES:
             self.record(problem, None)
             raise Stuck(f"{len(self.failures)} actions in a row failed. The last: {problem}")
@@ -141,6 +145,9 @@ class _Session:
         self.steps.append(note)
         if self.looping(note):
             note += await self.second_opinion()
+        self.taken += 1
+        if (left := MAX_STEPS - self.taken) <= WRAP_UP_STEPS:
+            note += f"\n{left} steps left: finish now with done (with what you've found) or give_up."
         self.record(note, self.screen)
         return ToolReturn(note, content=[content(self.screen)])
 
