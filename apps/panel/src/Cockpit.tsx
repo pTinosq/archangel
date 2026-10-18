@@ -14,7 +14,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Component, type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type CSSProperties, Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CALLS, type Notice, openCalls, type Role, useActivity } from "./activity";
 import { useNarrow } from "./narrow";
 
@@ -29,6 +29,7 @@ export function Cockpit() {
   const notices = useActivity();
   const now = useNow();
   const [follow, setFollow] = useState<Follow>("live");
+  const [opened, setOpened] = useState<number | null>(null);
   const request = follow === "live" ? (notices.findLast((n) => n.request !== null)?.request ?? null) : follow;
   const inRequest = (n: Notice) => request === null || n.request === request;
 
@@ -57,19 +58,35 @@ export function Cockpit() {
             .slice(-SHOWN)
             .reverse()
             .map((n) => (
-              <li
-                key={n.id}
-                title={n.text}
-                className={`${n.dir} ${n.ok ? "" : "failed"} ${inRequest(n) ? "" : "dim"}`}
-                onClick={() => n.request !== null && setFollow(n.request === follow ? "live" : n.request)}
-              >
-                <time>{new Date(n.time * 1000).toLocaleTimeString([], { hour12: false })}</time>
-                <span className="hop">
-                  {n.source} → {n.target}
-                </span>
-                <span className="text">{n.text}</span>
-                <span className="request">{n.request !== null && `#${n.request}`}</span>
-              </li>
+              <Fragment key={n.id}>
+                <li
+                  title={n.text}
+                  className={`${n.dir} ${n.ok ? "" : "failed"} ${inRequest(n) ? "" : "dim"} ${opened === n.id ? "open" : ""}`}
+                  onClick={() => {
+                    // Opening a notice also follows its request; closing it goes back to the latest.
+                    const closing = opened === n.id;
+                    setOpened(closing ? null : n.id);
+                    setFollow(closing || n.request === null ? "live" : n.request);
+                  }}
+                >
+                  <time>{new Date(n.time * 1000).toLocaleTimeString([], { hour12: false })}</time>
+                  <span className="hop">
+                    {n.source} → {n.target}
+                  </span>
+                  <span className="text">{n.text}</span>
+                  <span className="request">{n.request !== null && `#${n.request}`}</span>
+                </li>
+                {opened === n.id && (
+                  <li className="detail">
+                    <p>
+                      {n.kind} {n.dir === "tx" ? "sent" : "reply"}
+                      {n.task !== null && ` · task #${n.task}`}
+                      {!n.ok && " · failed"}
+                    </p>
+                    {n.text || <span className="quiet">(nothing said)</span>}
+                  </li>
+                )}
+              </Fragment>
             ))}
         </ol>
       </section>
@@ -152,8 +169,10 @@ function Graph({
   });
 
   const flow = useReactFlow();
+  // Fit to the layout's own bounds, not React Flow's measurements: parts that have just appeared aren't measured
+  // yet, and fitting without them zoomed in on the old ones, leaving the rest off-screen (the cockpit "vanishing").
   useEffect(() => {
-    requestAnimationFrame(() => flow.fitView({ padding: 0.06, duration: 400 }));
+    if (spots.size) flow.fitBounds(bounds(spots), { padding: 0.06, duration: 400 });
   }, [shape]);
 
   return (
@@ -242,6 +261,14 @@ function layout(names: string[], links: [string, string][], down: boolean): Map<
   for (const [from, to] of links) graph.setEdge(from, to);
   dagre.layout(graph);
   return new Map(names.map((name) => [name, { x: graph.node(name).x, y: graph.node(name).y }]));
+}
+
+/** The box around every part, as laid out (positions are centres). */
+function bounds(spots: Map<string, { x: number; y: number }>) {
+  const xs = [...spots.values()].map((p) => p.x);
+  const ys = [...spots.values()].map((p) => p.y);
+  const [left, top] = [Math.min(...xs) - NODE.width / 2, Math.min(...ys) - NODE.height / 2];
+  return { x: left, y: top, width: Math.max(...xs) + NODE.width / 2 - left, height: Math.max(...ys) + NODE.height / 2 - top };
 }
 
 /** Each node's role, as the agent declared it; the latest word wins, as a part's role becomes known. */

@@ -159,6 +159,14 @@ main > section:last-child { border-right: none; }
 .timeline .hop { font-weight: 600; }
 .timeline .text { color: var(--quiet); overflow: hidden; text-overflow: ellipsis; }
 .timeline .request { color: var(--quiet); font-variant-numeric: tabular-nums; }
+.timeline li.open { background: var(--panel); }
+/* An opened notice in full: as tall as its text needs. */
+.timeline li.detail {
+  display: block; height: auto; margin: 0 0 6px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--panel); border-left-color: var(--line); cursor: auto; font-size: 13px; line-height: 1.45;
+  max-height: 40vh; overflow-y: auto;
+}
+.timeline li.detail p { margin: 0 0 4px; color: var(--quiet); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Phones (as in narrow.ts): one column, the tab's own; the page never scrolls sideways, only the column does.
    Text fields are 16px so iOS doesn't zoom in on focus; anything tappable is at least 44px. */
@@ -224,7 +232,7 @@ main > section:last-child { border-right: none; }
   .timeline { min-height: 0; }
   .timeline .follow button { min-height: 36px; }
   /* Two lines a notice: who to whom, then what. */
-  .timeline li {
+  .timeline li:not(.detail) {
     grid-template-columns: auto 1fr auto; grid-template-areas: "time hop request" "text text text";
     height: 48px; row-gap: 2px; align-content: center;
   }

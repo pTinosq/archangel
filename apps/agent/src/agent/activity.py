@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 RECENT = 200
 QUEUED_PER_LISTENER = 1000
-MAX_TEXT = 200
+MAX_TEXT = 2000  # enough to read in full when opened in the cockpit
 
 Kind = Literal["message", "agent", "model", "tool", "phone", "task"]
 """agent, model and phone are always calls: a tx, then an rx when it's done. The rest are one-way hops."""

@@ -63,7 +63,7 @@ def test_listeners_get_recent_then_live_and_text_is_clipped():
         assert (await anext(stream)).text == "earlier"
         pending = asyncio.ensure_future(anext(stream))
         await asyncio.sleep(0)
-        activity.hop("b", "message", "x\n" * 500)
+        activity.hop("b", "message", "x\n" * activity.MAX_TEXT)
         live = await pending
         await stream.aclose()
         return live
