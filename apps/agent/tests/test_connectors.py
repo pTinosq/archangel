@@ -158,9 +158,10 @@ def test_several_accounts_of_a_service_live_side_by_side_in_profiles(store, tmp_
     async def scenario():
         found = connectors(store, tmp_path)
         personal = found.add("google", {"client_id": "id", "client_secret": "secret"}, "Personal")
-        assert found.services()[0]["needs"] == ()  # the same Google client serves every account
-        work = found.add("google", {}, "work")
-        assert (personal.name, work.name, work.settings["client_id"]) == ("personal_google", "work_google", "id")
+        with pytest.raises(ValueError, match="client_id"):  # each account its own Google client
+            found.add("google", {}, "work")
+        work = found.add("google", {"client_id": "work-id", "client_secret": "work-secret"}, "work")
+        assert (personal.name, work.name, work.settings["client_id"]) == ("personal_google", "work_google", "work-id")
         assert found.add("notion", {}).name == "notion"
         assert found.add("notion", {}).name == "notion_2"
 

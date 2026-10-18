@@ -63,9 +63,6 @@ class Service:
     needs: tuple[str, ...] = ()
     """What the owner enters to set it up."""
     help: str = ""
-    shared: bool = False
-    """What the owner entered serves every account (Google's OAuth client); otherwise each needs its own (a Slack
-    app belongs to one workspace)."""
 
 
 SERVICES = [
@@ -74,7 +71,6 @@ SERVICES = [
         "Gmail and Calendar",
         needs=("client_id", "client_secret"),
         help="A Google Cloud OAuth client (web application) with this redirect URI: {callback}",
-        shared=True,
     ),
     Service("notion", "Notion", "https://mcp.notion.com/mcp"),
     Service(
@@ -123,8 +119,6 @@ class Connectors:
     def services(self) -> list[dict]:
         return [
             {"kind": s.kind, "title": s.title, "needs": s.needs, "help": s.help.format(callback=self._callback)}
-            if not self._shared(s)
-            else {"kind": s.kind, "title": s.title, "needs": (), "help": ""}
             for s in SERVICES
         ]
 
@@ -144,10 +138,9 @@ class Connectors:
         )
 
     def add(self, kind: Kind, settings: dict[str, str], profile: str = "") -> Connector:
-        """Add a connector, one per account (several Gmails, Notions…), in a `profile`. The owner signs in next."""
+        """Add a connector, one per account (several Gmails, Notions…), each with its own settings (a work account's
+        Google client may live in the company's Google Cloud), in a `profile`. The owner signs in next."""
         service = next(s for s in SERVICES if s.kind == kind)
-        if shared := self._shared(service):
-            settings = {**shared.settings, **{k: v for k, v in settings.items() if v.strip()}}
         if missing := [need for need in service.needs if not settings.get(need, "").strip()]:
             raise ValueError(f"{service.title} needs {', '.join(missing)}")
         url = settings.pop("url", "").strip() or service.url
@@ -292,10 +285,6 @@ class Connectors:
     async def _connect(self, connector: Connector, auth: OAuthClientProvider) -> None:
         async with MCPToolset(connector.url, auth=auth):  # connecting is what signs in
             pass
-
-    def _shared(self, service: Service) -> Connector | None:
-        """A connector whose settings a new one of `service` can reuse."""
-        return service.shared and next((c for c in self.all() if c.kind == service.kind), None) or None
 
     def _signed_in(self, name: str) -> Connector:
         connector = self._get(name)
