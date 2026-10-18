@@ -102,6 +102,8 @@ Flat package `tech.arrakis.archangel.bridge`.
 | `Config` / `ConfigStore` | Dev and Prod relays (URL and token each), which is on, and the device name. One SharedPreferences value; a tap switches. |
 | `MainActivity` | One Compose screen: status, config, settings shortcuts. |
 
+The service declares itself an accessibility tool (`isAccessibilityTool`): otherwise Android hides "data sensitive" windows like permission prompts from it and silently drops its taps there.
+
 minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.versions.toml`. Release builds: `wss://` only, no baked-in URL or token.
 
 ## Relay
