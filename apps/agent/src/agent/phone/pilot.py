@@ -55,6 +55,7 @@ SCROLLS = {
     "right": (0.8, 0.5, 0.2, 0.5),
     "left": (0.2, 0.5, 0.8, 0.5),
 }
+UNLOCK = (0.5, 0.85, 0.5, 0.25)  # swipe up from below the lock icon, clear of the navigation bar
 
 
 @dataclass(frozen=True)
@@ -330,15 +331,18 @@ async def type_text(ctx: RunContext[_Session], text: str) -> ToolReturn | str:
 
 
 async def scroll(ctx: RunContext[_Session], direction: Literal["down", "up", "left", "right"]) -> ToolReturn | str:
-    """Scroll to reveal more content in `direction`."""
+    """Scroll to reveal more content in `direction`. `up` drags the finger down (on a lock screen, the shade)."""
     return await ctx.deps.act(ctx.deps.kit.phone.swipe(*SCROLLS[direction]), f"Scrolled {direction}.")
 
 
 async def press(
-    ctx: RunContext[_Session], key: Literal["back", "home", "recents", "notifications", "enter"]
+    ctx: RunContext[_Session], key: Literal["back", "home", "recents", "notifications", "enter", "unlock"]
 ) -> ToolReturn | str:
-    """Press a system button. `enter` submits the focused field (search, next, send)."""
-    return await ctx.deps.act(ctx.deps.kit.phone.key(key), f"Pressed {key}.")
+    """Press a system button. `enter` submits the focused field (search, next, send); `unlock` swipes away a lock
+    screen without a PIN (apps opened while locked are behind it)."""
+    phone = ctx.deps.kit.phone
+    pressing = phone.swipe(*UNLOCK) if key == "unlock" else phone.key(key)
+    return await ctx.deps.act(pressing, f"Pressed {key}.")
 
 
 async def look(ctx: RunContext[_Session], reason: str = "") -> ToolReturn:

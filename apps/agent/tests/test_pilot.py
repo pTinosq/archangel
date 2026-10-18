@@ -275,3 +275,9 @@ def test_close_app_closes_it_by_name():
     phone = FakePhone()
     run(scripted(("close_app", {"name": "whatsapp"})), phone)
     assert phone.actions == ["close com.whatsapp", "key home"]
+
+
+def test_unlock_swipes_instead_of_pressing_a_key():
+    phone = FakePhone()
+    run(scripted(("press", {"key": "unlock"})), phone)
+    assert phone.actions == ["swipe", "key home"]
