@@ -172,3 +172,24 @@ def test_several_accounts_of_a_service_live_side_by_side_in_profiles(store, tmp_
         assert "[tools work_google_…]" in found.describe(prefixes=True)
 
     asyncio.run(scenario())
+
+
+def test_the_helper_reads_whats_connected_from_the_store_itself(store, tmp_path):
+    # SQLite belongs to the thread that opened it: nothing the helper runs may read the store on another.
+    class Stored(Connectors):
+        def toolsets(self, mark):
+            return [Notion().toolsets(mark)[0]]
+
+    connectors = Stored(store, SITE, tmp_path)
+    connectors._save(Connector("personal_google", "google", "Gmail and Calendar", signed_in=True, profile="personal"))
+    seen = []
+
+    def model(messages, info) -> ModelResponse:
+        seen.append(info.instructions)
+        return ModelResponse(parts=[TextPart("Nothing new.")])
+
+    async def scenario():  # the store, like the agent's, opened on the thread that runs the helper
+        return await Helper(FunctionModel(model), connectors).run("Latest email", lambda text, screen: None)
+
+    assert asyncio.run(scenario()).status == "done"
+    assert "personal: Gmail and Calendar [tools personal_google_…]" in seen[0]

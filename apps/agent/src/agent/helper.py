@@ -54,7 +54,7 @@ class Helper:
             return Outcome(status, question(output), result.conversation)
         return Outcome("done", output)
 
-    def _connected(self) -> str:
+    async def _connected(self) -> str:  # async: sync ones run on a thread, away from SQLite
         return f"Connected, by profile: {self._connectors.describe(prefixes=True)}. Use the profile the task means."
 
 async def ask_owner(ctx: RunContext, question: str) -> str:
