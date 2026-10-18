@@ -15,6 +15,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; }
+[hidden] { display: none !important; }
 h1, h2 { margin: 0; font-weight: 600; }
 h1 { font-size: 16px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--quiet); margin-bottom: 12px; }
@@ -44,7 +45,7 @@ input, textarea {
 }
 input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 
-.app { display: flex; flex-direction: column; height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 header { display: flex; align-items: center; gap: 24px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 nav { display: flex; gap: 4px; }
 nav button { background: none; color: var(--quiet); }
@@ -74,31 +75,37 @@ main > section:last-child { border-right: none; }
 .status.failed, .status.interrupted { color: var(--bad); }
 .status.cancelled { color: var(--quiet); }
 
-.detail { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 20px; align-items: start; }
-.screen { position: sticky; top: 0; }
+/* Screen on the left, the whole height; the task and its steps on the right. A phone stacks them. */
+.detail {
+  display: grid; grid-template-columns: minmax(200px, 300px) 1fr; grid-template-rows: auto 1fr;
+  grid-template-areas: "screen head" "screen steps"; column-gap: 20px; align-items: start;
+}
+.detail .head { grid-area: head; }
+.detail .steps { grid-area: steps; }
+.screen { grid-area: screen; position: sticky; top: 0; }
 .screen img { width: 100%; border-radius: 12px; border: 1px solid var(--line); display: block; }
 .screen p { font-size: 12px; text-align: center; }
-.story h2 { text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--text); }
-.report { white-space: pre-wrap; background: var(--panel); padding: 10px 12px; border-radius: 8px; }
+.detail h2 { text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--text); }
+.report { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel); padding: 10px 12px; border-radius: 8px; }
 .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
 .controls.waiting { padding: 12px; border: 1px solid var(--warn); border-radius: 8px; }
 .controls input { flex: 1; min-width: 160px; }
 .controls p { width: 100%; margin: 0; font-size: 12px; }
 .steps { margin-top: 16px; border-left: 2px solid var(--line); }
-.steps li { display: flex; gap: 10px; padding: 5px 0 5px 12px; white-space: pre-wrap; }
+.steps li { display: flex; gap: 10px; padding: 5px 0 5px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .steps li.has-screen { cursor: pointer; }
-.steps li.has-screen:hover { background: var(--panel); }
+.steps li.has-screen:hover, .steps li.viewing { background: var(--panel); }
 .steps time { color: var(--quiet); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
 .chat { display: flex; flex-direction: column; }
 .lines { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .line { max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--panel); }
-.line p { margin: 0; white-space: pre-wrap; }
+.line p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .line .via { display: block; font-size: 11px; color: var(--quiet); margin-bottom: 2px; }
 .line.owner { align-self: flex-end; background: #233154; }
 .line img { max-width: 100%; max-height: 360px; margin-top: 8px; border-radius: 8px; display: block; }
 .chat form { display: flex; gap: 8px; margin-top: 12px; }
-.chat input { flex: 1; }
+.chat input { flex: 1; min-width: 0; }
 
 .editor { display: flex; flex-direction: column; gap: 12px; }
 .editor textarea { flex: 1; min-height: 300px; resize: none; font: 13px/1.5 ui-monospace, Menlo, monospace; }
@@ -152,3 +159,77 @@ main > section:last-child { border-right: none; }
 .timeline .hop { font-weight: 600; }
 .timeline .text { color: var(--quiet); overflow: hidden; text-overflow: ellipsis; }
 .timeline .request { color: var(--quiet); font-variant-numeric: tabular-nums; }
+
+/* Phones (as in narrow.ts): one column, the tab's own; the page never scrolls sideways, only the column does.
+   Text fields are 16px so iOS doesn't zoom in on focus; anything tappable is at least 44px. */
+@media (max-width: 760px) {
+  :root { font-size: 15px; }
+  header {
+    flex-wrap: wrap; gap: 4px 12px; padding: 8px 12px 0;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
+  }
+  header h1 { line-height: 32px; }
+  nav { order: 1; width: 100%; gap: 0; }
+  nav button { flex: 1; min-height: 44px; padding: 0 4px; border-radius: 0; border-bottom: 2px solid transparent; }
+  nav button.active { background: none; border-bottom-color: var(--accent); }
+  nav button:hover:not(:disabled) { border-color: transparent; }
+  nav button.active:hover { border-bottom-color: var(--accent); }
+  .sign-out { line-height: 32px; }
+
+  button { min-height: 44px; padding: 8px 16px; }
+  input, textarea { font-size: 16px; min-height: 44px; }
+
+  main, main.tasks, main.prompts, main.cockpit { display: flex; flex-direction: column; }
+  main > section {
+    flex: 1; border-right: none; padding: 12px;
+    padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .task-list li, .prompt-list li { padding: 12px; min-height: 44px; border-bottom: 1px solid var(--line); border-radius: 0; margin: 0; }
+  .task-list li.selected { background: none; }
+
+  .detail { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  .detail .back { align-self: flex-start; background: none; padding: 0 12px 0 0; color: var(--accent); }
+  .detail .head { display: flex; flex-direction: column; gap: 8px; }
+  .detail .head > * { margin: 0; }
+  .screen { position: static; width: 100%; }
+  .screen img { width: auto; max-width: 100%; max-height: 60dvh; margin: 0 auto; }
+  .steps { margin-top: 0; }
+  .steps li { padding: 10px 0 10px 12px; }
+  .controls { margin: 0; }
+  .controls button { flex: 1; padding: 8px 10px; white-space: nowrap; }
+  .controls input { flex-basis: 100%; }
+
+  .chat { padding-bottom: 0; }
+  .chat h2 { display: none; }
+  .line { max-width: 88%; }
+  .line img { max-height: 50dvh; }
+  .chat form {
+    margin: 8px -12px 0; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--bg);
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .prompt-list { flex: none; }
+  .prompt-list ul { display: flex; flex-wrap: wrap; gap: 6px; }
+  .prompt-list li { border: 1px solid var(--line); border-radius: 22px; display: flex; align-items: center; padding: 0 14px; }
+  .prompt-list li.selected { border-color: var(--accent); }
+  .prompt-list p { font-size: 13px; margin-bottom: 0; }
+  .editor textarea { min-height: 50dvh; font-size: 14px; }
+  .actions { flex-wrap: wrap; }
+  .actions button { flex: 1 1 auto; padding: 8px 10px; white-space: nowrap; }
+
+  main > .cockpit { flex: none; height: 45dvh; border-bottom: 1px solid var(--line); }
+  .timeline { min-height: 0; }
+  .timeline .follow button { min-height: 36px; }
+  /* Two lines a notice: who to whom, then what. */
+  .timeline li {
+    grid-template-columns: auto 1fr auto; grid-template-areas: "time hop request" "text text text";
+    height: 48px; row-gap: 2px; align-content: center;
+  }
+  .timeline time { grid-area: time; }
+  .timeline .hop { grid-area: hop; overflow: hidden; text-overflow: ellipsis; }
+  .timeline .text { grid-area: text; }
+  .timeline .request { grid-area: request; }
+}

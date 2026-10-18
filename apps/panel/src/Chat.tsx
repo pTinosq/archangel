@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl } from "./api";
 import { useFeed } from "./poll";
 
-export function Chat() {
+/** `visible` false: kept mounted but hidden (a phone on another tab), so the draft survives. */
+export function Chat({ visible }: { visible: boolean }) {
   const lines = useFeed(api.transcript);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
-  }, [lines.length]);
+  }, [lines.length, visible]); // a hidden list loses its scroll: back to the end when shown
 
   const send = async () => {
     const text = draft.trim();
@@ -24,7 +25,7 @@ export function Chat() {
   };
 
   return (
-    <section className="chat">
+    <section className="chat" hidden={!visible}>
       <h2>Conversation</h2>
       <div className="lines">
         {lines.map((line) => (
@@ -47,7 +48,12 @@ export function Chat() {
           send();
         }}
       >
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message Archangel" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Message Archangel"
+          enterKeyHint="send"
+        />
         <button type="submit">Send</button>
       </form>
     </section>

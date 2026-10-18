@@ -16,6 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Component, type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CALLS, type Notice, openCalls, type Role, useActivity } from "./activity";
+import { useNarrow } from "./narrow";
 
 const NODE = { width: 120, height: 44 }; // as in styles.css
 const PULSE_SECONDS = 1.2;
@@ -97,7 +98,7 @@ class Redrawn extends Component<{ children: ReactNode }, { error: Error | null; 
   }
 }
 
-type PartData = { name: string; kind: string; doing?: string; here: boolean; flash: boolean };
+type PartData = { name: string; kind: string; doing?: string; here: boolean; flash: boolean; down: boolean };
 type Pulse = { id: number; back: boolean; dir: Notice["dir"]; ok: boolean; dim: boolean };
 type HopData = { lit: boolean; pulses: Pulse[] };
 
@@ -117,9 +118,11 @@ function Graph({
 }) {
   const kindOf = roles(notices);
   const { names, links } = useTopology(notices, kindOf);
-  const shape = names.join() + "|" + links.map((l) => l.join(">")).join();
+  // A phone held upright has room down, not across.
+  const down = useNarrow();
+  const shape = names.join() + "|" + links.map((l) => l.join(">")).join() + (down ? "|down" : "");
   // Laid out again only when a part or a link first appears, so nothing moves while you watch.
-  const spots = useMemo(() => layout(names, links), [shape]);
+  const spots = useMemo(() => layout(names, links, down), [shape]);
 
   const open = openCalls(notices, now);
   const followed = notices.filter(inRequest);
@@ -137,6 +140,7 @@ function Graph({
       doing: open.get(name)?.text,
       here: name === here,
       flash: fresh.some((n) => n.source === name && n.target === name),
+      down,
     },
   }));
   const edges: Edge<HopData>[] = links.map(([from, to]) => {
@@ -175,8 +179,8 @@ function Part({ data }: NodeProps<Node<PartData>>) {
   const classes = ["part", data.kind, data.doing && "busy", data.here && "here", data.flash && "flash"];
   return (
     <div className={classes.filter(Boolean).join(" ")}>
-      <Handle type="target" position={Position.Left} isConnectable={false} />
-      <Handle type="source" position={Position.Right} isConnectable={false} />
+      <Handle type="target" position={data.down ? Position.Top : Position.Left} isConnectable={false} />
+      <Handle type="source" position={data.down ? Position.Bottom : Position.Right} isConnectable={false} />
       <span className="name">{data.name}</span>
       <span className="doing">{data.doing ?? " "}</span>
     </div>
@@ -228,11 +232,11 @@ function useTopology(notices: Notice[], kindOf: Map<string, Role>): { names: str
   return { names: [...seen.names].sort(), links: [...seen.links.values()] };
 }
 
-/** Left to right in the order things call each other: channels, gateway, orchestrator, tasks, pilot, and each
- * model or helper beside whatever calls it. */
-function layout(names: string[], links: [string, string][]): Map<string, { x: number; y: number }> {
+/** Left to right (or top to bottom, `down`) in the order things call each other: channels, gateway, orchestrator,
+ * tasks, pilot, and each model or helper beside whatever calls it. */
+function layout(names: string[], links: [string, string][], down: boolean): Map<string, { x: number; y: number }> {
   const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: "LR", nodesep: 18, ranksep: 44 });
+  graph.setGraph(down ? { rankdir: "TB", nodesep: 12, ranksep: 28 } : { rankdir: "LR", nodesep: 18, ranksep: 44 });
   graph.setDefaultEdgeLabel(() => ({}));
   for (const name of names) graph.setNode(name, { ...NODE });
   for (const [from, to] of links) graph.setEdge(from, to);

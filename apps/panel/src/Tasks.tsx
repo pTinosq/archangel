@@ -1,29 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl, type Step, type Task } from "./api";
+import { useNarrow } from "./narrow";
 import { useFeed, usePoll } from "./poll";
 
 export function Tasks() {
   const tasks = usePoll(api.tasks);
+  const narrow = useNarrow();
   const [selected, setSelected] = useState<number>();
-  const shown = tasks?.find((t) => t.id === selected) ?? tasks?.[0];
+  // A desktop always shows one beside the list; a phone shows the list, or the one picked from it.
+  const shown = tasks?.find((t) => t.id === selected) ?? (narrow ? undefined : tasks?.[0]);
+  const back = narrow ? () => setSelected(undefined) : undefined;
 
   return (
     <>
-      <section className="task-list">
-        <h2>Tasks</h2>
-        {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone.</p>}
-        <ul>
-          {tasks?.map((task) => (
-            <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => setSelected(task.id)}>
-              <div>
-                <span className="id">#{task.id}</span> <Status task={task} />
-              </div>
-              <div className="goal">{task.goal}</div>
-            </li>
-          ))}
-        </ul>
-      </section>
-      {shown ? <TaskDetail key={shown.id} task={shown} /> : <section className="detail" />}
+      {!(narrow && shown) && (
+        <section className="task-list">
+          <h2>Tasks</h2>
+          {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone.</p>}
+          <ul>
+            {tasks?.map((task) => (
+              <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => setSelected(task.id)}>
+                <div>
+                  <span className="id">#{task.id}</span> <Status task={task} />
+                </div>
+                <div className="goal">{task.goal}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {shown ? <TaskDetail key={shown.id} task={shown} back={back} /> : !narrow && <section className="detail" />}
     </>
   );
 }
@@ -32,20 +38,42 @@ function Status({ task }: { task: Task }) {
   return <span className={`status ${task.status.replace(" ", "-")}`}>{task.status}</span>;
 }
 
-function TaskDetail({ task }: { task: Task }) {
+/** `back` (on a phone): returns to the list. */
+function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
   const steps = useFeed((after) => api.steps(task.id, after), task.id);
   const screens = steps.filter((s) => s.screen);
   const [viewing, setViewing] = useState<Step>();
   const latest = screens[screens.length - 1];
   const shownScreen = viewing ?? latest;
   const end = useRef<HTMLLIElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest" });
+    // On a phone the page is one column: following the newest step would scroll past the approve buttons.
+    if (!back) end.current?.scrollIntoView({ block: "nearest" });
   }, [steps.length]);
+  useEffect(() => {
+    // On a phone the screen is above the steps, out of sight: bring it into view when a step is picked.
+    if (viewing) screen.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [viewing]);
 
   return (
     <section className="detail">
-      <div className="screen">
+      <div className="head">
+        {back && (
+          <button className="back" onClick={back}>
+            ‹ Tasks
+          </button>
+        )}
+        <h2>
+          #{task.id} {task.goal}
+        </h2>
+        <p>
+          <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
+        </p>
+        {task.report && <p className="report">{task.report}</p>}
+        {task.open && <Controls task={task} />}
+      </div>
+      <div className="screen" ref={screen}>
         {shownScreen ? (
           <>
             <img src={imageUrl(shownScreen.screen!)} alt="Phone screen" onError={hideExpired} />
@@ -63,29 +91,19 @@ function TaskDetail({ task }: { task: Task }) {
           <p className="quiet">No screens yet.</p>
         )}
       </div>
-      <div className="story">
-        <h2>
-          #{task.id} {task.goal}
-        </h2>
-        <p>
-          <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
-        </p>
-        {task.report && <p className="report">{task.report}</p>}
-        {task.open && <Controls task={task} />}
-        <ol className="steps">
-          {steps.map((step) => (
-            <li
-              key={step.id}
-              ref={step === steps[steps.length - 1] ? end : undefined}
-              className={step.screen ? "has-screen" : ""}
-              onClick={() => step.screen && setViewing(step)}
-            >
-              <time>{clock(step.time)}</time>
-              <span>{step.text}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ol className="steps">
+        {steps.map((step) => (
+          <li
+            key={step.id}
+            ref={step === steps[steps.length - 1] ? end : undefined}
+            className={[step.screen && "has-screen", step === viewing && "viewing"].filter(Boolean).join(" ")}
+            onClick={() => step.screen && setViewing(step)}
+          >
+            <time>{clock(step.time)}</time>
+            <span>{step.text}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -112,6 +130,7 @@ function Controls({ task }: { task: Task }) {
             onChange={(e) => setReply(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && answer()}
             placeholder="Your answer"
+            enterKeyHint="send"
           />
           <button onClick={answer} disabled={!reply}>Reply</button>
         </>
