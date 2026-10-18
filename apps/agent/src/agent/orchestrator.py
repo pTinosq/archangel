@@ -68,10 +68,18 @@ class Orchestrator:
             return start(ctx, goal, report_via, "phone")
 
         @self._agent.tool
-        async def research(ctx: RunContext[Event], question: str, report_via: str | None = None) -> str:
-            """Start research on the web in the background: many sources, a report (a link and a tldr) in a minute or
-            two, a few pence. Not on the phone, so it runs beside phone tasks. `report_via` as for start_task."""
-            return start(ctx, question, report_via, "research")
+        async def research(
+            ctx: RunContext[Event], question: str, deep: bool = False, report_via: str | None = None
+        ) -> str:
+            """Start research on the web in the background; a report (a link and a tldr) comes back. Not on the phone,
+            so it runs beside phone tasks. `report_via` as for start_task.
+
+            Normally a minute or two and a few pence: many sources, good rather than exhaustive. `deep`: exhaustive,
+            ~5 minutes and ~70p. Offer it with its cost when they want it thorough; set it only once they've agreed.
+            """
+            if deep and not ctx.deps.from_owner:
+                return "Only the owner can agree to deep research's cost. Ask them."
+            return start(ctx, question, report_via, "deep research" if deep else "research")
 
         def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:
             report_to = ctx.deps.reply_to
@@ -157,7 +165,7 @@ class Orchestrator:
         tasks = self._tasks.list()[::-1]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [
-            f"#{t.id} [{t.status}] {'research: ' if t.kind == 'research' else ''}{t.goal}"
+            f"#{t.id} [{t.status}] {'' if t.kind == 'phone' else t.kind + ': '}{t.goal}"
             + (f" → {t.report[:300]}" if t.report else "")
             for t in shown
         ]

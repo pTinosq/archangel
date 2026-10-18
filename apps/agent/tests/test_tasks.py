@@ -162,7 +162,7 @@ def test_without_a_report_the_research_is_passed_on_as_it_is(store):
 
 def test_failed_research_is_a_failed_task(store):
     class Broken(FakeResearcher):
-        async def research(self, question):
+        async def research(self, question, deep=False):
             raise RuntimeError("OpenRouter is down")
 
     async def scenario():

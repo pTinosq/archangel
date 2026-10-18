@@ -28,7 +28,7 @@ DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
 
-Kind = Literal["phone", "research"]
+Kind = Literal["phone", "research", "deep research"]
 
 
 class Status(StrEnum):
@@ -62,7 +62,7 @@ class Task:
     run: pydantic_ai.Conversation | None = None
     """The sub-agent's history, kept so a paused task resumes where it stopped."""
     kind: Kind = "phone"
-    """Phone tasks take turns on the phone; research runs beside them, on the web."""
+    """Phone tasks take turns on the phone; research (deep or not) runs beside them, on the web."""
 
 
 @dataclass(frozen=True)

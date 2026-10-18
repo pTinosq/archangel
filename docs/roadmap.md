@@ -28,7 +28,7 @@ Each milestone ships something usable and proves one idea.
 - **The right source.** The phone has apps with their own content (the Michelin Guide). Archangel decides between the web and an app, and the owner can say which they prefer.
 
 **Plan**
-- **Engine: Perplexity Pro Search via OpenRouter** (`perplexity/sonar-pro-search`): about 30 seconds and 3p, a direct answer with tables and ~15 sources. Sonar Deep Research was tried first: ~4 minutes and ~60p for an 80k-character essay, whatever it was told. A research task never touches the phone, so it runs beside phone tasks.
+- **Engine: Perplexity Pro Search via OpenRouter** (`perplexity/sonar-pro-search`): about 30 seconds and 3p, a direct answer with tables and ~15 sources. Sonar Deep Research (~4 minutes, ~60p, an 80k-character essay whatever it's told) stays for exhaustive asks: offered with its cost, run only once the owner agrees. A research task never touches the phone, so it runs beside phone tasks.
 - **Upgrade: GPT-5.6 Sol with web search** for "really dig into this", at roughly 3–5× the cost. OpenAI's own deep research models were shut down on 2026-07-23.
 - **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M12.
 - **Quick questions** ("what time does Tesco close?") get a plain web search (Tavily), not deep research.

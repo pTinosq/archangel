@@ -57,7 +57,7 @@ class Tasks:
             inbox.append(answer.text)
             return f"Passed on to task #{id}; it sees it on its next step."
         task = self._store.task(id)
-        if task and task.kind == "research" and task.status.open:
+        if task and task.kind != "phone" and task.status.open:
             return f"Task #{id} is research: it can't be told anything. Cancel it and start again to change it."
         if not task or not task.status.waiting:
             return f"Task #{id} isn't open."
@@ -104,7 +104,7 @@ class Tasks:
 
     async def _run(self, task: Task, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> None:
         try:
-            if task.kind == "research":
+            if task.kind != "phone":
                 outcome = await self._research(task)
             else:
                 async with self._phone:
@@ -136,7 +136,7 @@ class Tasks:
         self._store.add_step(task.id, "Researching.")
         with activity.call("research", "agent", task.goal) as reply:
             try:
-                found = await self._researcher.research(task.goal)
+                found = await self._researcher.research(task.goal, deep=task.kind == "deep research")
             except Exception as error:  # the model or OpenRouter: the orchestrator decides whether to retry
                 log.exception("Research failed")
                 return Outcome("failed", f"Research failed: {error}")

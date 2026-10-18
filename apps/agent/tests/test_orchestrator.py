@@ -13,7 +13,7 @@ from pydantic_ai import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from agent.events import OwnerMessage
+from agent.events import Notice, OwnerMessage
 from agent.gateway import Gateway
 from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
@@ -289,3 +289,21 @@ def test_research_and_quick_answers_come_from_the_web(store):
         ),
     ]
     assert owner.pilot.calls == []  # never the phone
+
+
+def test_deep_research_only_with_the_owner_s_say_so(store):
+    def respond(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Update"):
+            return say("ok")
+        return call("research", question="Hunting dogs", deep=True)
+
+    owner = Owner(store, tool_result_or(respond))
+    owner.says(Text("yes, go deep"))
+    assert (store.task(1).kind, store.task(1).report.startswith("Report: /reports/1")) == ("deep research", True)
+    assert store.steps(1)[1].text == "Everything about Hunting dogs."
+
+    async def noticed():
+        await owner.orchestrator.handle(Notice("The owner seems curious about dogs.", owner.cli.owner))
+
+    asyncio.run(noticed())
+    assert owner.cli.sent[-1].text == "Only the owner can agree to deep research's cost. Ask them."

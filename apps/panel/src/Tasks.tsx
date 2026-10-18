@@ -95,7 +95,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
             </p>
           </>
         ) : (
-          <p className="quiet">{task.kind === "research" ? "Research is on the web, not the phone." : "No screens yet."}</p>
+          <p className="quiet">{task.kind !== "phone" ? "Research is on the web, not the phone." : "No screens yet."}</p>
         )}
       </div>
       <ol className="steps">

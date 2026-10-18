@@ -57,10 +57,10 @@ class FakeResearcher:
     async def search(self, question: str) -> str:
         return f"Quick answer to {question}."
 
-    async def research(self, question: str) -> str:
+    async def research(self, question: str, deep: bool = False) -> str:
         if self.hold:
             await self.hold.wait()
-        return f"All about {question}."
+        return f"{'Everything' if deep else 'All'} about {question}."
 
 
 class FakeReporter:
