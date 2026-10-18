@@ -2,7 +2,7 @@ import asyncio
 
 from fakes import FakeChannel
 
-from agent.events import OwnerMessage
+from agent.events import Notice, OwnerMessage
 from agent.gateway import Gateway
 from agent.messages import Address, Message, Text
 
@@ -47,3 +47,19 @@ def test_nothing_to_say_sends_nothing(store):
     panel = FakeChannel("panel")
     asyncio.run(Gateway([panel], store).send(Message(panel.owner, (Text(" "),))))
     assert panel.sent == [] and store.lines() == []
+
+
+def test_a_channels_notice_goes_straight_to_the_handler(store):
+    notice = Notice("Your call went to voicemail.", Address("sms", "owner"))
+
+    class Noticing(FakeChannel):
+        async def start(self, deliver):
+            await deliver(notice)
+
+    events = []
+
+    async def handle(event):
+        events.append(event)
+
+    asyncio.run(Gateway([Noticing("voice")], store).run(handle))
+    assert events == [notice] and store.lines() == []

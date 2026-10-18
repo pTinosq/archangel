@@ -65,4 +65,20 @@ class TaskUpdate(Event):
         return (self.screen,) if self.screen and self.task.status.waiting else ()
 
     def fallback(self, error: Exception) -> str:
-        return f"An update on \"{self.task.goal}\": {self.task.report}"
+        return f'An update on "{self.task.goal}": {self.task.report}'
+
+
+@dataclass(frozen=True)
+class Notice(Event):
+    """Something a channel saw happen, e.g. that a call Archangel made went to voicemail. Not from the owner: what,
+    if anything, to tell them is the orchestrator's call."""
+
+    text: str
+    reply_to: Address
+    from_owner = False
+
+    def prompt(self) -> list[Part | str]:
+        return [f"[Notice, not from the owner; your reply, if any, goes via {self.reply_to.channel}] {self.text}"]
+
+    def fallback(self, error: Exception) -> str:
+        return ""  # nothing the owner needs from a notice the orchestrator couldn't think about

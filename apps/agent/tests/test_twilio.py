@@ -20,6 +20,7 @@ from agent.channels.twilio import (
     VoiceChannel,
     signature,
 )
+from agent.events import Event, Notice
 from agent.links import Links
 from agent.messages import Address, Image, Message, Text
 from agent.web import Web
@@ -119,11 +120,18 @@ class Voice:
     def __init__(self):
         self.calls: list[dict[str, list[str]]] = []
         self.texts: list[dict[str, list[str]]] = []
-        self.delivered: list[Message] = []
+        self.redirects: list[tuple[str, str]] = []
+        self.delivered: list[Message | Event] = []
 
         def api(request: httpx.Request) -> httpx.Response:
             kind = request.url.path.removeprefix("/2010-04-01/Accounts/AC1/")
-            (self.calls if kind == "Calls.json" else self.texts).append(parse_qs(request.content.decode()))
+            form = parse_qs(request.content.decode())
+            if kind == "Calls.json":
+                self.calls.append(form)
+            elif kind == "Messages.json":
+                self.texts.append(form)
+            else:
+                self.redirects.append((kind.removeprefix("Calls/").removesuffix(".json"), form["Twiml"][0]))
             return httpx.Response(201, json={"sid": f"CA{len(self.calls) + 100}"})
 
         web = Web()
@@ -201,48 +209,79 @@ def test_after_saying_goodbye_and_hanging_up_the_goodbye_isnt_texted():
     assert [t["Body"] for t in voice.texts] == [["Uber's closed."]]
 
 
-def test_asked_for_a_call_back_it_rings_and_says_it_once_answered():
+def test_asked_for_a_call_back_it_rings_and_says_it_as_soon_as_they_pick_up():
     voice = Voice()
     voice.says('Ready to send "hi" & go?')
     voice.says("Also, Alex replied.")  # while it rings: one call, both said
 
     (call,) = voice.calls
-    assert call["To"] == [ACCOUNT.owner]
+    assert call["To"] == [ACCOUNT.owner] and call["AsyncAmd"] == ["true"]
+    assert call["MachineDetection"] == ["DetectMessageEnd"]
     assert call["Url"] == ["https://archangel.example/twilio/voice/answered"]
+    assert call["AsyncAmdStatusCallback"] == ["https://archangel.example/twilio/voice/machine"]
     assert call["StatusCallback"] == ["https://archangel.example/twilio/voice/ended"]
     assert voice.twilio_posts("/twilio/voice/answered", forged=True, CallSid="CA101").status_code == 403
-    answered = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="human").text
+    answered = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101").text
     relay = ElementTree.fromstring(answered).find("Connect/ConversationRelay")
     assert relay.get("welcomeGreeting") == 'Ready to send "hi" & go? Also, Alex replied.' and relay.get("url") == RELAY
+    voice.twilio_posts("/twilio/voice/machine", CallSid="CA101", AnsweredBy="human")
     voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="completed")
-    assert voice.texts == []
+    assert voice.texts == [] and voice.delivered == []
 
 
-def test_a_voicemail_gets_the_message_and_the_owner_a_text():
+def test_what_a_voicemail_greeting_says_isnt_taken_for_the_owner():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101")
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA101"})
+        ws.send_json({"type": "prompt", "voicePrompt": "Please leave a message after the tone.", "last": True})
+        ws.send_json({"type": "interrupt"})
+        voice.twilio_posts("/twilio/voice/machine", CallSid="CA101", AnsweredBy="machine_end_beep")
+    assert voice.delivered == []
+
+
+def test_a_person_is_heard_once_twilio_knows_its_them():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101")
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA101"})
+        ws.send_json({"type": "prompt", "voicePrompt": "Great, check out", "last": True})
+        ws.send_json({"type": "interrupt"})
+        voice.twilio_posts("/twilio/voice/machine", CallSid="CA101", AnsweredBy="human")
+    assert voice.delivered == [Message(Address("voice", "CA101"), (Text("Great, check out"),))]
+
+
+def test_a_voicemail_gets_the_message_after_the_beep_and_the_orchestrator_hears_of_it():
     voice = Voice()
     voice.says("Your basket's ready & waiting.")
-    response = voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="machine_end_beep")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101")
+    voice.twilio_posts("/twilio/voice/machine", CallSid="CA101", AnsweredBy="machine_end_beep")
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="completed")
 
-    assert voice.calls[0]["MachineDetection"] == ["DetectMessageEnd"]
-    assert response.text == (
-        '<Response><Say language="en-GB">Your basket\'s ready &amp; waiting.</Say><Hangup/></Response>'
-    )
-    assert [t["Body"] for t in voice.texts] == [["Tried to call you. Your basket's ready & waiting."]]
+    ((call, twiml),) = voice.redirects
+    assert call == "CA101" and '<Say language="en-GB">Your basket\'s ready &amp; waiting.</Say><Hangup/>' in twiml
+    assert voice.texts == []  # what to text, if anything, is the orchestrator's call
+    (notice,) = voice.delivered
+    assert isinstance(notice, Notice) and notice.reply_to == Address("sms", ACCOUNT.owner)
+    assert "voicemail" in notice.text and "Your basket's ready & waiting." in notice.text
 
 
-def test_a_missed_call_becomes_a_text():
+def test_a_missed_call_is_a_notice_once():
     voice = Voice()
     voice.says("Your basket's ready.")
     voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")
-    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")  # once only
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="no-answer")
 
-    assert [t["Body"] for t in voice.texts] == [["Tried to call you. Your basket's ready."]]
+    (notice,) = voice.delivered
+    assert "no answer" in notice.text and "Your basket's ready." in notice.text
 
 
 def test_said_while_the_call_connects_is_said_once_its_live():
     voice = Voice()
     voice.says("Your basket's ready.")
-    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101", AnsweredBy="human")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101")
     voice.says("Also, Alex replied.")  # answered, not live yet: no second call
     with voice.relay() as ws:
         ws.send_json({"type": "setup", "callSid": "CA101"})
@@ -263,7 +302,8 @@ def test_it_rings_a_few_times_at_most_then_texts():
     voice = Voice()
     for n in range(RINGS + 1):
         voice.says(f"Update {n}.")
-        voice.twilio_posts("/twilio/voice/answered", CallSid=f"CA{101 + n}", AnsweredBy="human")
+        voice.twilio_posts("/twilio/voice/answered", CallSid=f"CA{101 + n}")
+        voice.twilio_posts("/twilio/voice/machine", CallSid=f"CA{101 + n}", AnsweredBy="human")
         voice.twilio_posts("/twilio/voice/ended", CallSid=f"CA{101 + n}", CallStatus="completed")
     assert len(voice.calls) == RINGS
     assert [t["Body"] for t in voice.texts] == [[f"Update {RINGS}."]]

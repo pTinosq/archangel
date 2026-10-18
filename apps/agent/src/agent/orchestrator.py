@@ -91,6 +91,8 @@ class Orchestrator:
             """
             if not (to := gateway.owner(channel)):
                 return f"No channel {channel!r}. Channels: {', '.join(gateway.channels)}."
+            if channel == ctx.deps.reply_to.channel and not screenshot:  # or the owner gets it twice
+                return f"Your reply already goes via {channel}: say it there."
             images = ctx.deps.attachments() if screenshot else ()
             if screenshot and not images:
                 return "There's no screenshot to send."

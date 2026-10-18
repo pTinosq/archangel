@@ -341,9 +341,10 @@ async def press(
     return await ctx.deps.act(ctx.deps.kit.phone.key(key), f"Pressed {key}.")
 
 
-async def look(ctx: RunContext[_Session]) -> ToolReturn:
+async def look(ctx: RunContext[_Session], reason: str = "") -> ToolReturn:
     """Take a fresh screenshot, e.g. while something loads."""
-    return await ctx.deps.look("Current screen.")
+    # `reason` because models like to say why, and a refused call three times over ends the task.
+    return await ctx.deps.look(f"Current screen{f' ({reason})' if reason else ''}.")
 
 
 async def ask_owner(ctx: RunContext[_Session], question: str) -> str:

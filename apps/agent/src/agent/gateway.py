@@ -43,9 +43,13 @@ class Gateway:
     async def run(self, handle: Handle) -> None:
         """Run until every channel closes, then finish the messages already received."""
 
-        async def deliver(message: Message) -> None:
-            self._store.add_line(message, "owner")
-            task = asyncio.create_task(self._handle(handle, message), context=activity.new_request("gateway"))
+        async def deliver(message: Message | Event) -> None:
+            if isinstance(message, Message):
+                self._store.add_line(message, "owner")
+                handling = self._handle(handle, message)
+            else:  # a notice: no one said it, so it isn't in the transcript
+                handling = handle(message)
+            task = asyncio.create_task(handling, context=activity.new_request("gateway"))
             self._running.add(task)
             task.add_done_callback(self._running.discard)
 

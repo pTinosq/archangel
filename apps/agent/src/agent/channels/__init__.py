@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 
+from agent.events import Event
 from agent.messages import Address, Message
 
-Deliver = Callable[[Message], Awaitable[None]]
+Deliver = Callable[[Message | Event], Awaitable[None]]
+"""The owner's messages, and anything else a channel sees that the orchestrator should hear about."""
 
 
 class Channel(ABC):
@@ -20,7 +22,7 @@ class Channel(ABC):
 
     @abstractmethod
     async def start(self, deliver: Deliver) -> None:
-        """Receive the owner's messages, passing each to `deliver`, until the medium closes."""
+        """Receive the owner's messages (and any notices), passing each to `deliver`, until the medium closes."""
 
     @abstractmethod
     async def send(self, message: Message) -> None:
