@@ -318,3 +318,13 @@ def test_on_a_call_a_screenshot_is_texted_and_mentioned():
         asyncio.run(voice.channel.send(message))
         assert json.loads(ws.receive_text())["token"] == "Send it to Alex? I've texted you a screenshot."
     assert [t["Body"] for t in voice.texts] == [["Screenshot: https://archangel.example/screenshots/1"]]
+
+
+def test_a_call_whose_answerer_was_never_known_is_a_notice_too():
+    voice = Voice()
+    voice.says("Your basket's ready.")
+    voice.twilio_posts("/twilio/voice/answered", CallSid="CA101")
+    voice.twilio_posts("/twilio/voice/ended", CallSid="CA101", CallStatus="completed")
+
+    (notice,) = voice.delivered
+    assert "may not have heard" in notice.text

@@ -223,6 +223,11 @@ class VoiceChannel(Channel):
                 await self._notice(
                     f'You rang the owner; no answer ({status}). They haven\'t heard: "{" ".join(outgoing.said)}"'
                 )
+            elif outgoing and outgoing.person is None:  # picked up, but by whom Twilio never said
+                await self._notice(
+                    f"You rang the owner and it was picked up, but maybe by their voicemail before the beep, so they "
+                    f'may not have heard: "{" ".join(outgoing.said)}"'
+                )
             return _xml(EMPTY)
 
         @web.app.websocket("/twilio/voice/relay")
