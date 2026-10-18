@@ -14,9 +14,10 @@ Each milestone ships something usable and proves one idea.
 | M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
 | M8 | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
 | M9 | Research | "do deep research into the best funds in 2026": a cited report 5–10 minutes later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
-| M10 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
-| M11 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
-| M12 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
+| M10 | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
+| M11 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
+| M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
+| M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
@@ -29,9 +30,21 @@ Each milestone ships something usable and proves one idea.
 **Plan**
 - **Engine: Perplexity Sonar Deep Research via OpenRouter** (`perplexity/sonar-deep-research`). One request returns one cited report, roughly $0.30–1 each, with no new account. A research task never touches the phone, so it runs beside phone tasks.
 - **Upgrade: GPT-5.6 Sol with web search** for "really dig into this", at roughly 3–5× the cost. OpenAI's own deep research models were shut down on 2026-07-23.
-- **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M11.
+- **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M12.
 - **Quick questions** ("what time does Tesco close?") get a plain web search, not deep research.
-- **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M12.
+- **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M13.
+
+## M10 requirements (location) (from the owner)
+
+- **Near me means near the owner.** "Near me" searches (Maps, the Michelin Guide) and Uber pickups use where the owner is, not where the phone sits at home.
+- **Easy on the battery.** Nothing on the owner's own phone (Android) runs in the background.
+
+**Plan**
+- **Ask when needed.** When a task needs the owner's location, Archangel texts a link; one tap shares it once from the browser. Saying a place ("outside Liverpool Street") works too, on a call or in a text. A recent location is reused for a short while instead of asking again.
+- **Type before faking.** Apps with an address field (Uber, Deliveroo, Maps directions) get the address typed. This is safer because Uber and banking apps can spot a faked location and may flag the account.
+- **Fake only for GPS-only apps.** The bridge becomes the phone's mock location app (Developer options, set once). The phone moves to the owner's location for that task, then goes back home. A new bridge command, `docs/protocol.md` first.
+- **Check it took.** Some apps read Wi-Fi and cell location too; the pilot checks the results look local before trusting them.
+- **Later, if the link gets tedious:** always-on Google Maps location sharing with the home phone's account.
 
 ## M8 (in progress)
 
@@ -114,7 +127,7 @@ The owner also tests across channels and reports changes.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M10).
+- **Not yet:** images from the panel chat; connectors and MCP setup (M11).
 
 ## M5 requirements (from the owner)
 
@@ -122,12 +135,12 @@ The owner also tests across channels and reports changes.
 - **Monitoring.** Task status, live progress, each run's steps and screenshots.
 - **A channel.** Chat with Archangel from it, approvals included.
 - **Prompts in the database.** The defaults stay in the code; edited versions are saved in the store and edited from the panel.
-- **Setup.** Later: connectors and MCP servers (M10) are configured here.
+- **Setup.** Later: connectors and MCP servers (M11) are configured here.
 
-## M11 requirements (context twin) (from the owner)
+## M12 requirements (context twin) (from the owner)
 
 - **Learns as it goes.** Standing instructions said in any channel become memories with no extra step. Examples: "never return sponsored results for restaurant recommendations"; "Uber: always the cheapest ride, rate drivers 5 stars, no tip".
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 
-Temporal waits for M12: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
