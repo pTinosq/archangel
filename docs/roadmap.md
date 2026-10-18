@@ -13,10 +13,24 @@ Each milestone ships something usable and proves one idea.
 | M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
 | M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
 | M8 | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
-| M9 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
-| M10 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
-| M11 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+| M9 | Research | "do deep research into the best funds in 2026": a cited report 5–10 minutes later | long-running jobs that wait without holding the phone; the owner's ChatGPT subscription as the engine |
+| M10 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
+| M11 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
+| M12 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
+
+## M9 requirements (research) (from the owner)
+
+- **Deep, not a search.** Many sources, read and cross-checked, ending in a report with citations, like ChatGPT's deep research. A 5–10 minute job is expected.
+- **Cheap.** The owner already pays for ChatGPT, so use that first.
+- **Runs in the background.** Started from any channel like any task; the report goes where it was asked for, short on sms and voice, in full on the panel.
+
+**Plan**
+- **Engine: ChatGPT's deep research, on the phone.** The pilot opens the ChatGPT app, turns on deep research, sends the question and answers its clarifying questions (or asks the owner). No extra cost.
+- **Wait without holding the phone.** The task parks and checks back every few minutes (or wakes on ChatGPT's "research complete" notification). Other tasks use the phone meanwhile. This is a small first step towards M12's scheduled tasks.
+- **Getting the report out.** Reading a long report by screenshots is slow and lossy: prefer the text (copy or share link, or the screen's text), and keep the sources.
+- **Fallback: a deep research model by API** (via OpenRouter) when the app is unavailable or the job is short. Pay per run; capped.
+- **Quick questions** ("what time does Tesco close?") are a plain web search, not deep research.
 
 ## M8 (in progress)
 
@@ -99,7 +113,7 @@ The owner also tests across channels and reports changes.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M9).
+- **Not yet:** images from the panel chat; connectors and MCP setup (M10).
 
 ## M5 requirements (from the owner)
 
@@ -107,12 +121,12 @@ The owner also tests across channels and reports changes.
 - **Monitoring.** Task status, live progress, each run's steps and screenshots.
 - **A channel.** Chat with Archangel from it, approvals included.
 - **Prompts in the database.** The defaults stay in the code; edited versions are saved in the store and edited from the panel.
-- **Setup.** Later: connectors and MCP servers (M9) are configured here.
+- **Setup.** Later: connectors and MCP servers (M10) are configured here.
 
-## M10 requirements (context twin) (from the owner)
+## M11 requirements (context twin) (from the owner)
 
 - **Learns as it goes.** Standing instructions said in any channel become memories with no extra step. Examples: "never return sponsored results for restaurant recommendations"; "Uber: always the cheapest ride, rate drivers 5 stars, no tip".
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 
-Temporal waits for M11: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+Temporal waits for M12: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
