@@ -189,7 +189,24 @@ def test_only_the_owner_can_approve(store):
     )
     replies = owner.says(Text("post hello"))
 
-    assert replies[-1].text == "Only the owner can approve. Ask them."
+    assert replies[-1].text == "Only the owner can say yes or no to this. Ask them."
+    assert len(owner.pilot.calls) == 1
+
+
+def test_only_the_owner_can_decline(store):
+    def declines_on_its_own(prompt):
+        if "not from the owner" in prompt:
+            return call("answer_task", id=1, answer="no")
+        return call("start_task", goal="Read my texts")
+
+    owner = Owner(
+        store,
+        tool_result_or(declines_on_its_own),
+        Outcome("needs_approval", "Approve: continue as Constantinos?", pydantic_ai.Conversation()),
+    )
+    replies = owner.says(Text("read my texts"))
+
+    assert replies[-1].text == "Only the owner can say yes or no to this. Ask them."
     assert len(owner.pilot.calls) == 1
 
 
@@ -230,7 +247,10 @@ def test_failures_reach_the_owner(store):
     def broken(messages, info):
         raise RuntimeError("boom")
 
-    assert Owner(store, broken).says(Text("hi"))[-1].text == "Sorry, something went wrong on my side. Could you say that again?"
+    assert (
+        Owner(store, broken).says(Text("hi"))[-1].text
+        == "Sorry, something went wrong on my side. Could you say that again?"
+    )
 
 
 def test_a_screenshot_can_be_sent_elsewhere_and_channels_say_what_they_show(store):

@@ -246,5 +246,14 @@ def test_unlock_swipes_instead_of_pressing_a_key():
 
 def test_a_second_opinion_when_the_pilot_asks():
     investigator = FakeInvestigator("Close the dialog first.")
-    outcome = run(scripted(("second_opinion", {})), FakePhone(), investigator=investigator)
+    outcome = run(
+        scripted(("second_opinion", {"question": "Why won't it close?"})), FakePhone(), investigator=investigator
+    )
     assert outcome.report == "Close the dialog first."
+
+
+def test_the_owner_s_word_reaches_a_running_pilot():
+    inbox = ["You can tap Continue"]
+    outcome = run(scripted(("press", {"key": "back"})), FakePhone(), inbox=inbox)
+    assert "The owner says, meanwhile: You can tap Continue" in outcome.report
+    assert inbox == []

@@ -34,6 +34,7 @@ class Tasks:
         self._pilot = pilot
         self._phone = asyncio.Lock()
         self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
+        self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
@@ -44,10 +45,13 @@ class Tasks:
         return task
 
     def answer(self, id: int, answer: Answer) -> str:
-        """Continue a task that's waiting on the owner. Returns what happened, for the model."""
+        """Continue a task that's waiting on the owner, or tell a running one. Returns what happened, for the model."""
+        if (inbox := self._inboxes.get(id)) is not None:
+            inbox.append(answer.text)
+            return f"Passed on to task #{id}; it sees it on its next step."
         task = self._store.task(id)
         if not task or not task.status.waiting:
-            return f"Task #{id} isn't waiting for an answer."
+            return f"Task #{id} isn't open."
         paused, task.run = task.run, None
         task.status = Status.QUEUED
         self._store.save_task(task)
@@ -83,6 +87,7 @@ class Tasks:
 
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
         activity.hop("tasks", "task", f"#{task.id} {'continue' if paused else 'start'}: {task.goal}")
+        self._inboxes[task.id] = []
         self._running[task.id] = asyncio.create_task(
             self._run(task, paused, answer), context=activity.in_task(task.id, "tasks")
         )
@@ -93,7 +98,9 @@ class Tasks:
                 task.status = Status.RUNNING
                 self._store.save_task(task)
                 with activity.call("pilot", "agent", task.goal) as reply:
-                    outcome = await self._pilot.run(task.goal, self._recorder(task), paused, answer)
+                    outcome = await self._pilot.run(
+                        task.goal, self._recorder(task), paused, answer, inbox=self._inboxes[task.id]
+                    )
                     reply(f"{outcome.status}: {outcome.report}")
         except asyncio.CancelledError:
             log.info("Task #%d cancelled", task.id)
@@ -101,6 +108,7 @@ class Tasks:
             return
         finally:
             del self._running[task.id]
+            del self._inboxes[task.id]
         task.run = outcome.run
         task.report_to = self._store.task(task.id).report_to  # the owner may have asked for it elsewhere meanwhile
         self._settle(task, _STATUSES[outcome.status], outcome.report)

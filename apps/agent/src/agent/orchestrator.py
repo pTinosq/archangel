@@ -18,7 +18,7 @@ from agent.gateway import Gateway
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.phone.pilot import Answer
-from agent.store import Store
+from agent.store import Status, Store
 from agent.tasks import Tasks
 
 log = logging.getLogger(__name__)
@@ -62,12 +62,12 @@ class Orchestrator:
 
         @self._agent.tool
         async def answer_task(ctx: RunContext[Event], id: int, answer: str, approve: bool = False) -> str:
-            """Pass the owner's reply to a task waiting on them.
+            """Pass the owner's reply to a task waiting on them, or their new word to one running.
 
             Set `approve` only if the owner said yes to the action.
             """
-            if approve and not ctx.deps.from_owner:
-                return "Only the owner can approve. Ask them."
+            if (task := store.task(id)) and task.status == Status.NEEDS_APPROVAL and not ctx.deps.from_owner:
+                return "Only the owner can say yes or no to this. Ask them."
             return tasks.answer(id, Answer(answer, approve))
 
         @self._agent.tool_plain

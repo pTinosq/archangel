@@ -53,10 +53,24 @@ def test_steps_are_recorded(store):
     ]
 
 
-def test_only_waiting_tasks_take_answers(store):
+def test_only_open_tasks_take_answers(store):
     async def scenario():
         tasks = Tasks(store, FakePilot())
-        assert tasks.answer(7, Answer("yes")) == "Task #7 isn't waiting for an answer."
+        assert tasks.answer(7, Answer("yes")) == "Task #7 isn't open."
+
+    asyncio.run(scenario())
+
+
+def test_a_running_task_hears_the_owner(store):
+    async def scenario():
+        pilot = FakePilot(hold=asyncio.Event())
+        tasks = Tasks(store, pilot)
+        tasks.start("Read the latest text", CLI)
+        await asyncio.sleep(0)
+        assert tasks.answer(1, Answer("You can tap Continue")) == "Passed on to task #1; it sees it on its next step."
+        assert pilot.inbox == ["You can tap Continue"]
+        pilot.hold.set()
+        await tasks.idle()
 
     asyncio.run(scenario())
 

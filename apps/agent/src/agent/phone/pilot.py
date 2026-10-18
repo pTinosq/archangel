@@ -96,6 +96,8 @@ class _Session:
     screen: Image | None = None
     steps: list[str] = field(default_factory=list)
     screens: deque[Image] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
+    inbox: list[str] = field(default_factory=list)
+    """The owner's word while it runs (the task's own list, appended to from outside)."""
 
     async def shoot(self) -> Image:
         self.screen = await self.kit.phone.screenshot()
@@ -124,11 +126,15 @@ class _Session:
         await self.shoot()
         self.steps.append(note)
         self.record(note, self.screen)
+        if self.inbox:
+            note += "".join(f"\nThe owner says, meanwhile: {said}" for said in self.inbox)
+            self.inbox.clear()
         return ToolReturn(note, content=[content(self.screen)])
 
-    async def diagnose(self) -> str | None:
-        with activity.call("investigator", "agent", self.goal) as reply:
-            advice = await self.kit.investigator.investigate(self.goal, self.steps[-RECENT_STEPS:], list(self.screens))
+    async def diagnose(self, question: str = "") -> str | None:
+        goal = f"{self.goal}\nThe pilot asks: {question}" if question else self.goal
+        with activity.call("investigator", "agent", goal) as reply:
+            advice = await self.kit.investigator.investigate(goal, self.steps[-RECENT_STEPS:], list(self.screens))
             reply(advice or "no opinion")
         return advice
 
@@ -185,11 +191,17 @@ class Pilot:
         )
 
     async def run(
-        self, goal: str, record: Record, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
+        self,
+        goal: str,
+        record: Record,
+        paused: pydantic_ai.Conversation | None = None,
+        answer: Answer | None = None,
+        inbox: list[str] | None = None,
     ) -> Outcome:
-        """Start `goal`, or continue a `paused` run with the owner's `answer`. Each step goes to `record`."""
+        """Start `goal`, or continue a `paused` run with the owner's `answer`. Each step goes to `record`; what the
+        owner says meanwhile is appended to `inbox`."""
         log.info("Phone task: %s", goal)
-        session = _Session(self._kit, goal, record)
+        session = _Session(self._kit, goal, record, inbox=[] if inbox is None else inbox)
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             screen = await session.shoot()
@@ -316,9 +328,9 @@ async def look(ctx: RunContext[_Session], reason: str = "") -> ToolReturn:
     return await ctx.deps.look(f"Current screen{f' ({reason})' if reason else ''}.")
 
 
-async def second_opinion(ctx: RunContext[_Session]) -> str:
+async def second_opinion(ctx: RunContext[_Session], question: str = "") -> str:
     """Ask a fresh model, which reads your recent screens and steps, what's in the way and how past it."""
-    advice = await ctx.deps.diagnose()
+    advice = await ctx.deps.diagnose(question)
     ctx.deps.record(f"Second opinion: {advice or 'none'}", None)
     return advice or "No opinion: decide for yourself."
 
