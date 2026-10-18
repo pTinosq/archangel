@@ -132,6 +132,6 @@ def test_research_reports_are_pages_that_run_nothing(store):
     [task] = panel.call("GET", "/api/tasks").json()
     assert (task["kind"], task["page"]) == ("research", True)
     page = panel.call("GET", "/reports/1")
-    assert page.text == "<p>All about the best funds.</p>"
+    assert "<p>All about the best funds.</p>" in page.text
     assert page.headers["content-security-policy"].startswith("default-src 'none'")
     assert panel.call("GET", "/reports/2").status_code == 404

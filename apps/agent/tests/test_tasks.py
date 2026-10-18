@@ -119,7 +119,7 @@ def test_research_runs_beside_a_phone_task(store):
         report = "Report: /reports/2\ntldr: The best funds in 2026: the gist."
         assert updates == [f"#2 done: {report}"]
         assert store.task(2).kind == "research"
-        assert store.page(2) == "<p>All about The best funds in 2026.</p>"
+        assert "<p>All about The best funds in 2026.</p>" in store.page(2)
         assert [s.text for s in store.steps(2)] == [
             "Researching.",
             "All about The best funds in 2026.",

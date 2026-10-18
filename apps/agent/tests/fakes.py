@@ -65,7 +65,7 @@ class FakeResearcher:
 
 class FakeReporter:
     async def write(self, topic: str, material: str) -> Report:
-        return Report(tldr=f"{topic}: the gist.", html=f"<p>{material}</p>")
+        return Report(tldr=f"{topic}: the gist.", title=topic, pages=[f"<p>{material}</p>"])
 
 
 async def apps() -> dict[str, str]:
