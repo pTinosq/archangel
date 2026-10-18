@@ -198,7 +198,7 @@ def _connector(connector: Connector) -> dict:  # never the secrets or tokens
 def _done(text: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(
         '<!DOCTYPE html><meta name="viewport" content="width=device-width, initial-scale=1">'
-        f'<p style="font:16px system-ui;margin:2rem">{escape(text)} <a href="/#connectors">Back to Archangel</a></p>',
+        f'<p style="font:16px system-ui;margin:2rem">{escape(text)} <a href="/connectors">Back to Archangel</a></p>',
         status,
     )
 

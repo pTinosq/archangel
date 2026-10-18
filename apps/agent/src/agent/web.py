@@ -12,6 +12,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent.channels.login import GitHub, protect
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 PORT = 8765
 DIST = Path("../panel/dist")  # from apps/agent
 HOSTS = ["localhost", "127.0.0.1"]
+PAGES = ["/chat", "/tasks", "/tasks/{id}", "/cockpit", "/prompts", "/connectors"]  # the panel's, as in its route.tsx
 
 
 class Web:
@@ -43,6 +45,12 @@ class Web:
     def finish(self) -> FastAPI:
         """The app, with the built panel mounted last so it can't shadow any channel's routes."""
         if DIST.is_dir() and not any(getattr(route, "name", None) == "panel" for route in self.app.routes):
+
+            async def page() -> FileResponse:  # the app finds its page from the address
+                return FileResponse(DIST / "index.html")
+
+            for path in PAGES:
+                self.app.add_api_route(path, page, include_in_schema=False)
             self.app.mount("/", StaticFiles(directory=DIST, html=True), name="panel")
         return self.app
 

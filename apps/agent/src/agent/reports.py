@@ -3,6 +3,7 @@ tldr for the orchestrator to pass on with its link. The model writes the pages; 
 time: portrait pages like a PDF's, phone-shaped (9:16).
 """
 
+from datetime import date
 from html import escape
 
 from pydantic import BaseModel, Field
@@ -14,7 +15,8 @@ from agent.models import Instructions
 
 INSTRUCTIONS = """Write a report on the topic from the material, for a busy person reading on a phone, in pages \
 like a PDF's, each one phone screen: about 120 words, or a short table. The answer first, then what backs it up, \
-sources as links on the last page. Keep what matters; add nothing."""
+sources as links on the last page. Each page opens with a short heading; the title and tldr are on a cover, so \
+don't repeat them. Keep what matters; add nothing."""
 
 
 class Report(BaseModel):
@@ -24,11 +26,22 @@ class Report(BaseModel):
 
     @property
     def html(self) -> str:
-        pages = "".join(
-            f'<section class="page">{page}<footer>{n} / {len(self.pages)}</footer></section>'
-            for n, page in enumerate(self.pages, 1)
+        title, total = escape(self.title), len(self.pages) + 1
+        cover = (
+            f'<p class="brand">Archangel</p><p class="kind">Research report</p>'
+            f"<h1>{title}</h1>"
+            f'<div class="summary"><p class="label">In short</p><p>{escape(self.tldr)}</p></div>'
+            f'<p class="date">{date.today():%-d %B %Y}</p>'
         )
-        return PAGE.format(title=escape(self.title), pages=pages)
+        pages = [f'<section class="page cover">{cover}{_footer(1, total)}</section>'] + [
+            f'<section class="page"><p class="running">{title}</p>{page}{_footer(n, total)}</section>'
+            for n, page in enumerate(self.pages, 2)
+        ]
+        return (
+            '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            f"<title>{title}</title><style>{STYLE}</style></head><body>{''.join(pages)}</body></html>"
+        )
 
 
 class Reporter:
@@ -39,24 +52,47 @@ class Reporter:
         return (await logs.run(self._agent, f"Topic: {topic}\n\nMaterial:\n{material}")).output
 
 
-# A page is 9:16 at least, and grows rather than cut off what doesn't fit; wide tables scroll inside it.
-PAGE = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title><style>
-:root{{color-scheme:light dark;--bg:#e6e8ec;--page:#fff;--fg:#14161b;--muted:#5b6270;--line:#e3e5ea;--accent:#0b5fbe}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#000;--page:#17191e;--fg:#e8eaef;--muted:#a3aab7;--line:#2a2f38;\
---accent:#79b6ff}}}}
-*{{box-sizing:border-box}}
-body{{margin:0;padding:12px;background:var(--bg);color:var(--fg);-webkit-text-size-adjust:100%;\
-font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
-.page{{display:flex;flex-direction:column;width:min(100%,30rem);aspect-ratio:9/16;margin:0 auto 12px;\
-padding:28px 22px 16px;background:var(--page);border-radius:6px;box-shadow:0 1px 4px #0003;overflow-wrap:break-word}}
-footer{{margin-top:auto;padding-top:16px;color:var(--muted);font-size:.8rem;text-align:center}}
-h1{{font-size:1.45rem;line-height:1.25;margin:0 0 .8rem}} h2{{font-size:1.15rem;margin:0 0 .6rem}}
-h3{{font-size:1rem;margin:1rem 0 .3rem}} p{{margin:.5rem 0}} ul,ol{{margin:.5rem 0;padding-left:1.2rem}}
-li{{margin:.25rem 0}} a{{color:var(--accent);overflow-wrap:anywhere}}
-table{{display:block;overflow-x:auto;border-collapse:collapse;font-size:.88rem;margin:.6rem 0}}
-th,td{{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}}
-th{{color:var(--muted);font-weight:600}}
-</style></head><body>{pages}</body></html>
+def _footer(n: int, total: int) -> str:
+    return f"<footer><span>Archangel</span><span>{n} / {total}</span></footer>"
+
+
+# Like a printed report, shrunk to a phone, in the panel's look: black, mono, one acid accent. Portrait 9:16 pages
+# that grow rather than cut off what doesn't fit; wide tables scroll inside. System fonts only: the page may load
+# nothing.
+STYLE = """
+*{box-sizing:border-box}
+html{color-scheme:dark;-webkit-text-size-adjust:100%}
+body{margin:0;padding:16px 12px;background:#000;color:#e9e9e4;
+font:14px/1.62 ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Roboto Mono",monospace}
+::selection{background:#c6ff3d;color:#000}
+.page{display:flex;flex-direction:column;width:min(100%,30rem);aspect-ratio:9/16;margin:0 auto 16px;
+padding:24px 22px 14px;background:#070707;border:1px solid #1f1f1f;overflow-wrap:break-word;
+background-image:repeating-linear-gradient(to bottom,#ffffff05 0 1px,transparent 1px 3px)}
+.running{margin:0 0 20px;padding-bottom:8px;border-bottom:1px solid #1f1f1f;color:#8b8b84;font-size:.7rem;
+text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+footer{display:flex;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid #1f1f1f;
+color:#8b8b84;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
+h1,h2{margin:0 0 .9rem;color:#c6ff3d;font-size:1rem;line-height:1.35;text-transform:uppercase;letter-spacing:.05em}
+h1::before,h2::before{content:"> "}
+h3{margin:1.2rem 0 .3rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em}
+p{margin:.55rem 0} strong{color:#fff}
+ul,ol{margin:.55rem 0;padding-left:1.2rem} li{margin:.3rem 0} li::marker{color:#c6ff3d}
+ul{list-style:square}
+a{color:#c6ff3d;overflow-wrap:anywhere;text-decoration:underline dashed 1px;text-underline-offset:3px}
+table{display:block;overflow-x:auto;border-collapse:collapse;margin:.8rem 0;font-size:.8rem;
+font-variant-numeric:tabular-nums;border:1px solid #343434}
+th,td{padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#c6ff3d;color:#000;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}
+td{border-bottom:1px solid #1f1f1f}
+.cover{border-top:4px solid #c6ff3d}
+.brand{margin:0;color:#c6ff3d;font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.2em}
+.brand::after{content:"_";animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.kind{margin:auto 0 .8rem;color:#8b8b84;font-size:.7rem;text-transform:uppercase;letter-spacing:.14em}
+.cover h1{margin:0 0 1.6rem;color:#fff;font-size:1.85rem;line-height:1.1;letter-spacing:0}
+.cover h1::before{content:none}
+.summary{padding:12px 14px;border:1px solid #5d7a12;background:#c6ff3d0d}
+.summary .label{margin:0 0 .3rem;color:#c6ff3d;font-size:.7rem;text-transform:uppercase;letter-spacing:.14em}
+.summary p:last-child{margin:0}
+.date{margin:1.2rem 0 auto;color:#8b8b84;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
 """

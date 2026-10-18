@@ -16,8 +16,9 @@ def test_a_report_is_pages_and_a_tldr():
     assert report == Report(tldr="Dachshunds.", title="Hunting dogs", pages=["<h1>Dachshunds</h1>"])
 
 
-def test_pages_are_laid_out_as_numbered_phone_shaped_pages():
-    html = Report(tldr="", title="Dogs & cats", pages=["<p>One</p>", "<p>Two</p>"]).html
+def test_a_report_is_a_cover_then_numbered_phone_shaped_pages():
+    html = Report(tldr="Both <3", title="Dogs & cats", pages=["<p>One</p>", "<p>Two</p>"]).html
     assert "<title>Dogs &amp; cats</title>" in html
-    assert '<section class="page"><p>Two</p><footer>2 / 2</footer></section>' in html
+    assert "<h1>Dogs &amp; cats</h1>" in html and "<p>Both &lt;3</p>" in html  # the cover
+    assert "<p>Two</p><footer><span>Archangel</span><span>3 / 3</span></footer>" in html
     assert "aspect-ratio:9/16" in html

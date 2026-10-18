@@ -3,13 +3,13 @@ import { api, hideExpired, imageUrl, type Step, type Task } from "./api";
 import { useNarrow } from "./narrow";
 import { useFeed, usePoll } from "./poll";
 
-export function Tasks() {
+/** `selected`: the task in the address, /tasks/12. */
+export function Tasks({ selected, select }: { selected?: number; select: (id?: number) => void }) {
   const tasks = usePoll(api.tasks);
   const narrow = useNarrow();
-  const [selected, setSelected] = useState<number>();
   // A desktop always shows one beside the list; a phone shows the list, or the one picked from it.
   const shown = tasks?.find((t) => t.id === selected) ?? (narrow ? undefined : tasks?.[0]);
-  const back = narrow ? () => setSelected(undefined) : undefined;
+  const back = narrow ? () => select() : undefined;
 
   return (
     <>
@@ -19,7 +19,7 @@ export function Tasks() {
           {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone, or to research something.</p>}
           <ul>
             {tasks?.map((task) => (
-              <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => setSelected(task.id)}>
+              <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => select(task.id)}>
                 <div>
                   <span className="id">#{task.id}</span> <Status task={task} />
                 </div>
