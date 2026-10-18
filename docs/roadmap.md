@@ -15,7 +15,7 @@ Each milestone ships something usable and proves one idea.
 | M8 ✅ | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
 | M9 ✅ | Research | "do deep research into the best funds in 2026": a cited report a minute or two later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
-| M11 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
+| M11 | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
@@ -34,6 +34,17 @@ Each milestone ships something usable and proves one idea.
 - **Quick questions** ("what time does Tesco close?") get a plain web search (Tavily), not deep research.
 - **A page to read on the phone.** The reporter (the main model) writes what research found as a short HTML page; the owner gets its link and a tldr.
 - **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M13.
+
+## M11 requirements (connectors) (from the owner)
+
+- **Gmail, Google Calendar, Notion and Slack** first, and any other MCP server.
+- **A Connectors page** in the panel: choose a service, set it up, and sign in again when one expires.
+
+**Plan**
+- **A helper agent** does connector tasks in the background, beside the phone: one task, the connected services' tools, an answer. The orchestrator prefers it to the phone for anything connected.
+- **Read freely, ask before acting.** Tools a server marks read-only run at once; anything else (send, write, delete) pauses for the owner's approval, like a consequential tap.
+- **Notion** is Notion's own server: one sign-in. **Slack**'s own server needs the owner's internal Slack app (client ID and secret, entered once). **Gmail and Calendar**: Google's servers are invite-only, so Archangel runs workspace-mcp itself on its own Google sign-in (the owner's Google Cloud OAuth client, entered once).
+- **Expired sign-ins** show on the page as "needs sign-in"; a task that can't reach a service says so.
 
 ## M10 requirements (location) (from the owner)
 

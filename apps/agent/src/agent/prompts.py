@@ -5,7 +5,7 @@ control panel live in the store and win. An edit applies from the agent's next r
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from agent import orchestrator, reports
+from agent import helper, orchestrator, reports
 from agent.phone import guard, investigator, pilot, vision
 from agent.store import Store
 
@@ -16,6 +16,7 @@ DEFAULTS = {
     "investigator": investigator.INSTRUCTIONS,
     "vision": vision.INSTRUCTIONS,
     "reporter": reports.INSTRUCTIONS,
+    "helper": helper.INSTRUCTIONS,
 }
 
 

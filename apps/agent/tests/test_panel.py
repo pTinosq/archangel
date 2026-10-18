@@ -1,13 +1,16 @@
 import asyncio
 import json
+import tempfile
+from pathlib import Path
 
 import httpx
-from fakes import FakePilot, FakeReporter, FakeResearcher
+from fakes import FakeHelper, FakePilot, FakeReporter, FakeResearcher
 
 from agent import activity, web
 from agent.channels import panel
 from agent.channels.login import GitHub
 from agent.channels.panel import PanelChannel
+from agent.connectors import Connectors
 from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
 from agent.store import Store
@@ -20,7 +23,8 @@ class Panel:
         self.store = store
         self.prompts = Prompts(store)
         self.web = Web(github)
-        self.channel = PanelChannel(store, self.prompts, self.web)
+        self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
+        self.channel = PanelChannel(store, self.prompts, self.connectors, self.web)
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -53,7 +57,7 @@ def test_transcript_and_its_images(store):
 
 def test_tasks_steps_and_screens(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter())
+        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
         tasks.start("post hello", Address("cli", "local"))
         await tasks.idle()
 
@@ -109,7 +113,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None, Web()))
+        events = panel._events(PanelChannel(None, None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line
@@ -122,7 +126,7 @@ def test_activity_streams_as_server_sent_events():
 
 def test_research_reports_are_pages_that_run_nothing(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter())
+        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
         tasks.start("the best funds", Address("cli", "local"), "research")
         await tasks.idle()
 
@@ -135,3 +139,24 @@ def test_research_reports_are_pages_that_run_nothing(store):
     assert "<p>All about the best funds.</p>" in page.text
     assert page.headers["content-security-policy"].startswith("default-src 'none'")
     assert panel.call("GET", "/reports/2").status_code == 404
+
+
+def test_connectors_are_added_and_listed_without_their_secrets(store):
+    panel = Panel(store)
+    added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": {"client_id": "id"}})
+    assert added.status_code == 400  # no client secret
+
+    settings = {"client_id": "id", "client_secret": "secret"}
+    added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": settings})
+    assert added.json()["signIn"].startswith("https://accounts.google.com/")
+
+    listed = panel.call("GET", "/api/connectors").json()
+    assert listed["connectors"] == [
+        {"name": "google", "kind": "google", "title": "Gmail and Calendar", "account": "", "signedIn": False}
+    ]
+    assert "http://localhost/connectors/callback" in listed["services"][0]["help"]
+    assert "secret" not in json.dumps(listed["connectors"])
+
+    assert "Not connected" in panel.call("GET", "/connectors/callback?state=unknown&code=x").text
+    panel.call("DELETE", "/api/connectors/google")
+    assert panel.call("GET", "/api/connectors").json()["connectors"] == []

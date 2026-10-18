@@ -15,9 +15,10 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from agent.history import forget_old_screenshots
 from agent.messages import Image
 from agent.phone import pilot as pilot_module
-from agent.phone.pilot import Answer, Kit, Outcome, Pilot
+from agent.phone.pilot import Kit, Pilot
 from agent.phone.relay import PhoneError
 from agent.phone.vision import Box
+from agent.runs import Answer, Outcome
 
 SCREEN = Image(b"jpg", "image/jpeg")
 

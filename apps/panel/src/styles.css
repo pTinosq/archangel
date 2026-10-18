@@ -56,6 +56,7 @@ main { flex: 1; display: grid; min-height: 0; }
 main.tasks { grid-template-columns: 260px 1fr 340px; }
 main.prompts { grid-template-columns: 220px 1fr 340px; }
 main.cockpit { grid-template-columns: 1fr 320px 280px; }
+main.connectors { grid-template-columns: 1fr 1fr 340px; }
 main > section { padding: 16px; overflow-y: auto; min-height: 0; border-right: 1px solid var(--line); }
 main > section:last-child { border-right: none; }
 
@@ -106,6 +107,18 @@ main > section:last-child { border-right: none; }
 .line img { max-width: 100%; max-height: 360px; margin-top: 8px; border-radius: 8px; display: block; }
 .chat form { display: flex; gap: 8px; margin-top: 12px; }
 .chat input { flex: 1; min-width: 0; }
+
+.connector-list li {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+  padding: 12px; margin-bottom: 8px; background: var(--panel); border-radius: 8px;
+}
+.connector-list li .actions { grid-column: 1 / -1; }
+.connector-list .quiet, .connector-list li .quiet { font-size: 12px; }
+.services { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.services button.selected { border-color: var(--accent); }
+.add-connector form { display: flex; flex-direction: column; gap: 12px; max-width: 420px; }
+.add-connector label { display: flex; flex-direction: column; gap: 4px; color: var(--quiet); font-size: 12px; }
+.add-connector .help { margin: 0; overflow-wrap: anywhere; }
 
 .editor { display: flex; flex-direction: column; gap: 12px; }
 .editor textarea { flex: 1; min-height: 300px; resize: none; font: 13px/1.5 ui-monospace, Menlo, monospace; }
@@ -188,7 +201,8 @@ main > section:last-child { border-right: none; }
   button { min-height: 44px; padding: 8px 16px; }
   input, textarea { font-size: 16px; min-height: 44px; }
 
-  main, main.tasks, main.prompts, main.cockpit { display: flex; flex-direction: column; }
+  main, main.tasks, main.prompts, main.cockpit, main.connectors { display: flex; flex-direction: column; }
+  .connector-list, .add-connector { flex: none !important; }
   main > section {
     flex: 1; border-right: none; padding: 12px;
     padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));

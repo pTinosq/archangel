@@ -1,5 +1,5 @@
-"""The agent the owner talks to. It manages work rather than doing it: starts phone tasks and research, searches
-the web for quick answers, relays tasks' questions, decides what to do when they fail, and keeps the owner informed on whichever channel suits.
+"""The agent the owner talks to. It manages work rather than doing it: starts phone tasks, research and tasks in the
+owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to do when they fail, and keeps the owner informed on whichever channel suits.
 
 One conversation whatever the channel. Events (owner messages, task updates) are handled one at a time, in order.
 """
@@ -14,13 +14,14 @@ from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
 from agent import activity, history, logs
+from agent.connectors import Connectors
 from agent.events import Event
 from agent.gateway import Gateway
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
-from agent.phone.pilot import Answer
 from agent.phone.relay import PhoneError
 from agent.research import Researcher
+from agent.runs import Answer
 from agent.store import Kind, Status, Store
 from agent.tasks import Tasks
 
@@ -39,12 +40,14 @@ class Orchestrator:
         tasks: Tasks,
         gateway: Gateway,
         researcher: Researcher,
+        connectors: Connectors,
         apps: Callable[[], Awaitable[dict[str, str]]],
         instructions: Instructions = INSTRUCTIONS,
     ):
         self._store = store
         self._tasks = tasks
         self._gateway = gateway
+        self._connectors = connectors
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
         tasks.notify = self.handle
@@ -80,6 +83,13 @@ class Orchestrator:
             if deep and not ctx.deps.from_owner:
                 return "Only the owner can agree to deep research's cost. Ask them."
             return start(ctx, question, report_via, "deep research" if deep else "research")
+
+        @self._agent.tool
+        async def use_connectors(ctx: RunContext[Event], goal: str, report_via: str | None = None) -> str:
+            """Start a task in the owner's connected services (listed above) in the background, e.g. "Summarise
+            today's unread emails". Quicker and surer than the phone, and runs beside it. `report_via` as for
+            start_task."""
+            return start(ctx, goal, report_via, "connectors")
 
         def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:
             report_to = ctx.deps.reply_to
@@ -163,6 +173,7 @@ class Orchestrator:
 
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]
+        connected = [c.title + (f" ({c.account})" if c.account else "") for c in self._connectors.connected()]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [
             f"#{t.id} [{t.status}] {'' if t.kind == 'phone' else t.kind + ': '}{t.goal}"
@@ -172,6 +183,7 @@ class Orchestrator:
         return "\n".join(
             [
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
+                f"Connected services: {', '.join(connected) or 'none (added on the panel, under Connectors)'}.",
                 "Tasks when this arrived (open, then recently finished):"
                 if lines
                 else "Tasks when this arrived: none.",

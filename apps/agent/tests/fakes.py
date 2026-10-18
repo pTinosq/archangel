@@ -5,9 +5,10 @@ import asyncio
 import pydantic_ai
 
 from agent.channels import Channel, Deliver
+from agent.connectors import Connector
 from agent.messages import Address, Image, Message, Text
-from agent.phone.pilot import Outcome
 from agent.reports import Report
+from agent.runs import Outcome
 
 SCREEN = Image(b"jpg", "image/jpeg")
 
@@ -70,3 +71,15 @@ class FakeReporter:
 
 async def apps() -> dict[str, str]:
     return {"WhatsApp": "com.whatsapp", "Michelin Guide": "com.michelin"}
+
+
+class FakeHelper(FakePilot):
+    """To tasks, the helper is a pilot without the phone."""
+
+
+class FakeConnectors:
+    def __init__(self, *connected: Connector):
+        self._connected = list(connected)
+
+    def connected(self) -> list[Connector]:
+        return self._connected

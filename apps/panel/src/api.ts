@@ -3,7 +3,7 @@
 export type Task = {
   id: number;
   goal: string;
-  kind: "phone" | "research" | "deep research";
+  kind: "phone" | "research" | "deep research" | "connectors";
   /** A research report's web page, at /reports/{id}. */
   page: boolean;
   status: string;
@@ -21,6 +21,11 @@ export type Line = {
   images: string[];
 };
 export type Prompt = { name: string; text: string; default: string; edited: boolean };
+/** One the Connectors page offers: what the owner enters to set it up, and where to get it. */
+export type Service = { kind: string; title: string; needs: string[]; help: string };
+export type Connector = { name: string; kind: string; title: string; account: string; signedIn: boolean };
+/** Where to send the owner to sign in; null if they still are. */
+type SignIn = { signIn: string | null };
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -29,7 +34,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 401) location.reload(); // signed out: the page load goes to sign in
-  if (!response.ok) throw new Error(`${method} ${path}: ${response.status}`);
+  if (!response.ok) {
+    const detail = await response.json().then((body) => body.detail, () => null);
+    throw new Error(typeof detail === "string" ? detail : `${method} ${path}: ${response.status}`);
+  }
   return response.json();
 }
 
@@ -42,6 +50,11 @@ export const api = {
   prompts: () => call<Prompt[]>("GET", "/prompts"),
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),
   resetPrompt: (name: string) => call<Prompt>("DELETE", `/prompts/${name}`),
+  connectors: () => call<{ services: Service[]; connectors: Connector[] }>("GET", "/connectors"),
+  addConnector: (kind: string, settings: Record<string, string>) =>
+    call<SignIn>("POST", "/connectors", { kind, settings }),
+  signIn: (name: string) => call<SignIn>("POST", `/connectors/${name}/sign-in`),
+  removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
 };
 
 /** Images expire after a few days: `hideExpired` as `onError` shows nothing rather than a broken icon. */

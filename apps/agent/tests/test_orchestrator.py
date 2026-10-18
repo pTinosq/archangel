@@ -1,7 +1,16 @@
 import asyncio
 
 import pydantic_ai
-from fakes import SCREEN, FakeChannel, FakePilot, FakeReporter, FakeResearcher, apps
+from fakes import (
+    SCREEN,
+    FakeChannel,
+    FakeConnectors,
+    FakeHelper,
+    FakePilot,
+    FakeReporter,
+    FakeResearcher,
+    apps,
+)
 from pydantic_ai import (
     BinaryContent,
     ModelMessage,
@@ -17,7 +26,7 @@ from agent.events import Notice, OwnerMessage
 from agent.gateway import Gateway
 from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
-from agent.phone.pilot import Outcome
+from agent.runs import Outcome
 from agent.tasks import Tasks
 
 
@@ -27,7 +36,7 @@ class Owner:
     def __init__(self, store, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
         self.requests: list[list[ModelMessage]] = []
         self.pilot = FakePilot(outcome)
-        self.tasks = Tasks(store, self.pilot, FakeResearcher(), FakeReporter())
+        self.tasks = Tasks(store, self.pilot, FakeResearcher(), FakeReporter(), FakeHelper())
         self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
         self.store = store
 
@@ -36,7 +45,7 @@ class Owner:
             return respond(messages, info)
 
         gateway = Gateway([self.cli, self.email], store)
-        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), apps)
+        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), FakeConnectors(), apps)
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
         async def scenario():

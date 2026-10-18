@@ -1,14 +1,28 @@
 import asyncio
 
 import pytest
-from fakes import FakeChannel, FakePilot, FakeReporter, FakeResearcher, apps
-from pydantic_ai import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from fakes import (
+    FakeChannel,
+    FakeConnectors,
+    FakeHelper,
+    FakePilot,
+    FakeReporter,
+    FakeResearcher,
+    apps,
+)
+from pydantic_ai import (
+    ModelResponse,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.function import FunctionModel
 
 from agent import activity
 from agent.gateway import Gateway
 from agent.orchestrator import Orchestrator
-from agent.phone.pilot import Outcome
+from agent.runs import Outcome
 from agent.tasks import Tasks
 
 
@@ -96,8 +110,8 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
 
     cli = FakeChannel("cli", ["open whatsapp"])
     gateway = Gateway([cli], store)
-    tasks = Tasks(store, FakePilot(Outcome("done", "WhatsApp is open.")), FakeResearcher(), FakeReporter())
-    orchestrator = Orchestrator(FunctionModel(model), store, tasks, gateway, FakeResearcher(), apps)
+    tasks = Tasks(store, FakePilot(Outcome("done", "WhatsApp is open.")), FakeResearcher(), FakeReporter(), FakeHelper())
+    orchestrator = Orchestrator(FunctionModel(model), store, tasks, gateway, FakeResearcher(), FakeConnectors(), apps)
 
     async def main():
         await gateway.run(orchestrator.handle)

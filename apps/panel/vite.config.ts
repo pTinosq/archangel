@@ -4,5 +4,5 @@ import { defineConfig } from "vite";
 // The agent serves the API; Vite serves the app and forwards /api, keeping one origin.
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173, proxy: { "/api": "http://127.0.0.1:8765", "/reports": "http://127.0.0.1:8765" } },
+  server: { port: 5173, proxy: { "/api": "http://127.0.0.1:8765", "/reports": "http://127.0.0.1:8765", "/connectors": "http://127.0.0.1:8765" } },
 });

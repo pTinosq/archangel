@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -15,11 +15,9 @@ from pydantic_ai import (
     ApprovalRequired,
     CallDeferred,
     DeferredToolRequests,
-    DeferredToolResults,
     ModelSettings,
     RunContext,
     Tool,
-    ToolDenied,
     ToolOutput,
     ToolReturn,
     UsageLimitExceeded,
@@ -36,6 +34,7 @@ from agent.phone.guard import Guard
 from agent.phone.investigator import Investigator
 from agent.phone.relay import Phone, PhoneError
 from agent.phone.vision import Vision
+from agent.runs import Answer, Outcome, Record, answered, question, results
 
 log = logging.getLogger(__name__)
 
@@ -57,24 +56,6 @@ UNLOCK = (0.5, 0.85, 0.5, 0.25)  # swipe up from below the lock icon, clear of t
 
 
 @dataclass(frozen=True)
-class Answer:
-    """The owner's reply to a paused task: free text, and for an approval, yes or no."""
-
-    text: str
-    approved: bool = False
-
-
-@dataclass(frozen=True)
-class Outcome:
-    status: Literal["done", "gave_up", "stuck", "failed", "needs_approval", "needs_answer"]
-    report: str
-    """What happened; when it needs the owner, what they're being asked."""
-    run: pydantic_ai.Conversation | None = None
-    """Set when it needs the owner: pass back to `Pilot.run` with their answer to continue."""
-    screen: Image | None = None
-
-
-@dataclass(frozen=True)
 class Kit:
     """What a pilot works with: the phone, and the models that find things on it, keep it safe and unstick it."""
 
@@ -82,10 +63,6 @@ class Kit:
     vision: Vision
     guard: Guard
     investigator: Investigator
-
-
-Record = Callable[[str, Image | None], None]
-"""Hears each step of a run as it happens, with the screen it left, for watching the task live."""
 
 
 @dataclass
@@ -205,9 +182,9 @@ class Pilot:
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             screen = await session.shoot()
-            record(f"Continuing. {_answered(answer)}" if paused else "Started.", screen)
+            record(f"Continuing. {answered(answer)}" if paused else "Started.", screen)
             if paused:
-                prompt, resume = None, {"conversation": paused, "deferred_tool_results": _results(paused, answer)}
+                prompt, resume = None, {"conversation": paused, "deferred_tool_results": results(paused, answer)}
             else:
                 prompt, resume = [goal, content(screen)], {}
             result = await logs.run(
@@ -226,9 +203,9 @@ class Pilot:
 
         output = result.output
         if isinstance(output, DeferredToolRequests):
-            log.info("Waiting on the owner: %s", _question(output))
+            log.info("Waiting on the owner: %s", question(output))
             status = "needs_approval" if output.approvals else "needs_answer"
-            return Outcome(status, _question(output), result.conversation, session.screen)
+            return Outcome(status, question(output), result.conversation, session.screen)
         log.debug("Phone task result: %s", output)
         if output.finished and not output.leave_open:
             with contextlib.suppress(PhoneError):  # tidying up; the task's done either way
@@ -241,28 +218,6 @@ async def _stuck(session: _Session, report: str) -> Outcome:
     if diagnosis := await session.diagnose():
         report += f"\nWhat seems to be in the way: {diagnosis}"
     return Outcome("stuck", report, screen=session.screen)
-
-
-def _answered(answer: Answer | None) -> str:
-    if not answer:
-        return ""
-    return ("Approved" if answer.approved else "Owner replied") + (f": {answer.text}" if answer.text else ".")
-
-
-def _question(requests: DeferredToolRequests) -> str:
-    asks = [f"Approve: {requests.metadata[call.tool_call_id]['action']}?" for call in requests.approvals]
-    asks += [requests.metadata[call.tool_call_id]["question"] for call in requests.calls]
-    return "\n".join(asks)
-
-
-def _results(paused: pydantic_ai.Conversation, answer: Answer | None) -> DeferredToolResults:
-    requests = paused.deferred_tool_requests or DeferredToolRequests()
-    answer = answer or Answer("")
-    no = ToolDenied(f"The owner said no: {answer.text}" if answer.text else "The owner said no.")
-    return requests.build_results(
-        approvals={call.tool_call_id: answer.approved or no for call in requests.approvals},
-        calls={call.tool_call_id: f"The owner replied: {answer.text}" for call in requests.calls},
-    )
 
 
 async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:

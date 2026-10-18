@@ -1,5 +1,5 @@
 """Everything that must survive a restart: the one conversation with the owner, the transcript across channels,
-every task and its steps, and edited prompts. SQLite, one file in data/.
+every task and its steps, edited prompts, and connectors with their sign-ins. SQLite, one file in data/.
 
 The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
 Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT: they're most of the bytes
@@ -28,7 +28,7 @@ DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
 
-Kind = Literal["phone", "research", "deep research"]
+Kind = Literal["phone", "research", "deep research", "connectors"]
 
 
 class Status(StrEnum):
@@ -62,7 +62,8 @@ class Task:
     run: pydantic_ai.Conversation | None = None
     """The sub-agent's history, kept so a paused task resumes where it stopped."""
     kind: Kind = "phone"
-    """Phone tasks take turns on the phone; research (deep or not) runs beside them, on the web."""
+    """Phone tasks take turns on the phone; the rest run beside them: research (deep or not) on the web, and
+    connectors in the owner's online services."""
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS steps (id INTEGER PRIMARY KEY, task INTEGER, time REAL, text TEXT, screen TEXT);
             CREATE INDEX IF NOT EXISTS steps_by_task ON steps (task);
             CREATE TABLE IF NOT EXISTS prompts (name TEXT PRIMARY KEY, text TEXT);
+            CREATE TABLE IF NOT EXISTS connectors (name TEXT PRIMARY KEY, data TEXT);
             """
         )
         if "kind" not in {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}:  # added in M9
@@ -244,6 +246,20 @@ class Store:
                 self._db.execute("DELETE FROM prompts WHERE name = ?", (name,))
             else:
                 self._db.execute("INSERT OR REPLACE INTO prompts VALUES (?, ?)", (name, text))
+
+    # Connectors
+
+    def connectors(self) -> dict[str, dict]:
+        """Each connector's settings and sign-in, by name (shaped by `Connectors`)."""
+        return {name: json.loads(data) for name, data in self._db.execute("SELECT name, data FROM connectors")}
+
+    def save_connector(self, name: str, data: dict | None) -> None:
+        """None removes it."""
+        with self._db:
+            if data is None:
+                self._db.execute("DELETE FROM connectors WHERE name = ?", (name,))
+            else:
+                self._db.execute("INSERT OR REPLACE INTO connectors VALUES (?, ?)", (name, json.dumps(data)))
 
 
 _TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind"

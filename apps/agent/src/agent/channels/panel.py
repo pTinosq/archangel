@@ -2,6 +2,9 @@
 tasks and their steps, and the prompts. The React app in apps/panel polls it, and watches live activity as a
 stream (server-sent events: one way, so nothing can be commanded through it).
 
+The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
+back to /connectors/callback.
+
 Its buttons (approve, decline, cancel) send ordinary owner messages, so every decision goes through the one
 conversation and the orchestrator knows about it.
 """
@@ -11,6 +14,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import asdict
+from html import escape
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -18,6 +22,7 @@ from pydantic import BaseModel
 
 from agent import activity
 from agent.channels import Channel, Deliver
+from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.store import Line, Step, Store, Task
@@ -34,10 +39,11 @@ class PanelChannel(Channel):
     shows = "text and pictures"
     owner = Address(name, "owner")
 
-    def __init__(self, store: Store, prompts: Prompts, web: Web):
+    def __init__(self, store: Store, prompts: Prompts, connectors: Connectors, web: Web):
         self._deliver: Deliver | None = None
         self._web = web
         _routes(web.app, self, store, prompts)
+        _connector_routes(web.app, connectors)
 
     async def start(self, deliver: Deliver) -> None:
         self._deliver = deliver
@@ -57,6 +63,11 @@ class PanelChannel(Channel):
 
 class Said(BaseModel):
     text: str
+
+
+class NewConnector(BaseModel):
+    kind: Kind
+    settings: dict[str, str] = {}
 
 
 def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts) -> None:
@@ -110,6 +121,46 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
         return _prompt(_edit(prompts, name, None))
 
 
+def _connector_routes(app: FastAPI, connectors: Connectors) -> None:
+    @app.get("/api/connectors")
+    async def listed() -> dict:
+        return {"services": connectors.services(), "connectors": [_connector(c) for c in connectors.all()]}
+
+    @app.post("/api/connectors")
+    async def add(new: NewConnector) -> dict:
+        try:
+            connector = connectors.add(new.kind, new.settings)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return await sign_in(connector.name)
+
+    @app.post("/api/connectors/{name}/sign-in")
+    async def sign_in(name: str) -> dict:
+        """Where to send the owner to sign in; none if they still are."""
+        try:
+            return {"signIn": await connectors.sign_in(name)}
+        except KeyError as error:
+            raise HTTPException(404, f"No connector called {name!r}") from error
+        except Exception as error:  # the service: down, or refusing
+            log.exception("Couldn't start signing in to %s", name)
+            raise HTTPException(502, f"Couldn't reach it: {error}") from error
+
+    @app.delete("/api/connectors/{name}")
+    async def remove(name: str) -> None:
+        connectors.remove(name)
+
+    @app.get("/connectors/callback")
+    async def callback(state: str = "", code: str = "", error: str = "") -> HTMLResponse:
+        if error or not code:
+            return _done(f"Not connected: {error or 'no sign-in'}.", 400)
+        try:
+            connector = await connectors.finish(state, code)
+        except Exception as failure:
+            log.exception("Couldn't finish signing in")
+            return _done(f"Not connected: {failure}", 400)
+        return _done(f"{connector.title} is connected.")
+
+
 async def _events(channel: PanelChannel) -> AsyncIterator[str]:
     # Ends itself on shutdown: the server waits for open responses, and this one would never finish.
     async with aclosing(activity.listen(idle=HEARTBEAT_SECONDS)) as notices:
@@ -130,6 +181,24 @@ def _task(task: Task, page: bool) -> dict:
         "report": task.report,
         "reportTo": task.report_to.channel,
     }
+
+
+def _connector(connector: Connector) -> dict:  # never the secrets or tokens
+    return {
+        "name": connector.name,
+        "kind": connector.kind,
+        "title": connector.title,
+        "account": connector.account,
+        "signedIn": connector.signed_in,
+    }
+
+
+def _done(text: str, status: int = 200) -> HTMLResponse:
+    return HTMLResponse(
+        '<!DOCTYPE html><meta name="viewport" content="width=device-width, initial-scale=1">'
+        f'<p style="font:16px system-ui;margin:2rem">{escape(text)} <a href="/#connectors">Back to Archangel</a></p>',
+        status,
+    )
 
 
 def _prompt(prompt: Prompt) -> dict:

@@ -14,6 +14,8 @@ COPY apps/agent/pyproject.toml apps/agent/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY apps/agent ./
 RUN uv sync --frozen --no-dev
+# The Google connector (Gmail and Calendar) runs as its own process; fetched now rather than on first use.
+RUN uvx workspace-mcp@2.1.0 --help > /dev/null
 COPY --from=panel /app/apps/panel/dist /app/apps/panel/dist
 # data/ is the volume: the store and its images outlive deploys.
 CMD ["uv", "run", "--no-sync", "python", "-m", "agent"]

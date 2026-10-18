@@ -11,7 +11,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic_ai import Agent, AgentRunResult, RetryPromptPart, TextPart, ToolCallPart, ToolReturnPart
+from pydantic_ai import (
+    Agent,
+    AgentRunResult,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
 
 from agent import activity
 from agent.models import short_name

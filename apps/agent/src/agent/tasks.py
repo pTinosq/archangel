@@ -1,7 +1,8 @@
-"""Tasks running in the background, so the conversation carries on while they work: on the phone, or researching.
+"""Tasks running in the background, so the conversation carries on while they work: on the phone, researching, or in
+the owner's online services (connectors).
 
-One phone, so one phone task drives it at a time; the rest queue. Research doesn't touch the phone, so runs beside;
-the reporter writes it up as a page. Every change is saved, each step the pilot reports
+One phone, so one phone task drives it at a time; the rest queue. Research and connectors don't touch the phone, so
+run beside; the reporter writes research up as a page. Every change is saved, each step the pilot reports
 is recorded for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
 """
 
@@ -14,9 +15,11 @@ import pydantic_ai
 from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
-from agent.phone.pilot import Answer, Outcome, Pilot, Record
+from agent.phone.pilot import Pilot
+from agent.helper import Helper
 from agent.reports import Reporter
 from agent.research import Researcher
+from agent.runs import Answer, Outcome, Record
 from agent.store import Kind, Status, Store, Task
 
 log = logging.getLogger(__name__)
@@ -32,13 +35,16 @@ _STATUSES = {
 
 
 class Tasks:
-    def __init__(self, store: Store, pilot: Pilot, researcher: Researcher, reporter: Reporter, site: str = ""):
+    def __init__(
+        self, store: Store, pilot: Pilot, researcher: Researcher, reporter: Reporter, helper: Helper, site: str = ""
+    ):
         """`site`: where Archangel's web server (and the panel) is, for links to reports."""
         self._site = site
         self._reporter = reporter
         self._store = store
         self._pilot = pilot
         self._researcher = researcher
+        self._helper = helper
         self._phone = asyncio.Lock()
         self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
@@ -57,10 +63,10 @@ class Tasks:
             inbox.append(answer.text)
             return f"Passed on to task #{id}; it sees it on its next step."
         task = self._store.task(id)
-        if task and task.kind != "phone" and task.status.open:
-            return f"Task #{id} is research: it can't be told anything. Cancel it and start again to change it."
-        if not task or not task.status.waiting:
+        if not task or not task.status.open:
             return f"Task #{id} isn't open."
+        if not task.status.waiting:  # only the pilot reads what it's told as it goes
+            return f"Task #{id} ({task.kind}) can't be told anything while it runs. Cancel it and start again to change it."
         paused, task.run = task.run, None
         task.status = Status.QUEUED
         self._store.save_task(task)
@@ -104,7 +110,12 @@ class Tasks:
 
     async def _run(self, task: Task, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> None:
         try:
-            if task.kind != "phone":
+            if task.kind == "connectors":
+                self._started(task)
+                with activity.call("helper", "agent", task.goal) as reply:
+                    outcome = await self._helper.run(task.goal, self._recorder(task), paused, answer)
+                    reply(f"{outcome.status}: {outcome.report}")
+            elif task.kind != "phone":
                 outcome = await self._research(task)
             else:
                 async with self._phone:

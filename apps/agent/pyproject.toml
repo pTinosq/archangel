@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
     "httpx>=0.28.1",
-    "pydantic-ai-slim[openrouter]>=2.57",
+    "pydantic-ai-slim[mcp,openrouter]>=2.57",
     "uvicorn>=0.32",
     "websockets>=17.2",
 ]
