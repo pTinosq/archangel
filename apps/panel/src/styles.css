@@ -142,6 +142,7 @@ main > section:last-child { border-right: none; }
 .part.agent { border-color: #3a4a7a; }
 .part.model { border-color: #5b3f7a; }
 .part.channel, .part.device { border-color: #2f5a4a; }
+.part.service { border-color: #7a5a2f; }
 .part.busy { border-color: var(--warn); box-shadow: 0 0 14px -2px var(--warn); }
 .part.flash { border-color: var(--accent); }
 .part.here { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.35); }

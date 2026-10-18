@@ -33,6 +33,7 @@ from pydantic_ai import ApprovalRequired, RunContext
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset, ToolsetTool, WrapperToolset
 
+from agent import activity
 from agent.store import Store
 
 log = logging.getLogger(__name__)
@@ -250,7 +251,8 @@ class Connectors:
         )
         response.raise_for_status()
         connector.tokens = response.json()
-        user = await self._http.get(GOOGLE_USER, headers={"Authorization": f"Bearer {connector.tokens['access_token']}"})
+        bearer = {"Authorization": f"Bearer {connector.tokens['access_token']}"}
+        user = await self._http.get(GOOGLE_USER, headers=bearer)
         user.raise_for_status()
         connector.account = user.json()["email"]
 
@@ -385,12 +387,16 @@ class _Guarded(WrapperToolset):
         return {} if self._failed else await super().get_tools(ctx)
 
     async def call_tool(self, name: str, tool_args: dict[str, Any], ctx: RunContext, tool: ToolsetTool) -> Any:
-        action = f"{self._connector.describe()}: {name} {json.dumps(tool_args, ensure_ascii=False)}"
+        call = f"{name} {json.dumps(tool_args, ensure_ascii=False)}"
+        action = f"{self._connector.describe()}: {call}"
         annotations = (tool.tool_def.metadata or {}).get("annotations") or {}
         if not annotations.get("readOnlyHint") and not ctx.tool_call_approved:
             raise ApprovalRequired(metadata={"action": action})
         self._mark(action)
-        return await super().call_tool(name, tool_args, ctx, tool)
+        with activity.call(self._connector.name, "service", call) as reply:  # for the cockpit
+            result = await super().call_tool(name, tool_args, ctx, tool)
+            reply(result)
+        return result
 
 
 def _connector(data: dict) -> Connector:

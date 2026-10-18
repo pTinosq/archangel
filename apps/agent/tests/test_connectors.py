@@ -8,6 +8,7 @@ from pydantic_ai import ModelResponse, TextPart, Tool, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.toolsets import FunctionToolset
 
+from agent import activity
 from agent.connectors import GOOGLE_TOKEN, GOOGLE_USER, Connector, Connectors, _Guarded
 from agent.helper import Helper
 from agent.runs import Answer
@@ -124,6 +125,8 @@ def test_read_only_tools_run_freely():
     outcome = run(Helper(scripted(("notion_search", {"query": "notes"})), Notion()), steps)
     assert (outcome.status, outcome.report) == ("done", "Found notes.")
     assert steps == ["Started.", 'Notion: search {"query": "notes"}']
+    calls = [(n.source, n.target, n.dir, n.target_role) for n in activity._recent if n.kind == "service"]
+    assert calls == [("helper", "notion", "tx", "service"), ("notion", "helper", "rx", "agent")]  # for the cockpit
 
 
 def test_anything_else_waits_for_the_owner_and_runs_once_approved():
