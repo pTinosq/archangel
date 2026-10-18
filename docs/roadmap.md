@@ -15,7 +15,7 @@ Each milestone ships something usable and proves one idea.
 | M8 ✅ | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
 | M9 ✅ | Research | "do deep research into the best funds in 2026": a cited report a minute or two later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
-| M11 | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
+| M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
