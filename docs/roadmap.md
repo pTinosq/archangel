@@ -12,7 +12,7 @@ Each milestone ships something usable and proves one idea.
 | M5 ✅ | Control panel | watch tasks, runs and screenshots live in a local web app; chat from it; edit prompts | panel as a channel and a window onto the store |
 | M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
 | M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
-| M8 | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
+| M8 ✅ | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
 | M9 | Research | "do deep research into the best funds in 2026": a cited report 5–10 minutes later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
 | M11 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
@@ -46,10 +46,10 @@ Each milestone ships something usable and proves one idea.
 - **Check it took.** Some apps read Wi-Fi and cell location too; the pilot checks the results look local before trusting them.
 - **Later, if the link gets tedious:** always-on Google Maps location sharing with the home phone's account.
 
-## M8 (in progress)
+## M8 (done)
 
 - **SMS (done, live):** `channels/twilio.py`. Twilio posts the owner's texts to `/twilio/sms`; each is checked against Twilio's signature, and other numbers are ignored. Replies go by Twilio's API. Screenshots are a link to the panel (UK numbers can't send pictures). `web.py` is now the one server every HTTP channel adds routes to.
-- **Voice (next):** ConversationRelay. Twilio does speech and turn-taking; Archangel trades text over a WebSocket. With no call live, it rings the owner. Caller ID is trusted (the owner's choice).
+- **Voice (done, live):** ConversationRelay. Twilio does speech and turn-taking; Archangel trades text over a WebSocket. Quick things are done while you wait; it rings back only when asked, and a voicemail gets the message after the beep, then the orchestrator decides what to text. On a call, screenshots are texted as a link. Caller ID is trusted (the owner's choice).
 
 ## M7 (done)
 
@@ -118,7 +118,7 @@ The owner also tests across channels and reports changes.
 ## M4 (done)
 
 - **Locator fallback:** Jev first; if it can't find the target or fails, Luna (`openai/gpt-6-luna`) looks at the same screenshot.
-- **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too.
+- **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too. (Since M8: no loop rules; the pilot calls `second_opinion` when it judges it's going in circles, with 120 steps only as a backstop.)
 - **Still open:** a cheap text model (DeepSeek) for the orchestrator. DeepSeek can't see images, and the orchestrator gets approval screenshots, so it needs them stripped first.
 
 ## M5 (done)
