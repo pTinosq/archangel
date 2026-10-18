@@ -57,6 +57,11 @@ def port() -> int:
     return int(os.environ.get("PORT", DEFAULT_PORT))
 
 
+def tavily_api_key() -> str | None:
+    """For quick web searches. None: deep research only."""
+    return os.environ.get("TAVILY_API_KEY") or None
+
+
 def openrouter_api_key() -> str:
     return _required("OPENROUTER_API_KEY")
 

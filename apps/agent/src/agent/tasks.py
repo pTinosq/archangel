@@ -1,6 +1,6 @@
-"""Phone tasks running in the background, so the conversation carries on while the phone works.
+"""Tasks running in the background, so the conversation carries on while they work: on the phone, or researching.
 
-One phone, so one task drives it at a time; the rest queue. Every change is saved, each step the pilot reports
+One phone, so one phone task drives it at a time; the rest queue. Research doesn't touch the phone, so runs beside. Every change is saved, each step the pilot reports
 is recorded for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
 """
 
@@ -13,8 +13,9 @@ import pydantic_ai
 from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
-from agent.phone.pilot import Answer, Pilot, Record
-from agent.store import Status, Store, Task
+from agent.phone.pilot import Answer, Outcome, Pilot, Record
+from agent.research import Researcher
+from agent.store import Kind, Status, Store, Task
 
 log = logging.getLogger(__name__)
 
@@ -29,18 +30,21 @@ _STATUSES = {
 
 
 class Tasks:
-    def __init__(self, store: Store, pilot: Pilot):
+    def __init__(self, store: Store, pilot: Pilot, researcher: Researcher, site: str = ""):
+        """`site`: where Archangel's web server is, for links to research reports."""
+        self._site = site
         self._store = store
         self._pilot = pilot
+        self._researcher = researcher
         self._phone = asyncio.Lock()
         self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
-    def start(self, goal: str, report_to: Address) -> Task:
-        task = self._store.add_task(goal, report_to)
-        log.info("Task #%d: %s", task.id, goal)
+    def start(self, goal: str, report_to: Address, kind: Kind = "phone") -> Task:
+        task = self._store.add_task(goal, report_to, kind)
+        log.info("Task #%d (%s): %s", task.id, kind, goal)
         self._launch(task)
         return task
 
@@ -50,6 +54,8 @@ class Tasks:
             inbox.append(answer.text)
             return f"Passed on to task #{id}; it sees it on its next step."
         task = self._store.task(id)
+        if task and task.kind == "research" and task.status.open:
+            return f"Task #{id} is research: it can't be told anything. Cancel it and start again to change it."
         if not task or not task.status.waiting:
             return f"Task #{id} isn't open."
         paused, task.run = task.run, None
@@ -87,28 +93,31 @@ class Tasks:
 
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
         activity.hop("tasks", "task", f"#{task.id} {'continue' if paused else 'start'}: {task.goal}")
-        self._inboxes[task.id] = []
+        if task.kind == "phone":
+            self._inboxes[task.id] = []
         self._running[task.id] = asyncio.create_task(
             self._run(task, paused, answer), context=activity.in_task(task.id, "tasks")
         )
 
     async def _run(self, task: Task, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> None:
         try:
-            async with self._phone:
-                task.status = Status.RUNNING
-                self._store.save_task(task)
-                with activity.call("pilot", "agent", task.goal) as reply:
-                    outcome = await self._pilot.run(
-                        task.goal, self._recorder(task), paused, answer, inbox=self._inboxes[task.id]
-                    )
-                    reply(f"{outcome.status}: {outcome.report}")
+            if task.kind == "research":
+                outcome = await self._research(task)
+            else:
+                async with self._phone:
+                    self._started(task)
+                    with activity.call("pilot", "agent", task.goal) as reply:
+                        outcome = await self._pilot.run(
+                            task.goal, self._recorder(task), paused, answer, inbox=self._inboxes[task.id]
+                        )
+                        reply(f"{outcome.status}: {outcome.report}")
         except asyncio.CancelledError:
             log.info("Task #%d cancelled", task.id)
             self._settle(task, Status.CANCELLED, "Cancelled while running.")
             return
         finally:
             del self._running[task.id]
-            del self._inboxes[task.id]
+            self._inboxes.pop(task.id, None)
         task.run = outcome.run
         task.report_to = self._store.task(task.id).report_to  # the owner may have asked for it elsewhere meanwhile
         self._settle(task, _STATUSES[outcome.status], outcome.report)
@@ -118,6 +127,26 @@ class Tasks:
             update = asyncio.create_task(self.notify(TaskUpdate(task, outcome.screen)))
             self._updates.add(update)
             update.add_done_callback(self._updates.discard)
+
+    async def _research(self, task: Task) -> Outcome:
+        self._started(task)
+        self._store.add_step(task.id, "Researching.")
+        with activity.call("research", "agent", task.goal) as reply:
+            try:
+                report = await self._researcher.research(task.goal)
+            except Exception as error:  # the model or OpenRouter: the orchestrator decides whether to retry
+                log.exception("Research failed")
+                return Outcome("failed", f"Research failed: {error}")
+            reply(report.summary)
+        self._store.add_step(task.id, report.research)
+        if not report.page:
+            return Outcome("done", report.summary)
+        self._store.save_page(task.id, report.page)
+        return Outcome("done", f"{report.summary}\n\nThe report: {self._site}/reports/{task.id}")
+
+    def _started(self, task: Task) -> None:
+        task.status = Status.RUNNING
+        self._store.save_task(task)
 
     def _settle(self, task: Task, status: Status, report: str) -> None:
         task.status, task.report = status, report

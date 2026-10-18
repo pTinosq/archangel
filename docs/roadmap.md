@@ -31,7 +31,8 @@ Each milestone ships something usable and proves one idea.
 - **Engine: Perplexity Sonar Deep Research via OpenRouter** (`perplexity/sonar-deep-research`). One request returns one cited report, roughly $0.30–1 each, with no new account. A research task never touches the phone, so it runs beside phone tasks.
 - **Upgrade: GPT-5.6 Sol with web search** for "really dig into this", at roughly 3–5× the cost. OpenAI's own deep research models were shut down on 2026-07-23.
 - **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M12.
-- **Quick questions** ("what time does Tesco close?") get a plain web search, not deep research.
+- **Quick questions** ("what time does Tesco close?") get a plain web search (Tavily), not deep research.
+- **A page to read on the phone.** Deep research writes a long essay, so the main model turns it into a short HTML report; the owner gets a summary and its link.
 - **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M13.
 
 ## M10 requirements (location) (from the owner)

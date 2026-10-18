@@ -2,7 +2,7 @@
 every task and its steps, and edited prompts. SQLite, one file in data/.
 
 The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
-Images (screenshots, pictures in chat) are files beside it, deleted after IMAGES_KEPT: they're most of the bytes
+Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT: they're most of the bytes
 and only matter while a task is fresh.
 """
 
@@ -16,6 +16,7 @@ from dataclasses import dataclass, replace
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 import pydantic_ai
 from pydantic_ai import ConversationTypeAdapter, ModelMessage, ModelMessagesTypeAdapter
@@ -26,6 +27,8 @@ from agent.messages import Address, Image, Message
 DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
+
+Kind = Literal["phone", "research"]
 
 
 class Status(StrEnum):
@@ -58,6 +61,8 @@ class Task:
     report: str = ""
     run: pydantic_ai.Conversation | None = None
     """The sub-agent's history, kept so a paused task resumes where it stopped."""
+    kind: Kind = "phone"
+    """Phone tasks take turns on the phone; research runs beside them, on the web."""
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,8 @@ class Store:
     def __init__(self, directory: Path = DATA):
         self._images = directory / "images"
         self._images.mkdir(parents=True, exist_ok=True)
+        self._pages = directory / "pages"
+        self._pages.mkdir(exist_ok=True)
         self._db = sqlite3.connect(directory / "archangel.db")
         self._db.executescript(
             """
@@ -102,6 +109,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS prompts (name TEXT PRIMARY KEY, text TEXT);
             """
         )
+        if "kind" not in {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}:  # added in M9
+            with self._db:
+                self._db.execute("ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'phone'")
         self.forget_old_images()
 
     # The conversation
@@ -132,14 +142,14 @@ class Store:
 
     # Tasks
 
-    def add_task(self, goal: str, report_to: Address) -> Task:
+    def add_task(self, goal: str, report_to: Address, kind: Kind = "phone") -> Task:
         self.forget_old_images()  # tasks are where images pile up; check as each starts
         with self._db:
             cursor = self._db.execute(
-                "INSERT INTO tasks (goal, channel, address, status, report) VALUES (?, ?, ?, ?, '')",
-                (goal, report_to.channel, report_to.id, Status.QUEUED),
+                "INSERT INTO tasks (goal, channel, address, status, report, kind) VALUES (?, ?, ?, ?, '', ?)",
+                (goal, report_to.channel, report_to.id, Status.QUEUED, kind),
             )
-        return Task(cursor.lastrowid, goal, report_to)
+        return Task(cursor.lastrowid, goal, report_to, kind=kind)
 
     def save_task(self, task: Task) -> None:
         # A paused run only needs the screen it stopped on; the rest would be dead weight in every save.
@@ -189,6 +199,18 @@ class Store:
         )
         return [Step(*row) for row in rows]
 
+    # Pages: research reports as web pages, kept (they're small)
+
+    def save_page(self, task: int, html: str) -> None:
+        (self._pages / f"{task}.html").write_text(html)
+
+    def has_page(self, task: int) -> bool:
+        return (self._pages / f"{task}.html").exists()
+
+    def page(self, task: int) -> str | None:
+        path = self._pages / f"{task}.html"
+        return path.read_text() if path.exists() else None
+
     # Images
 
     def save_image(self, image: Image) -> str:
@@ -224,11 +246,11 @@ class Store:
                 self._db.execute("INSERT OR REPLACE INTO prompts VALUES (?, ?)", (name, text))
 
 
-_TASK_COLUMNS = "id, goal, channel, address, status, report, run"
+_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind"
 
 
 def _task(row: tuple) -> Task:
-    id, goal, channel, address, status, report, run = row
+    id, goal, channel, address, status, report, run, kind = row
     return Task(
         id,
         goal,
@@ -236,4 +258,5 @@ def _task(row: tuple) -> Task:
         Status(status),
         report,
         ConversationTypeAdapter.validate_json(run) if run else None,
+        kind,
     )

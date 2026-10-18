@@ -3,6 +3,9 @@
 export type Task = {
   id: number;
   goal: string;
+  kind: "phone" | "research";
+  /** A research report's web page, at /reports/{id}. */
+  page: boolean;
   status: string;
   open: boolean;
   report: string;

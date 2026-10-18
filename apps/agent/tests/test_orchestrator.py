@@ -1,7 +1,7 @@
 import asyncio
 
 import pydantic_ai
-from fakes import SCREEN, FakeChannel, FakePilot
+from fakes import SCREEN, FakeChannel, FakePilot, FakeResearcher, apps
 from pydantic_ai import (
     BinaryContent,
     ModelMessage,
@@ -27,7 +27,7 @@ class Owner:
     def __init__(self, store, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
         self.requests: list[list[ModelMessage]] = []
         self.pilot = FakePilot(outcome)
-        self.tasks = Tasks(store, self.pilot)
+        self.tasks = Tasks(store, self.pilot, FakeResearcher())
         self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
         self.store = store
 
@@ -36,7 +36,7 @@ class Owner:
             return respond(messages, info)
 
         gateway = Gateway([self.cli, self.email], store)
-        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway)
+        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), apps)
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
         async def scenario():
@@ -265,3 +265,27 @@ def test_a_screenshot_can_be_sent_elsewhere_and_channels_say_what_they_show(stor
 
     assert owner.email.sent[0].parts == (Text("Here's the screen."), SCREEN)
     assert "email (text)" in owner.requests[0][-1].instructions
+
+
+def test_research_and_quick_answers_come_from_the_web(store):
+    def respond(prompt: str) -> ModelResponse:
+        if "not from the owner" in prompt:
+            return say(f"Relayed: {prompt}")
+        if "Tesco" in prompt:
+            return call("search_web", question="When does Tesco close?")
+        if "apps" in prompt:
+            return call("phone_apps")
+        return call("research", question="The best funds in 2026")
+
+    owner = Owner(store, tool_result_or(respond))
+    assert owner.says(Text("when does Tesco close?"))[-1].text == "Quick answer to When does Tesco close?."
+    assert owner.says(Text("what apps are there?"))[-1].text == "WhatsApp, Michelin Guide"
+    replies = owner.says(Text("look into the best funds in 2026"))
+    assert [r.text for r in replies[-2:]] == [
+        "Started task #1.",
+        (
+            "Relayed: [Update on task #1, not from the owner; your reply goes via cli] done: Report on The best "
+            "funds in 2026.\n\nThe report: /reports/1"
+        ),
+    ]
+    assert owner.pilot.calls == []  # never the phone

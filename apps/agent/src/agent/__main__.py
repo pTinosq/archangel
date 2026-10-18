@@ -20,6 +20,7 @@ from agent.phone.pilot import Kit, Pilot
 from agent.phone.relay import Phone
 from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
+from agent.research import DEEP, Researcher, tavily
 from agent.store import Store, Task
 from agent.tasks import Tasks
 from agent.web import Web
@@ -45,7 +46,10 @@ def main() -> None:
         guard=ModelGuard(model, prompts.live("guard")),
         investigator=ModelInvestigator(fallback, prompts.live("investigator")),
     )
-    tasks = Tasks(store, Pilot(model, kit, prompts.live("pilot")))
+    search = (key := config.tavily_api_key()) and tavily(key)
+    researcher = Researcher(openrouter(DEEP), model, search, prompts.live("writer"))
+    site = config.public_url() or f"http://127.0.0.1:{config.port()}"
+    tasks = Tasks(store, Pilot(model, kit, prompts.live("pilot")), researcher, site)
 
     web = Web(config.github(), config.port())
     channels = [PanelChannel(store, prompts, web)]
@@ -59,7 +63,7 @@ def main() -> None:
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
-    orchestrator = Orchestrator(model, store, tasks, gateway, prompts.live("orchestrator"))
+    orchestrator = Orchestrator(model, store, tasks, gateway, researcher, kit.phone.apps, prompts.live("orchestrator"))
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_run(web, gateway, orchestrator, interrupted))
     print()

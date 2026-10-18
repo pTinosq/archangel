@@ -10,7 +10,7 @@ import hmac
 import secrets
 import time
 from dataclasses import dataclass
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import FastAPI, Request
@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 SESSION = "archangel_session"
 STATE = "archangel_state"
+AFTER = "archangel_after"  # where to go once signed in
 SESSION_SECONDS = 30 * 24 * 3600
 STATE_SECONDS = 600
 OPEN = ("/auth/", "/health", "/twilio/", "/screenshots/")  # these check their own signatures
@@ -46,14 +47,15 @@ def protect(app: FastAPI, github: GitHub, client: httpx.AsyncClient | None = Non
             return await call_next(request)
         if path.startswith("/api/"):
             return JSONResponse({"detail": "Sign in first"}, status_code=401)
-        return RedirectResponse("/auth/login")
+        return RedirectResponse("/auth/login" + (f"?after={quote(path)}" if path != "/" else ""))
 
     @app.get("/auth/login")
-    async def login() -> Response:
+    async def login(after: str = "/") -> Response:
         state = secrets.token_urlsafe(24)
         query = urlencode({"client_id": github.client_id, "state": state, "allow_signup": "false"})
         response = RedirectResponse(f"{AUTHORIZE}?{query}")
         response.set_cookie(STATE, state, STATE_SECONDS, path="/auth", secure=True, httponly=True, samesite="lax")
+        response.set_cookie(AFTER, after, STATE_SECONDS, path="/auth", secure=True, httponly=True, samesite="lax")
         return response
 
     @app.get("/auth/callback")
@@ -69,9 +71,10 @@ def protect(app: FastAPI, github: GitHub, client: httpx.AsyncClient | None = Non
             return _page("GitHub didn't sign you in.", 400)
         if login.lower() != github.owner.lower():
             return _page("This Archangel belongs to someone else.", 403)
-        response = RedirectResponse("/")
+        response = RedirectResponse(_here(request.cookies.get(AFTER, "/")))
         response.set_cookie(SESSION, _session(login, key), SESSION_SECONDS, secure=True, httponly=True, samesite="lax")
         response.delete_cookie(STATE, path="/auth")
+        response.delete_cookie(AFTER, path="/auth")
         return response
 
     @app.get("/auth/logout")
@@ -89,6 +92,11 @@ async def _github_login(client: httpx.AsyncClient, github: GitHub, code: str) ->
         return None
     user = await client.get(USER, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
     return user.json().get("login") if user.is_success else None
+
+
+def _here(path: str) -> str:
+    """`path` if it's on this site, else home: a link can't use sign-in to send the owner elsewhere."""
+    return path if path.startswith("/") and not path.startswith("//") and "\\" not in path else "/"
 
 
 def _session(login: str, key: bytes) -> str:

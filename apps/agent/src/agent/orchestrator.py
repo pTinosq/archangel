@@ -1,11 +1,12 @@
-"""The agent the owner talks to. It manages work rather than doing it: starts phone tasks, relays their
-questions, decides what to do when they fail, and keeps the owner informed on whichever channel suits.
+"""The agent the owner talks to. It manages work rather than doing it: starts phone tasks and research, searches
+the web for quick answers, relays tasks' questions, decides what to do when they fail, and keeps the owner informed on whichever channel suits.
 
 One conversation whatever the channel. Events (owner messages, task updates) are handled one at a time, in order.
 """
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from pydantic_ai import Agent, RunContext
@@ -18,7 +19,9 @@ from agent.gateway import Gateway
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.phone.pilot import Answer
-from agent.store import Status, Store
+from agent.phone.relay import PhoneError
+from agent.research import Researcher
+from agent.store import Kind, Status, Store
 from agent.tasks import Tasks
 
 log = logging.getLogger(__name__)
@@ -30,7 +33,14 @@ INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 
 class Orchestrator:
     def __init__(
-        self, model: Model, store: Store, tasks: Tasks, gateway: Gateway, instructions: Instructions = INSTRUCTIONS
+        self,
+        model: Model,
+        store: Store,
+        tasks: Tasks,
+        gateway: Gateway,
+        researcher: Researcher,
+        apps: Callable[[], Awaitable[dict[str, str]]],
+        instructions: Instructions = INSTRUCTIONS,
     ):
         self._store = store
         self._tasks = tasks
@@ -55,10 +65,36 @@ class Orchestrator:
             Updates come back where you're talking now. Set `report_via` only if the owner asked for the results
             elsewhere: "voice" rings them, even if they're on a call now.
             """
+            return start(ctx, goal, report_via, "phone")
+
+        @self._agent.tool
+        async def research(ctx: RunContext[Event], question: str, report_via: str | None = None) -> str:
+            """Start deep research on the web in the background: many sources, a cited report in 5–10 minutes,
+            under a dollar. Not on the phone, so it runs beside phone tasks. `report_via` as for start_task."""
+            return start(ctx, question, report_via, "research")
+
+        def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
                 return f"No channel {report_via!r}. Channels: {', '.join(gateway.channels)}."
-            return f"Started task #{tasks.start(goal, report_to).id}."
+            return f"Started task #{tasks.start(goal, report_to, kind).id}."
+
+        @self._agent.tool_plain
+        async def search_web(question: str) -> str:
+            """Search the web, in seconds: results with their sources, to answer from. Opening times, facts, news."""
+            try:
+                return await researcher.search(question)
+            except Exception as error:  # the model or OpenRouter; the conversation goes on
+                log.exception("Search failed")
+                return f"Search failed: {error}"
+
+        @self._agent.tool_plain
+        async def phone_apps() -> str:
+            """The apps installed on the phone."""
+            try:
+                return ", ".join(await apps())
+            except PhoneError as error:
+                return f"Couldn't ask the phone: {error}"
 
         @self._agent.tool
         async def answer_task(ctx: RunContext[Event], id: int, answer: str, approve: bool = False) -> str:
@@ -120,7 +156,11 @@ class Orchestrator:
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
-        lines = [f"#{t.id} [{t.status}] {t.goal}" + (f" → {t.report[:300]}" if t.report else "") for t in shown]
+        lines = [
+            f"#{t.id} [{t.status}] {'research: ' if t.kind == 'research' else ''}{t.goal}"
+            + (f" → {t.report[:300]}" if t.report else "")
+            for t in shown
+        ]
         return "\n".join(
             [
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",

@@ -13,7 +13,7 @@ from contextlib import aclosing
 from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agent import activity
@@ -72,7 +72,7 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
 
     @app.get("/api/tasks")
     async def tasks() -> list[dict]:
-        return [_task(task) for task in store.tasks()]
+        return [_task(task, store.has_page(task.id)) for task in store.tasks()]
 
     @app.get("/api/tasks/{id}/steps")
     async def steps(id: int, after: int = 0) -> list[Step]:
@@ -83,6 +83,13 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
         if not (found := store.image(name)):
             raise HTTPException(404, "No such image, or it has expired")
         return Response(found.data, media_type=found.media_type, headers={"Cache-Control": FOREVER})
+
+    @app.get("/reports/{id}")
+    async def report(id: int) -> HTMLResponse:
+        if (page := store.page(id)) is None:
+            raise HTTPException(404, "No such report")
+        # Written by a model from what the web said: show it, but let nothing in it run or load.
+        return HTMLResponse(page, headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
 
     @app.get("/api/activity")
     async def live() -> StreamingResponse:
@@ -112,10 +119,12 @@ async def _events(channel: PanelChannel) -> AsyncIterator[str]:
             yield f"data: {json.dumps(asdict(notice))}\n\n" if notice else ": still here\n\n"
 
 
-def _task(task: Task) -> dict:
+def _task(task: Task, page: bool) -> dict:
     return {
         "id": task.id,
         "goal": task.goal,
+        "kind": task.kind,
+        "page": page,
         "status": task.status,
         "open": task.status.open,
         "report": task.report,

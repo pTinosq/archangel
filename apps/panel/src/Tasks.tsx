@@ -16,7 +16,7 @@ export function Tasks() {
       {!(narrow && shown) && (
         <section className="task-list">
           <h2>Tasks</h2>
-          {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone.</p>}
+          {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone, or to research something.</p>}
           <ul>
             {tasks?.map((task) => (
               <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => setSelected(task.id)}>
@@ -70,6 +70,13 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
         <p>
           <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
         </p>
+        {task.page && (
+          <p>
+            <a href={`/reports/${task.id}`} target="_blank" rel="noreferrer">
+              Open the report
+            </a>
+          </p>
+        )}
         {task.report && <p className="report">{task.report}</p>}
         {task.open && <Controls task={task} />}
       </div>
@@ -88,7 +95,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
             </p>
           </>
         ) : (
-          <p className="quiet">No screens yet.</p>
+          <p className="quiet">{task.kind === "research" ? "Research is on the web, not the phone." : "No screens yet."}</p>
         )}
       </div>
       <ol className="steps">

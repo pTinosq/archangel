@@ -91,3 +91,12 @@ def test_sessions_cant_be_forged_or_outlive_their_time(monkeypatch):
 
     monkeypatch.setattr(time, "time", lambda: int(expires) + 1)
     assert call(panel, "/api/tasks", {SESSION: cookie}).status_code == 401
+
+
+def test_signing_in_returns_to_the_page_asked_for():
+    panel = app()
+    assert call(panel, "/reports/3").headers["location"] == "/auth/login?after=/reports/3"
+    for after, back in (("/reports/3", "/reports/3"), ("//evil.com", "/"), ("https://evil.com", "/")):
+        state = call(panel, f"/auth/login?after={after}").cookies[STATE]
+        signed_in = call(panel, f"/auth/callback?code=good&state={state}", {STATE: state, login.AFTER: after})
+        assert signed_in.headers["location"] == back

@@ -7,6 +7,7 @@ import pydantic_ai
 from agent.channels import Channel, Deliver
 from agent.messages import Address, Image, Message, Text
 from agent.phone.pilot import Outcome
+from agent.research import Report
 
 SCREEN = Image(b"jpg", "image/jpeg")
 
@@ -45,3 +46,22 @@ class FakePilot:
         if not paused:
             return Outcome("needs_approval", "Approve: post it?", run=pydantic_ai.Conversation(), screen=SCREEN)
         return Outcome("done" if answer.approved else "gave_up", f"Owner said {answer.text}.", screen=SCREEN)
+
+
+class FakeResearcher:
+    """Answers at once; `hold` keeps deep research going until set."""
+
+    def __init__(self, hold: asyncio.Event | None = None):
+        self.hold = hold
+
+    async def search(self, question: str) -> str:
+        return f"Quick answer to {question}."
+
+    async def research(self, question: str) -> Report:
+        if self.hold:
+            await self.hold.wait()
+        return Report(f"All about {question}.", f"Report on {question}.", "<p>Report</p>")
+
+
+async def apps() -> dict[str, str]:
+    return {"WhatsApp": "com.whatsapp", "Michelin Guide": "com.michelin"}
