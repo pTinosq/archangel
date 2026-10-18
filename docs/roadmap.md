@@ -13,24 +13,25 @@ Each milestone ships something usable and proves one idea.
 | M6 ✅ | Cockpit | watch a request travel live: channel → orchestrator → task → pilot → Jev / guard / Luna → phone, and back | a lossy live activity feed that observes the system without slowing or changing it |
 | M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
 | M8 | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
-| M9 | Research | "do deep research into the best funds in 2026": a cited report 5–10 minutes later | long-running jobs that wait without holding the phone; the owner's ChatGPT subscription as the engine |
+| M9 | Research | "do deep research into the best funds in 2026": a cited report 5–10 minutes later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 | MCP tools | "summarise today's emails" without the phone | MCP toolsets beside phone tools, set up from the panel |
 | M11 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
-| M12 | Autonomy | scheduled and event-triggered tasks | triggers as channels; Temporal if needed |
+| M12 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
 
 - **Deep, not a search.** Many sources, read and cross-checked, ending in a report with citations, like ChatGPT's deep research. A 5–10 minute job is expected.
-- **Cheap.** The owner already pays for ChatGPT, so use that first.
-- **Runs in the background.** Started from any channel like any task; the report goes where it was asked for, short on sms and voice, in full on the panel.
+- **Cheap.** Cents per report, not dollars.
+- **Runs in the background.** Started from any channel like any task, and the phone stays free meanwhile. The report goes where it was asked for: short on sms and voice, in full on the panel.
+- **The right source.** The phone has apps with their own content (the Michelin Guide). Archangel decides between the web and an app, and the owner can say which they prefer.
 
 **Plan**
-- **Engine: ChatGPT's deep research, on the phone.** The pilot opens the ChatGPT app, turns on deep research, sends the question and answers its clarifying questions (or asks the owner). No extra cost.
-- **Wait without holding the phone.** The task parks and checks back every few minutes (or wakes on ChatGPT's "research complete" notification). Other tasks use the phone meanwhile. This is a small first step towards M12's scheduled tasks.
-- **Getting the report out.** Reading a long report by screenshots is slow and lossy: prefer the text (copy or share link, or the screen's text), and keep the sources.
-- **Fallback: a deep research model by API** (via OpenRouter) when the app is unavailable or the job is short. Pay per run; capped.
-- **Quick questions** ("what time does Tesco close?") are a plain web search, not deep research.
+- **Engine: Perplexity Sonar Deep Research via OpenRouter** (`perplexity/sonar-deep-research`). One request returns one cited report, roughly $0.30–1 each, with no new account. A research task never touches the phone, so it runs beside phone tasks.
+- **Upgrade: GPT-5.6 Sol with web search** for "really dig into this", at roughly 3–5× the cost. OpenAI's own deep research models were shut down on 2026-07-23.
+- **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M11.
+- **Quick questions** ("what time does Tesco close?") get a plain web search, not deep research.
+- **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M12.
 
 ## M8 (in progress)
 
