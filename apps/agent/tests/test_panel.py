@@ -146,17 +146,24 @@ def test_connectors_are_added_and_listed_without_their_secrets(store):
     added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": {"client_id": "id"}})
     assert added.status_code == 400  # no client secret
 
+    assert "http://localhost/connectors/callback" in panel.call("GET", "/api/connectors").json()["services"][0]["help"]
     settings = {"client_id": "id", "client_secret": "secret"}
-    added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": settings})
+    added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": settings, "profile": "work"})
     assert added.json()["signIn"].startswith("https://accounts.google.com/")
 
     listed = panel.call("GET", "/api/connectors").json()
     assert listed["connectors"] == [
-        {"name": "google", "kind": "google", "title": "Gmail and Calendar", "account": "", "signedIn": False}
+        {
+            "name": "work_google",
+            "kind": "google",
+            "title": "Gmail and Calendar",
+            "account": "",
+            "profile": "work",
+            "signedIn": False,
+        }
     ]
-    assert "http://localhost/connectors/callback" in listed["services"][0]["help"]
     assert "secret" not in json.dumps(listed["connectors"])
 
     assert "Not connected" in panel.call("GET", "/connectors/callback?state=unknown&code=x").text
-    panel.call("DELETE", "/api/connectors/google")
+    panel.call("DELETE", "/api/connectors/work_google")
     assert panel.call("GET", "/api/connectors").json()["connectors"] == []

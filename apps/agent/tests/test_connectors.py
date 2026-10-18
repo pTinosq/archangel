@@ -49,7 +49,7 @@ def test_signing_in_to_google_keeps_a_refresh_token_for_its_connector(store, tmp
         assert (connector.account, connector.signed_in) == ("owner@gmail.com", True)
 
         found._workspace(connector)  # what workspace-mcp starts from
-        credentials = json.loads((tmp_path / "google" / "owner@gmail.com.json").read_text())
+        credentials = json.loads((tmp_path / "google" / "google" / "owner@gmail.com.json").read_text())
         assert (credentials["refresh_token"], credentials["client_id"]) == ("rt", "id")
 
     asyncio.run(scenario())
@@ -89,6 +89,9 @@ class Notion:
 
     def connected(self) -> list[Connector]:
         return [self.connector]
+
+    def describe(self, prefixes: bool = False) -> str:
+        return "Notion"
 
     def toolsets(self, mark):
         tools = Broken() if self.failing else self.tools
@@ -149,3 +152,22 @@ def test_nothing_connected_is_a_failure_to_pass_on():
             return []
 
     assert run(Helper(scripted(), Nothing()), []).status == "failed"
+
+
+def test_several_accounts_of_a_service_live_side_by_side_in_profiles(store, tmp_path):
+    async def scenario():
+        found = connectors(store, tmp_path)
+        personal = found.add("google", {"client_id": "id", "client_secret": "secret"}, "Personal")
+        assert found.services()[0]["needs"] == ()  # the same Google client serves every account
+        work = found.add("google", {}, "work")
+        assert (personal.name, work.name, work.settings["client_id"]) == ("personal_google", "work_google", "id")
+        assert found.add("notion", {}).name == "notion"
+        assert found.add("notion", {}).name == "notion_2"
+
+        for connector in (personal, work):
+            state = parse_qs(urlparse(await found.sign_in(connector.name)).query)["state"][0]
+            await found.finish(state, "the-code")
+        assert found.describe() == "personal: Gmail and Calendar (owner@gmail.com); work: Gmail and Calendar (owner@gmail.com)"
+        assert "[tools work_google_…]" in found.describe(prefixes=True)
+
+    asyncio.run(scenario())

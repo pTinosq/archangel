@@ -68,6 +68,7 @@ class Said(BaseModel):
 class NewConnector(BaseModel):
     kind: Kind
     settings: dict[str, str] = {}
+    profile: str = ""
 
 
 def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts) -> None:
@@ -129,7 +130,7 @@ def _connector_routes(app: FastAPI, connectors: Connectors) -> None:
     @app.post("/api/connectors")
     async def add(new: NewConnector) -> dict:
         try:
-            connector = connectors.add(new.kind, new.settings)
+            connector = connectors.add(new.kind, new.settings, new.profile)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
         return await sign_in(connector.name)
@@ -189,6 +190,7 @@ def _connector(connector: Connector) -> dict:  # never the secrets or tokens
         "kind": connector.kind,
         "title": connector.title,
         "account": connector.account,
+        "profile": connector.profile,
         "signedIn": connector.signed_in,
     }
 

@@ -55,9 +55,7 @@ class Helper:
         return Outcome("done", output)
 
     def _connected(self) -> str:
-        accounts = [c.title + (f" ({c.account})" if c.account else "") for c in self._connectors.connected()]
-        return "Connected: " + ", ".join(accounts) + "."
-
+        return f"Connected, by profile: {self._connectors.describe(prefixes=True)}. Use the profile the task means."
 
 async def ask_owner(ctx: RunContext, question: str) -> str:
     """Ask the owner something only they can answer, e.g. which of two Sams. The task pauses until they reply."""

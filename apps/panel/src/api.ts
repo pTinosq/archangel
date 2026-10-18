@@ -23,7 +23,15 @@ export type Line = {
 export type Prompt = { name: string; text: string; default: string; edited: boolean };
 /** One the Connectors page offers: what the owner enters to set it up, and where to get it. */
 export type Service = { kind: string; title: string; needs: string[]; help: string };
-export type Connector = { name: string; kind: string; title: string; account: string; signedIn: boolean };
+export type Connector = {
+  name: string;
+  kind: string;
+  title: string;
+  account: string;
+  /** "work", "personal": the agents choose accounts by it. */
+  profile: string;
+  signedIn: boolean;
+};
 /** Where to send the owner to sign in; null if they still are. */
 type SignIn = { signIn: string | null };
 
@@ -51,8 +59,8 @@ export const api = {
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),
   resetPrompt: (name: string) => call<Prompt>("DELETE", `/prompts/${name}`),
   connectors: () => call<{ services: Service[]; connectors: Connector[] }>("GET", "/connectors"),
-  addConnector: (kind: string, settings: Record<string, string>) =>
-    call<SignIn>("POST", "/connectors", { kind, settings }),
+  addConnector: (kind: string, settings: Record<string, string>, profile: string) =>
+    call<SignIn>("POST", "/connectors", { kind, settings, profile }),
   signIn: (name: string) => call<SignIn>("POST", `/connectors/${name}/sign-in`),
   removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
 };

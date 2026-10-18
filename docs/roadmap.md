@@ -39,6 +39,7 @@ Each milestone ships something usable and proves one idea.
 
 - **Gmail, Google Calendar, Notion and Slack** first, and any other MCP server.
 - **A Connectors page** in the panel: choose a service, set it up, and sign in again when one expires.
+- **Several accounts**, e.g. work and personal Google, Notion, Slack, grouped in **profiles**; Archangel knows which one is meant.
 
 **Plan**
 - **A helper agent** does connector tasks in the background, beside the phone: one task, the connected services' tools, an answer. The orchestrator prefers it to the phone for anything connected.

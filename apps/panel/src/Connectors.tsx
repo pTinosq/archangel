@@ -8,6 +8,7 @@ export function Connectors() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [adding, setAdding] = useState<Service | null>(null);
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [profile, setProfile] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false); // reaching the service takes a few seconds
 
@@ -31,6 +32,7 @@ export function Connectors() {
         setBusy(false);
       });
   };
+  const profiles = [...new Set(connectors.map((c) => c.profile))].sort();
   const choose = (service: Service) => {
     setAdding(service);
     setSettings({});
@@ -41,25 +43,38 @@ export function Connectors() {
     <>
       <section className="connector-list">
         <h2>Connectors</h2>
-        {connectors.length === 0 && <p className="quiet">None yet. Archangel reaches what's connected without the phone.</p>}
-        <ul>
-          {connectors.map((c) => (
-            <li key={c.name}>
-              <div>
-                <strong>{c.title}</strong> {c.account && <span className="quiet">{c.account}</span>}
-              </div>
-              <span className={`status ${c.signedIn ? "done" : "needs-answer"}`}>
-                {c.signedIn ? "connected" : "needs sign-in"}
-              </span>
-              <div className="actions">
-                <button className={c.signedIn ? "" : "approve"} disabled={busy} onClick={() => signIn(api.signIn(c.name))}>
-                  {c.signedIn ? "Reconnect" : "Sign in"}
-                </button>
-                <button onClick={() => api.removeConnector(c.name).then(load)}>Remove</button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {connectors.length === 0 && (
+          <p className="quiet">None yet. Archangel reaches what's connected without the phone.</p>
+        )}
+        {profiles.map((p) => (
+          <div key={p}>
+            {(profiles.length > 1 || p) && <h3>{p || "No profile"}</h3>}
+            <ul>
+              {connectors
+                .filter((c) => c.profile === p)
+                .map((c) => (
+                  <li key={c.name}>
+                    <div>
+                      <strong>{c.title}</strong> {c.account && <span className="quiet">{c.account}</span>}
+                    </div>
+                    <span className={`status ${c.signedIn ? "done" : "needs-answer"}`}>
+                      {c.signedIn ? "connected" : "needs sign-in"}
+                    </span>
+                    <div className="actions">
+                      <button
+                        className={c.signedIn ? "" : "approve"}
+                        disabled={busy}
+                        onClick={() => signIn(api.signIn(c.name))}
+                      >
+                        {c.signedIn ? "Reconnect" : "Sign in"}
+                      </button>
+                      <button onClick={() => api.removeConnector(c.name).then(load)}>Remove</button>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
         <p className="quiet">Reading is free; anything that sends, writes or deletes asks you first.</p>
       </section>
       <section className="add-connector">
@@ -75,9 +90,18 @@ export function Connectors() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              signIn(api.addConnector(adding.kind, settings));
+              signIn(api.addConnector(adding.kind, settings, profile));
             }}
           >
+            <label>
+              Profile, e.g. work or personal
+              <input value={profile} onChange={(e) => setProfile(e.target.value)} list="profiles" autoComplete="off" />
+              <datalist id="profiles">
+                {profiles.filter(Boolean).map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </label>
             {adding.help && <p className="quiet help">{adding.help}</p>}
             {adding.needs.map((need) => (
               <label key={need}>

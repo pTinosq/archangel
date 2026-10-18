@@ -5,7 +5,6 @@ import asyncio
 import pydantic_ai
 
 from agent.channels import Channel, Deliver
-from agent.connectors import Connector
 from agent.messages import Address, Image, Message, Text
 from agent.reports import Report
 from agent.runs import Outcome
@@ -78,8 +77,8 @@ class FakeHelper(FakePilot):
 
 
 class FakeConnectors:
-    def __init__(self, *connected: Connector):
-        self._connected = list(connected)
+    def __init__(self, described: str = ""):
+        self.described = described
 
-    def connected(self) -> list[Connector]:
-        return self._connected
+    def describe(self) -> str:
+        return self.described

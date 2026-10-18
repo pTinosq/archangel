@@ -173,7 +173,6 @@ class Orchestrator:
 
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]
-        connected = [c.title + (f" ({c.account})" if c.account else "") for c in self._connectors.connected()]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [
             f"#{t.id} [{t.status}] {'' if t.kind == 'phone' else t.kind + ': '}{t.goal}"
@@ -183,7 +182,9 @@ class Orchestrator:
         return "\n".join(
             [
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
-                f"Connected services: {', '.join(connected) or 'none (added on the panel, under Connectors)'}.",
+                "Connected services, by profile: "
+                + (self._connectors.describe() or "none (added on the panel, under Connectors)")
+                + ".",
                 "Tasks when this arrived (open, then recently finished):"
                 if lines
                 else "Tasks when this arrived: none.",

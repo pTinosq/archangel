@@ -63,6 +63,9 @@ class Service:
     needs: tuple[str, ...] = ()
     """What the owner enters to set it up."""
     help: str = ""
+    shared: bool = False
+    """What the owner entered serves every account (Google's OAuth client); otherwise each needs its own (a Slack
+    app belongs to one workspace)."""
 
 
 SERVICES = [
@@ -71,6 +74,7 @@ SERVICES = [
         "Gmail and Calendar",
         needs=("client_id", "client_secret"),
         help="A Google Cloud OAuth client (web application) with this redirect URI: {callback}",
+        shared=True,
     ),
     Service("notion", "Notion", "https://mcp.notion.com/mcp"),
     Service(
@@ -98,6 +102,12 @@ class Connector:
     account: str = ""
     """Who it's signed in as, where the service says (Google)."""
     signed_in: bool = False
+    profile: str = ""
+    """Which side of the owner's life it's for ("work", "personal"): several accounts of one service are told
+    apart by it, and the agents choose by it."""
+
+    def describe(self) -> str:
+        return self.title + (f" ({self.account})" if self.account else "")
 
 
 class Connectors:
@@ -113,6 +123,8 @@ class Connectors:
     def services(self) -> list[dict]:
         return [
             {"kind": s.kind, "title": s.title, "needs": s.needs, "help": s.help.format(callback=self._callback)}
+            if not self._shared(s)
+            else {"kind": s.kind, "title": s.title, "needs": (), "help": ""}
             for s in SERVICES
         ]
 
@@ -122,15 +134,30 @@ class Connectors:
     def connected(self) -> list[Connector]:
         return [connector for connector in self.all() if connector.signed_in]
 
-    def add(self, kind: Kind, settings: dict[str, str]) -> Connector:
-        """Add or replace a connector; the owner signs in next."""
+    def describe(self, prefixes: bool = False) -> str:
+        """What's connected, by profile, for the agents; with `prefixes`, which tools are whose."""
+        profiles: dict[str, list[str]] = {}
+        for c in self.connected():
+            profiles.setdefault(c.profile, []).append(c.describe() + (f" [tools {c.name}_…]" if prefixes else ""))
+        return "; ".join(
+            (f"{profile}: " if profile else "") + ", ".join(services) for profile, services in profiles.items()
+        )
+
+    def add(self, kind: Kind, settings: dict[str, str], profile: str = "") -> Connector:
+        """Add a connector, one per account (several Gmails, Notions…), in a `profile`. The owner signs in next."""
         service = next(s for s in SERVICES if s.kind == kind)
+        if shared := self._shared(service):
+            settings = {**shared.settings, **{k: v for k, v in settings.items() if v.strip()}}
         if missing := [need for need in service.needs if not settings.get(need, "").strip()]:
             raise ValueError(f"{service.title} needs {', '.join(missing)}")
         url = settings.pop("url", "").strip() or service.url
         title = (urlparse(url).hostname or url) if kind == "mcp" else service.title
-        name = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_") if kind == "mcp" else kind
-        connector = Connector(name, kind, title, url, {k: v.strip() for k, v in settings.items()})
+        profile = profile.strip().lower()
+        base = re.sub(r"[^a-z0-9]+", "_", f"{profile} {title if kind == 'mcp' else kind}".lower()).strip("_")
+        taken = self._store.connectors()
+        name = next(n for n in [base, *(f"{base}_{i}" for i in range(2, 100))] if n not in taken)
+        settings = {k: v.strip() for k, v in settings.items()}
+        connector = Connector(name, kind, title, url, settings, profile=profile)
         self._save(connector)
         return connector
 
@@ -150,7 +177,7 @@ class Connectors:
                     "response_type": "code",
                     "scope": " ".join(GOOGLE_SCOPES),
                     "access_type": "offline",
-                    "prompt": "consent",  # a refresh token every time, even on reconnecting
+                    "prompt": "consent select_account",  # a refresh token every time; any of their accounts
                     "state": state,
                 }
             )
@@ -195,7 +222,9 @@ class Connectors:
 
     def _workspace(self, connector: Connector) -> StdioTransport:
         # workspace-mcp reads (and refreshes) the sign-in from a file of its own; ours, in the store, is the original.
-        self._google.mkdir(parents=True, exist_ok=True)
+        # Its single-user mode uses whichever sign-in it finds: one folder per account.
+        folder = self._google / connector.name
+        folder.mkdir(parents=True, exist_ok=True)
         tokens = connector.tokens or {}
         credentials = {
             "token": tokens.get("access_token"),
@@ -205,11 +234,11 @@ class Connectors:
             "client_secret": connector.settings["client_secret"],
             "scopes": GOOGLE_SCOPES,
         }
-        (self._google / f"{connector.account}.json").write_text(json.dumps(credentials))
+        (folder / f"{connector.account}.json").write_text(json.dumps(credentials))
         env = {
             "GOOGLE_OAUTH_CLIENT_ID": connector.settings["client_id"],
             "GOOGLE_OAUTH_CLIENT_SECRET": connector.settings["client_secret"],
-            "WORKSPACE_MCP_CREDENTIALS_DIR": str(self._google.resolve()),
+            "WORKSPACE_MCP_CREDENTIALS_DIR": str(folder.resolve()),
             "USER_GOOGLE_EMAIL": connector.account,
             "WORKSPACE_MCP_DISABLED_TOOLS": ",".join(WORKSPACE_MCP_OFF),
         }
@@ -263,6 +292,10 @@ class Connectors:
     async def _connect(self, connector: Connector, auth: OAuthClientProvider) -> None:
         async with MCPToolset(connector.url, auth=auth):  # connecting is what signs in
             pass
+
+    def _shared(self, service: Service) -> Connector | None:
+        """A connector whose settings a new one of `service` can reuse."""
+        return service.shared and next((c for c in self.all() if c.kind == service.kind), None) or None
 
     def _signed_in(self, name: str) -> Connector:
         connector = self._get(name)

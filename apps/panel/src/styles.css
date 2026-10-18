@@ -112,6 +112,7 @@ main > section:last-child { border-right: none; }
   display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
   padding: 12px; margin-bottom: 8px; background: var(--panel); border-radius: 8px;
 }
+.connector-list h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 600; text-transform: capitalize; }
 .connector-list li .actions { grid-column: 1 / -1; }
 .connector-list .quiet, .connector-list li .quiet { font-size: 12px; }
 .services { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
