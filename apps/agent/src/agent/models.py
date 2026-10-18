@@ -2,9 +2,9 @@
 
 from collections.abc import Callable, Sequence
 
-from pydantic_ai import BinaryContent, ModelSettings, UserContent
+from pydantic_ai import BinaryContent, UserContent
 from pydantic_ai.models import Model
-from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterModelSettings
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from agent import config
@@ -19,11 +19,22 @@ TIMEOUT = 120
 the orchestrator answers one message at a time: everything the owner says waits behind it."""
 
 
+TRUSTED = [
+    *("digitalocean", "deepinfra", "wafer", "parasail", "fireworks", "together", "baseten", "novita"),  # open models
+    *("anthropic", "openai", "perplexity", "typesafe"),  # makers
+    *("amazon-bedrock", "google-vertex", "azure", "claude-on-aws"),  # clouds serving makers' models
+]
+"""The only hosts OpenRouter may send a call to: the first that serves the model, then, if it fails, the next (the
+owner's order). An open model like DeepSeek has dozens, some running cut-down copies that answer gibberish (Morph's
+did, for minutes). A new model may need its host added here."""
+
+
 def openrouter(name: str, timeout: float = TIMEOUT) -> Model:
-    """Every model goes through OpenRouter, so any of its models works by name. A call taking over `timeout` seconds
-    is abandoned and retried."""
+    """Every model goes through OpenRouter, so any of its models works by name, on a `TRUSTED` host. A call taking
+    over `timeout` seconds is abandoned and retried."""
     provider = OpenRouterProvider(api_key=config.openrouter_api_key())
-    return OpenRouterModel(name, provider=provider, settings=ModelSettings(timeout=timeout))
+    settings = OpenRouterModelSettings(timeout=timeout, openrouter_provider={"order": TRUSTED, "only": TRUSTED})
+    return OpenRouterModel(name, provider=provider, settings=settings)
 
 
 def content(image: Image) -> BinaryContent:
