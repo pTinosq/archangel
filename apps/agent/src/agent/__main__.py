@@ -21,7 +21,7 @@ from agent.phone.relay import Phone
 from agent.phone.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
 from agent.reports import Reporter
-from agent.research import DEEP, Researcher, tavily
+from agent.research import RESEARCH, Researcher, tavily
 from agent.store import Store, Task
 from agent.tasks import Tasks
 from agent.web import Web
@@ -48,7 +48,7 @@ def main() -> None:
         investigator=ModelInvestigator(fallback, prompts.live("investigator")),
     )
     search = (key := config.tavily_api_key()) and tavily(key)
-    researcher = Researcher(openrouter(DEEP), search)
+    researcher = Researcher(openrouter(RESEARCH), search)
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
     tasks = Tasks(
         store, Pilot(model, kit, prompts.live("pilot")), researcher, Reporter(model, prompts.live("reporter")), site

@@ -1,6 +1,6 @@
 """Answers from the web, never the phone: a quick search while the owner waits (Tavily: results the orchestrator
-answers from), or deep research (Perplexity Sonar Deep Research via OpenRouter: many sources, read and cross-checked,
-minutes long) as a background task. Deep research writes long essays: the reporter makes them readable.
+answers from), or research (Perplexity's Pro Search via OpenRouter: several searches, many sources, under a minute,
+a few pence; its Deep Research was ~20x the price for an 80k-character essay) as a background task.
 """
 
 import httpx
@@ -9,14 +9,14 @@ from pydantic_ai.models import Model
 
 from agent import logs
 
-DEEP = "perplexity/sonar-deep-research"
+RESEARCH = "perplexity/sonar-pro-search"
 TAVILY = "https://api.tavily.com/search"
 
 
 class Researcher:
-    def __init__(self, deep: Model, tavily: httpx.AsyncClient | None):
+    def __init__(self, model: Model, tavily: httpx.AsyncClient | None):
         """`tavily`: from `tavily(key)`; None, no quick search."""
-        self._deep = Agent(deep, name="research")
+        self._research = Agent(model, name="research")
         self._tavily = tavily
 
     async def search(self, question: str) -> str:
@@ -29,8 +29,8 @@ class Researcher:
         return "\n\n".join(f"{r['title']} ({r['url']})\n{r['content']}" for r in results) or "Nothing found."
 
     async def research(self, question: str) -> str:
-        """A long cited essay, in minutes."""
-        result = await logs.run(self._deep, question)
+        """A cited answer, in under a minute."""
+        result = await logs.run(self._research, question)
         # The text cites [1], [2]…; the sources come beside it, in order.
         citations = (result.response.provider_details or {}).get("annotations", [])
         urls = [c["url_citation"]["url"] for c in citations if c.get("type") == "url_citation"]

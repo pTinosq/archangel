@@ -69,8 +69,8 @@ class Orchestrator:
 
         @self._agent.tool
         async def research(ctx: RunContext[Event], question: str, report_via: str | None = None) -> str:
-            """Start deep research on the web in the background: many sources, a report (a link and a tldr) in about
-            5 minutes, under a dollar. Not on the phone, so it runs beside phone tasks. `report_via` as for start_task."""
+            """Start research on the web in the background: many sources, a report (a link and a tldr) in a minute or
+            two, a few pence. Not on the phone, so it runs beside phone tasks. `report_via` as for start_task."""
             return start(ctx, question, report_via, "research")
 
         def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:

@@ -1,4 +1,4 @@
-"""The reporter: turns material about a topic (deep research's long essays, so far) into a short web page to read on
+"""The reporter: turns material about a topic (research, so far) into a short web page to read on
 a phone, and a tldr for the orchestrator to pass on with its link."""
 
 from pydantic import BaseModel, Field

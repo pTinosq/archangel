@@ -136,20 +136,20 @@ class Tasks:
         self._store.add_step(task.id, "Researching.")
         with activity.call("research", "agent", task.goal) as reply:
             try:
-                essay = await self._researcher.research(task.goal)
+                found = await self._researcher.research(task.goal)
             except Exception as error:  # the model or OpenRouter: the orchestrator decides whether to retry
                 log.exception("Research failed")
                 return Outcome("failed", f"Research failed: {error}")
-            reply(essay)
-        self._store.add_step(task.id, essay)
+            reply(found)
+        self._store.add_step(task.id, found)
         self._store.add_step(task.id, "Writing the report.")
         try:
             with activity.call("reporter", "agent", task.goal) as reply:
-                report = await self._reporter.write(task.goal, essay)
+                report = await self._reporter.write(task.goal, found)
                 reply(report.tldr)
         except Exception:  # the research is what matters; pass it on as it is
             log.exception("Couldn't write the report")
-            return Outcome("done", essay)
+            return Outcome("done", found)
         self._store.save_page(task.id, report.html)
         return Outcome("done", f"Report: {self._site}/reports/{task.id}\ntldr: {report.tldr}")
 
