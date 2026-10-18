@@ -139,6 +139,7 @@ Railway project `archangel`, two services, both deployed from `main` on push. Se
 
 - `FLAG_SECURE` screens (banking, payments) screenshot black; `ui_tree` usually still works.
 - Some apps detect accessibility services or ignore synthetic input.
+- The phone has no SIM: no texts or calls on it. The orchestrator prompt says so (edit it there if that changes).
 - Can't pass a secure lock screen. Unattended: no lock, "Stay awake while charging", battery optimisation off.
 - Browser-sideloaded on Android 13+: App info → ⋮ → "Allow restricted settings" before enabling. `adb install` unaffected.
 - Install or force-stop switches the service off.
