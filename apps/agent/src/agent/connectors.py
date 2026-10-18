@@ -385,7 +385,7 @@ class _Guarded(WrapperToolset):
         return {} if self._failed else await super().get_tools(ctx)
 
     async def call_tool(self, name: str, tool_args: dict[str, Any], ctx: RunContext, tool: ToolsetTool) -> Any:
-        action = f"{self._connector.title}: {name} {json.dumps(tool_args, ensure_ascii=False)}"
+        action = f"{self._connector.describe()}: {name} {json.dumps(tool_args, ensure_ascii=False)}"
         annotations = (tool.tool_def.metadata or {}).get("annotations") or {}
         if not annotations.get("readOnlyHint") and not ctx.tool_call_approved:
             raise ApprovalRequired(metadata={"action": action})
