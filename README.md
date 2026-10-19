@@ -61,7 +61,7 @@ Archangel on Railway, the phone on your desk, the laptop closed.
 1. A Railway project with two services from this repo, `relay` and `agent`, each with a domain. Their settings: [CLAUDE.md](CLAUDE.md#deploy).
 2. A GitHub OAuth App with callback `https://<agent-domain>/auth/callback`.
 3. Its client ID and secret go in the agent's variables as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
-4. On the phone: URL `wss://<relay-domain>/ws/device`, and the relay's token. Keep it charging, on Wi-Fi, unlocked ("Stay awake"), battery optimisation off.
+4. On the phone: URL `wss://<relay-domain>/ws/device`, and the relay's token. Keep it charging, on Wi-Fi, unlocked ("Stay awake"), battery optimisation off. For "near me" in apps that only use GPS: Developer options → Select mock location app → Archangel Bridge.
 
 Then open `https://<agent-domain>` and continue with GitHub. Only `ARCHANGEL_OWNER` gets in.
 

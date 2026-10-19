@@ -54,6 +54,13 @@ class CommandExecutor(private val device: Device) {
             is Command.Type -> device.type(command.text)
             is Command.Key -> device.key(command.key)
             is Command.Launch -> device.launch(command.packageName)
+            is Command.Location -> {
+                require((command.lat == null) == (command.lon == null)) { "lat and lon go together" }
+                require(command.lat == null || command.lat in -90.0..90.0 && command.lon!! in -180.0..180.0) {
+                    "lat must be in -90..90 and lon in -180..180"
+                }
+                device.location(command.lat, command.lon)
+            }
         }
         return null
     }

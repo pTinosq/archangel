@@ -77,6 +77,8 @@ class _Session:
     """The owner's word while it runs (the task's own list, appended to from outside)."""
     said: list[str] = field(default_factory=list)
     """All the owner has said about the task, for the guard: what they've agreed to isn't asked again."""
+    moved: bool = False
+    """The phone's GPS is faked, until the run ends."""
 
     async def shoot(self) -> Image:
         self.screen = await self.kit.phone.screenshot()
@@ -163,6 +165,7 @@ class Pilot:
                 scroll,
                 Tool(press, args_validator=_check_press),
                 look,
+                set_location,
                 second_opinion,
                 ask_owner,
             ],
@@ -184,6 +187,15 @@ class Pilot:
         session = _Session(
             self._kit, goal, record, inbox=[] if inbox is None else inbox, said=[] if said is None else said
         )
+        try:
+            return await self._run(session, paused, answer)
+        finally:
+            if session.moved:  # paused too: another task may have the phone meanwhile
+                with contextlib.suppress(PhoneError):
+                    await self._kit.phone.location()
+
+    async def _run(self, session: _Session, paused: pydantic_ai.Conversation | None, answer: Answer | None) -> Outcome:
+        goal, record = session.goal, session.record
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             screen = await session.shoot()
@@ -286,6 +298,13 @@ async def look(ctx: RunContext[_Session], reason: str = "") -> ToolReturn:
     """Take a fresh screenshot, e.g. while something loads."""
     # `reason` because models like to say why, and a refused call three times over ends the task.
     return await ctx.deps.look(f"Current screen{f' ({reason})' if reason else ''}.")
+
+
+async def set_location(ctx: RunContext[_Session], lat: float, lon: float) -> ToolReturn | str:
+    """Make the phone's GPS say it's at `lat`, `lon`, for an app that only uses where the phone is ("near me").
+    Not where the app takes an address or area: type that. Lasts until the task ends or pauses."""
+    ctx.deps.moved = True
+    return await ctx.deps.act(ctx.deps.kit.phone.location(lat, lon), f"The phone's GPS now says {lat}, {lon}.")
 
 
 async def second_opinion(ctx: RunContext[_Session], question: str = "") -> str:

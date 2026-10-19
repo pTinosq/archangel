@@ -10,6 +10,8 @@ interface Device {
     fun launch(packageName: String)
     fun uiTree(): UiTree
     fun apps(): Apps
+    /** Fake GPS at [lat], [lon]; both null: where the phone really is. */
+    fun location(lat: Double?, lon: Double?)
 }
 
 /** An expected failure, reported to the caller with [code] (see [ErrorCode]). */

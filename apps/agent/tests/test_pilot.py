@@ -56,6 +56,9 @@ class FakePhone:
     async def close(self, package: str) -> None:
         self.actions.append(f"close {package}")
 
+    async def location(self, lat: float | None = None, lon: float | None = None) -> None:
+        self.actions.append(f"location {lat},{lon}")
+
 
 class FakeVision:
     async def find(self, screen: Image, target: str) -> Box | None:
@@ -250,3 +253,16 @@ def test_the_owner_s_word_reaches_a_running_pilot():
     outcome = run(scripted(("press", {"key": "back"})), FakePhone(), inbox=inbox)
     assert "The owner says, meanwhile: You can tap Continue" in outcome.report
     assert inbox == []
+
+
+def test_a_faked_location_lasts_only_while_the_task_runs():
+    phone = FakePhone()
+    run(scripted(("set_location", {"lat": 51.5178, "lon": -0.0823})), phone)
+    assert phone.actions == ["location 51.5178,-0.0823", "key home", "location None,None"]
+
+
+def test_a_paused_task_gives_the_phone_back_where_it_is():
+    phone = FakePhone()
+    model = scripted(("set_location", {"lat": 51.5, "lon": -0.08}), ("tap", {"target": "the Send button"}))
+    assert run(model, phone).status == "needs_approval"
+    assert phone.actions == ["location 51.5,-0.08", "location None,None"]

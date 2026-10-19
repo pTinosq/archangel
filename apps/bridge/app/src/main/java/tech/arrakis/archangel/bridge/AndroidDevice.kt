@@ -26,6 +26,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 class AndroidDevice(private val service: AccessibilityService) : Device {
+    private val mockLocation = MockLocation(service)
 
     override suspend fun screenshot(scale: Float, quality: Int): Screenshot {
         val result = captureScreen()
@@ -156,6 +157,10 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
             .distinctBy { it.packageName }
             .sortedBy { it.label.lowercase() }
         return Apps(apps)
+    }
+
+    override fun location(lat: Double?, lon: Double?) {
+        if (lat != null && lon != null) mockLocation.set(lat, lon) else mockLocation.stop()
     }
 
     override fun uiTree() = UiTree(service.windows.mapNotNull { it.root?.toNode() })

@@ -65,6 +65,10 @@ class Phone:
         await asyncio.sleep(CLOSE_PAUSE_SECONDS / 2)
         await self.key("home")
 
+    async def location(self, lat: float | None = None, lon: float | None = None) -> None:
+        """Fake GPS at `lat`, `lon`, for apps that only use where the phone is. Neither: where it really is."""
+        await self._command("location", **({} if lat is None else {"lat": lat, "lon": lon}))
+
     async def apps(self) -> dict[str, str]:
         """Launchable apps, label → package."""
         data = await self._command("apps")

@@ -55,6 +55,16 @@ class CommandExecutorTest {
     }
 
     @Test
+    fun `location fakes a place, or stops`() = runTest {
+        assertEquals(Reply("1", ok = true), executor.execute("""{"id":"1","type":"location","lat":51.5,"lon":-0.08}"""))
+        executor.execute("""{"id":"2","type":"location"}""")
+        assertEquals(listOf("location 51.5,-0.08", "location null,null"), device.calls)
+
+        assertError("invalid_command", executor.execute("""{"id":"3","type":"location","lat":51.5}"""))
+        assertError("invalid_command", executor.execute("""{"id":"4","type":"location","lat":95,"lon":0}"""))
+    }
+
+    @Test
     fun `unknown command is invalid`() = runTest {
         assertError("invalid_command", executor.execute("""{"id":"1","type":"dance"}"""))
     }
@@ -110,4 +120,8 @@ private class FakeDevice : Device {
     override fun uiTree() = throw IllegalStateException("boom")
 
     override fun apps() = Apps(listOf(App("WhatsApp", "com.whatsapp")))
+
+    override fun location(lat: Double?, lon: Double?) {
+        calls += "location $lat,$lon"
+    }
 }

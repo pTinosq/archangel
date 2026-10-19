@@ -47,6 +47,9 @@ Error codes: `invalid_command`, `not_found`, `failed`, `internal`.
 | `launch`     | `package`                                    |                                              |
 | `ui_tree`    |                                              | `{"windows": [Node]}`                        |
 | `apps`       |                                              | `{"apps": [{"label", "package"}]}`         |
+| `location`   | `lat`, `lon` (degrees) to fake GPS there, until the next `location`; neither to stop | |
+
+`location` needs the bridge chosen as the mock location app (Developer options), else `failed`. Apps see the faked position from GPS and network location; it's dropped if the service stops.
 
 `Node`: `{"class", "text"?, "desc"?, "id"?, "bounds": [left, top, right, bottom], "flags"?: ["clickable", "editable", "scrollable", "focused"], "children"?: [Node]}`. Empty fields are omitted.
 

@@ -61,6 +61,8 @@ Each milestone ships something usable and proves one idea.
 
 **Progress**
 - **Sharing (done):** `owner_location` gives the last place and a signed link; its page shares the browser's location once and the orchestrator carries on. Addresses come from OpenStreetMap. The pilot types the place where an app takes one.
+- **Faking (done):** the bridge's `location` command (mock location app); the pilot's `set_location`, only for GPS-only apps, put back when its run ends or pauses. It checks the results look local.
+- **To try live:** "restaurants near me" in Maps and the Michelin Guide, and an Uber pickup.
 
 ## M8 (done)
 

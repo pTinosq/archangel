@@ -54,6 +54,10 @@ sealed interface Command {
     @Serializable
     @SerialName("apps")
     data class Apps(override val id: String) : Command
+
+    @Serializable
+    @SerialName("location")
+    data class Location(override val id: String, val lat: Double? = null, val lon: Double? = null) : Command
 }
 
 @Serializable

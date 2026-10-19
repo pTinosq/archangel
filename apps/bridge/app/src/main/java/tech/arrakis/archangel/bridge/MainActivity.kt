@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
                             val uri = Uri.fromParts("package", packageName, null)
                             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, uri))
                         },
+                        onOpenDeveloper = {
+                            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                        },
                     )
                 }
             }
@@ -61,6 +64,7 @@ private fun BridgeScreen(
     onSave: (BridgeSettings) -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenBattery: () -> Unit,
+    onOpenDeveloper: () -> Unit,
 ) {
     val status by Connection.status.collectAsState()
     var settings by remember { mutableStateOf(initial) }
@@ -111,6 +115,9 @@ private fun BridgeScreen(
         }
         OutlinedButton(onClick = onOpenBattery, modifier = Modifier.fillMaxWidth()) {
             Text("Allow running in background")
+        }
+        OutlinedButton(onClick = onOpenDeveloper, modifier = Modifier.fillMaxWidth()) {
+            Text("Mock location app (Developer options)")
         }
     }
 }

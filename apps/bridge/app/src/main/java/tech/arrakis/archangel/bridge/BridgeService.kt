@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
  * so this owns the relay connection for exactly as long as the user has the bridge switched on.
  */
 class BridgeService : AccessibilityService() {
+    private val device by lazy { AndroidDevice(this) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val networkAvailable = Channel<Unit>(Channel.CONFLATED)
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -29,7 +30,7 @@ class BridgeService : AccessibilityService() {
 
     override fun onServiceConnected() {
         getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
-        val executor = CommandExecutor(AndroidDevice(this))
+        val executor = CommandExecutor(device)
         val handle: suspend (String) -> String = { frame ->
             val reply = executor.execute(frame)
             if (!reply.ok) Log.w(TAG, "${reply.id}: ${reply.error}")
@@ -45,6 +46,7 @@ class BridgeService : AccessibilityService() {
     override fun onDestroy() {
         getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback)
         scope.cancel()
+        device.location(null, null) // a faked place mustn't outlive the bridge
         super.onDestroy()
     }
 
