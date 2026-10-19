@@ -35,9 +35,10 @@ class FakePilot:
         self.hold = hold
         self.calls: list[tuple[str, object]] = []
 
-    async def run(self, goal, record, paused=None, answer=None, inbox=None) -> Outcome:
+    async def run(self, goal, record, paused=None, answer=None, inbox=None, said=None) -> Outcome:
         self.calls.append((goal, answer))
         self.inbox = inbox
+        self.said = said
         record("Tapped the Post button.", SCREEN)
         if self.hold:
             await self.hold.wait()

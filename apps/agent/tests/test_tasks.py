@@ -53,6 +53,22 @@ def test_steps_are_recorded(store):
     ]
 
 
+def test_all_the_owner_says_to_a_task_stays_with_it_so_its_not_asked_again(store):
+    async def scenario():
+        pilot = FakePilot(hold=asyncio.Event())
+        tasks = Tasks(store, pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks.start("Find flights", CLI)
+        await asyncio.sleep(0)
+        tasks.answer(1, Answer("Clear any old filters"))  # while it runs
+        pilot.hold.set()
+        await tasks.idle()
+        tasks.answer(1, Answer("Yes, clear them all", approved=True))  # once it pauses
+        await tasks.idle()
+        assert pilot.said == ["Clear any old filters", "Yes, clear them all"]
+
+    asyncio.run(scenario())
+
+
 def test_only_open_tasks_take_answers(store):
     async def scenario():
         tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())

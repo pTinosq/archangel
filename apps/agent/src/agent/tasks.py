@@ -48,6 +48,7 @@ class Tasks:
         self._phone = asyncio.Lock()
         self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
+        self._said: dict[int, list[str]] = {}  # all the owner has said to an open phone task (not kept over restarts)
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
@@ -59,6 +60,8 @@ class Tasks:
 
     def answer(self, id: int, answer: Answer) -> str:
         """Continue a task that's waiting on the owner, or tell a running one. Returns what happened, for the model."""
+        if answer.text:
+            self._said.setdefault(id, []).append(answer.text)
         if (inbox := self._inboxes.get(id)) is not None:
             inbox.append(answer.text)
             return f"Passed on to task #{id}; it sees it on its next step."
@@ -122,7 +125,12 @@ class Tasks:
                     self._started(task)
                     with activity.call("pilot", "agent", task.goal) as reply:
                         outcome = await self._pilot.run(
-                            task.goal, self._recorder(task), paused, answer, inbox=self._inboxes[task.id]
+                            task.goal,
+                            self._recorder(task),
+                            paused,
+                            answer,
+                            inbox=self._inboxes[task.id],
+                            said=self._said.setdefault(task.id, []),
                         )
                         reply(f"{outcome.status}: {outcome.report}")
         except asyncio.CancelledError:
@@ -172,6 +180,7 @@ class Tasks:
         task.status, task.report = status, report
         if not status.waiting:
             task.run = None
+            self._said.pop(task.id, None)
         self._store.save_task(task)
         self._store.add_step(task.id, f"{status}: {report}")
         log.info("Task #%d %s: %s", task.id, status, report)

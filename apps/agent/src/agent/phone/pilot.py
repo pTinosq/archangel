@@ -75,6 +75,8 @@ class _Session:
     screens: deque[Image] = field(default_factory=lambda: deque(maxlen=SCREENS_INVESTIGATED))
     inbox: list[str] = field(default_factory=list)
     """The owner's word while it runs (the task's own list, appended to from outside)."""
+    said: list[str] = field(default_factory=list)
+    """All the owner has said about the task, for the guard: what they've agreed to isn't asked again."""
 
     async def shoot(self) -> Image:
         self.screen = await self.kit.phone.screenshot()
@@ -174,11 +176,14 @@ class Pilot:
         paused: pydantic_ai.Conversation | None = None,
         answer: Answer | None = None,
         inbox: list[str] | None = None,
+        said: list[str] | None = None,
     ) -> Outcome:
         """Start `goal`, or continue a `paused` run with the owner's `answer`. Each step goes to `record`; what the
-        owner says meanwhile is appended to `inbox`."""
+        owner says meanwhile is appended to `inbox`; `said` holds all they've said about it (both kept up by the caller)."""
         log.info("Phone task: %s", goal)
-        session = _Session(self._kit, goal, record, inbox=[] if inbox is None else inbox)
+        session = _Session(
+            self._kit, goal, record, inbox=[] if inbox is None else inbox, said=[] if said is None else said
+        )
         try:
             # Fresh on resume too: an approved tap must find its target on the screen as it is now.
             screen = await session.shoot()
@@ -312,7 +317,7 @@ async def _check(ctx: RunContext[_Session], action: str) -> None:
     if ctx.tool_call_approved:
         return
     with activity.call("guard", "agent", action) as reply:
-        consequence = await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal)
+        consequence = await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal, ctx.deps.said)
         reply(f"needs approval: {consequence}" if consequence else "fine")
     if consequence:
         raise ApprovalRequired(metadata={"action": consequence})

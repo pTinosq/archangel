@@ -4,7 +4,9 @@ Twilio's webhooks skip GitHub sign-in (`login.OPEN`); each one is checked agains
 anything not from the owner's number is ignored. Twilio's REST API is a couple of form posts, so no SDK.
 """
 
+import asyncio
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -37,6 +39,8 @@ GREETING = "Archangel."
 RING_SECONDS = 120  # a call Archangel makes is answered or given up on well within this
 RINGS = 3  # at most this many calls Archangel makes…
 RINGS_SECONDS = 600  # …in this long; beyond that, it texts
+PAUSE_SECONDS = 1.0  # Twilio splits what's said at a breath; speech this close together is one thing said
+WORDS_PER_SECOND = 2.5  # about how fast it speaks: Twilio doesn't say when it's finished, so hang up after that
 
 
 @dataclass(frozen=True)
@@ -170,6 +174,7 @@ class VoiceChannel(Channel):
         # The URL Twilio signs the handshake with is the one we give it; behind a proxy, request.url isn't that.
         self._relay = public_url.replace("https://", "wss://", 1) + "/twilio/voice/relay"
         self._calls: dict[str, WebSocket] = {}  # live, by call id
+        self._hanging_up: dict[WebSocket, asyncio.Task] = {}  # calls to end once the last word is said
         self._outgoing: dict[str, _Outgoing] = {}  # calls Archangel is making, until they end
         self._rung: deque[float] = deque(maxlen=RINGS)
         self._deliver: Deliver | None = None
@@ -237,10 +242,15 @@ class VoiceChannel(Channel):
                 await websocket.close(code=1008)
                 return
             await websocket.accept()
-            call = ""
+            call, heard = "", []
             try:
                 while True:
-                    event = await websocket.receive_json()
+                    try:
+                        event = await asyncio.wait_for(websocket.receive_json(), PAUSE_SECONDS if heard else None)
+                    except TimeoutError:  # they've finished: all of it is one thing said, and gets one reply
+                        await self._hear(call, " ".join(heard))
+                        heard.clear()
+                        continue
                     if event.get("type") == "setup":
                         call = event.get("callSid", "")
                         self._calls[call] = websocket
@@ -248,17 +258,18 @@ class VoiceChannel(Channel):
                             for text in outgoing.said[outgoing.greeted :]:
                                 await self._say(websocket, text)
                     elif event.get("type") == "prompt" and (said := event.get("voicePrompt", "").strip()):
-                        outgoing = self._outgoing.get(call)
-                        if outgoing and outgoing.person is None:
-                            outgoing.heard.append(said)  # until Twilio knows it's them, not their voicemail
-                        elif not outgoing or outgoing.person:
-                            await self._heard(call, said)
+                        if hanging_up := self._hanging_up.pop(websocket, None):  # they're still talking
+                            hanging_up.cancel()
+                        heard.append(said)
                     elif event.get("type") == "error":
                         log.warning("Call %s: %s", call, event.get("description"))
             except WebSocketDisconnect:
                 pass
             finally:
                 self._calls.pop(call, None)
+                self._hanging_up.pop(websocket, None)
+                if heard:  # said just before hanging up
+                    await self._hear(call, " ".join(heard))
 
     def _twiml(self, greeting: str) -> str:
         return (
@@ -277,6 +288,8 @@ class VoiceChannel(Channel):
             text += " I've texted you a screenshot."
         to = message.address.id
         if (call := self._calls.get(to) or next(iter(self._calls.values()), None)) and await self._say(call, text):
+            if message.ends:
+                self._hanging_up[call] = asyncio.create_task(self._hang_up(call, text))
             return
         if to == self.owner.id:
             await self._ring(text)
@@ -284,6 +297,19 @@ class VoiceChannel(Channel):
             log.info("Not texting a reply to a call that has ended: %s", text)
         else:
             await self._text(text)
+
+    async def _hear(self, call: str, said: str) -> None:
+        outgoing = self._outgoing.get(call)
+        if outgoing and outgoing.person is None:
+            outgoing.heard.append(said)  # until Twilio knows it's them, not their voicemail
+        elif not outgoing or outgoing.person:
+            await self._heard(call, said)
+
+    async def _hang_up(self, call: WebSocket, said: str) -> None:
+        await asyncio.sleep(len(said.split()) / WORDS_PER_SECOND + 0.5)
+        self._hanging_up.pop(call, None)
+        with contextlib.suppress(Exception):  # already gone
+            await call.send_text(json.dumps({"type": "end"}))  # nothing follows <Connect>, so the call ends
 
     async def _heard(self, call: str, said: str) -> None:
         if self._deliver:

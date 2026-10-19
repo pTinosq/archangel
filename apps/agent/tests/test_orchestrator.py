@@ -316,3 +316,18 @@ def test_deep_research_only_with_the_owner_s_say_so(store):
 
     asyncio.run(noticed())
     assert owner.cli.sent[-1].text == "Only the owner can agree to deep research's cost. Ask them."
+
+
+def test_it_can_hang_up_after_its_last_word(store):
+    def respond(messages, info) -> ModelResponse:
+        if isinstance(messages[-1].parts[-1], ToolReturnPart):
+            return ModelResponse(parts=[TextPart("Bye for now.")])
+        if "bye" in prompt_of(messages):
+            return ModelResponse(parts=[ToolCallPart("hang_up", {})])
+        return ModelResponse(parts=[TextPart("On it.")])
+
+    owner = Owner(store, respond)
+    owner.says(Text("open whatsapp"))
+    (bye,) = owner.says(Text("that's all, bye"))[1:]
+    assert bye.text == "Bye for now." and bye.ends
+    assert not owner.cli.sent[0].ends

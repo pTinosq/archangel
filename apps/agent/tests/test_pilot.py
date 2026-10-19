@@ -68,7 +68,7 @@ class FakeGuard:
     def __init__(self):
         self.checked: list[str] = []
 
-    async def check(self, screen: Image, target: str, task: str) -> str | None:
+    async def check(self, screen: Image, target: str, task: str, said: list[str]) -> str | None:
         self.checked.append(target)
         return "send the message" if "Send" in target else None
 

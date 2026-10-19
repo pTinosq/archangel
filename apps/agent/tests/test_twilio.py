@@ -184,6 +184,28 @@ def test_what_the_owner_says_joins_the_conversation_and_the_reply_is_spoken():
     assert voice.calls == voice.texts == []
 
 
+def test_speech_split_at_a_breath_is_one_thing_said():
+    voice = Voice()
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA1"})
+        ws.send_json({"type": "prompt", "voicePrompt": "Yeah, you can clear them.", "last": True})
+        ws.send_json({"type": "prompt", "voicePrompt": "I don't care.", "last": True})
+        time.sleep(1.5)  # then a pause: their turn's over
+        ws.send_json({"type": "prompt", "voicePrompt": "Thanks.", "last": True})
+    assert [m.text for m in voice.delivered] == ["Yeah, you can clear them. I don't care.", "Thanks."]
+
+
+def test_it_hangs_up_once_its_last_word_is_said():
+    voice = Voice()
+    with voice.relay() as ws:
+        ws.send_json({"type": "setup", "callSid": "CA1"})
+        ws.send_json({"type": "interrupt"})  # setup handled
+        # On the server's own loop, where hanging up later happens.
+        ws.portal.call(voice.channel.send, Message(Address("voice", "CA1"), (Text("Bye."),), ends=True))
+        assert json.loads(ws.receive_text())["token"] == "Bye."
+        assert json.loads(ws.receive_text()) == {"type": "end"}
+
+
 def test_while_on_a_call_everything_is_said_on_it():
     voice = Voice()
     with voice.relay() as ws:

@@ -24,11 +24,13 @@ commit something the phone's owner must approve first:
 - paying, purchasing, booking, ordering or subscribing
 - logging in, signing up, or granting access or permissions
 - deleting, archiving or unsending anything
-- changing a setting (toggles, preferences, account details)
+- changing a setting (the app's or phone's own: toggles, preferences, account details)
 
 Navigation doesn't need approval: opening apps, menus or settings pages (a settings row usually opens a page; \
-only its switch changes anything), scrolling, searching, focusing text fields and drafting text.
-Judge by what the tap does on this screen, not by the task. When unsure, require approval.\
+only its switch changes anything), scrolling, searching, filtering or sorting results, focusing text fields and \
+drafting text.
+Judge by what the tap does on this screen, not by the task. But what the owner has said they agree to (below the \
+task) doesn't need asking again. When unsure, require approval.\
 """
 
 
@@ -38,8 +40,9 @@ class Verdict(BaseModel):
 
 
 class Guard(Protocol):
-    async def check(self, screen: Image, target: str, task: str) -> str | None:
-        """What the tap would commit, if the owner must approve it first; otherwise None."""
+    async def check(self, screen: Image, target: str, task: str, said: list[str]) -> str | None:
+        """What the tap would commit, if the owner must approve it first; otherwise None. `said`: what the owner has
+        said about the task so far (answers, approvals)."""
         ...
 
 
@@ -47,8 +50,9 @@ class ModelGuard:
     def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
         self._agent = Agent(model, name="guard", instructions=instructions, output_type=Verdict)
 
-    async def check(self, screen: Image, target: str, task: str) -> str | None:
-        prompt = [f"Task: {task}\nAbout to tap: {target}", content(screen)]
+    async def check(self, screen: Image, target: str, task: str, said: list[str]) -> str | None:
+        owner = "".join(f"\nThe owner said: {line}" for line in said)
+        prompt = [f"Task: {task}{owner}\nAbout to tap: {target}", content(screen)]
         try:
             verdict = (await logs.run(self._agent, prompt)).output
         except Exception as error:

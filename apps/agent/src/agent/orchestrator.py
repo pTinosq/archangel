@@ -50,6 +50,7 @@ class Orchestrator:
         self._connectors = connectors
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
+        self._ends = False  # the reply being written is the last word on a call
         tasks.notify = self.handle
         self._agent = Agent(
             model,
@@ -145,6 +146,12 @@ class Orchestrator:
             """Stop a task."""
             return tasks.cancel(id)
 
+        @self._agent.tool_plain
+        async def hang_up() -> str:
+            """On a call, hang up once your reply is said: they've said bye, or asked you to."""
+            self._ends = True
+            return "It hangs up after your reply."
+
         @self._agent.tool
         async def send(ctx: RunContext[Event], channel: str, text: str, screenshot: bool = False) -> str:
             """Message the owner on another channel, e.g. results they asked to get by email.
@@ -168,6 +175,7 @@ class Orchestrator:
                 # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
                 # it had been there all along, and the model apologises for starting a duplicate.
                 self._arrived_to = await self._situation()
+                self._ends = False
                 try:
                     messages = self._store.history()
                     log.debug("in (%d prior messages): %s", len(messages), describe(event.prompt()))
@@ -178,7 +186,7 @@ class Orchestrator:
                 except Exception as error:
                     log.exception("Failed to handle: %s", describe(event.prompt()))
                     parts = (Text(event.fallback(error)),)
-                await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner))
+                await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends))
 
     async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
         tasks = self._tasks.list()[::-1]

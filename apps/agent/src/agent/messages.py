@@ -31,6 +31,8 @@ class Message:
     parts: tuple[Part, ...]
     answering: bool = False
     """A reply to what the owner just said, not news: a channel they've since left (a call) may drop it."""
+    ends: bool = False
+    """The last word: a call hangs up once it's said."""
 
     @property
     def text(self) -> str:
