@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Connector, type Service } from "./api";
+import { api, type Connector, type Service, type SignIn } from "./api";
 
 const LABELS: Record<string, string> = { client_id: "Client ID", client_secret: "Client secret", url: "Address" };
 
@@ -22,7 +22,7 @@ export function Connectors() {
   }, []);
 
   // Signing in happens on the service's own site, which sends the owner back to Archangel.
-  const signIn = (starting: Promise<{ signIn: string | null }>) => {
+  const signIn = (starting: Promise<SignIn>) => {
     setError("");
     setBusy(true);
     starting

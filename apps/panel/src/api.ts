@@ -33,7 +33,7 @@ export type Connector = {
   signedIn: boolean;
 };
 /** Where to send the owner to sign in; null if they still are. */
-type SignIn = { signIn: string | null };
+export type SignIn = { signIn: string | null };
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {

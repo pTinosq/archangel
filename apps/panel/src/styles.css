@@ -112,9 +112,8 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
   color: var(--tone); border: 1px solid var(--tone); white-space: nowrap; vertical-align: 1px;
 }
 .status.running, .status.queued, .status.done { --tone: var(--accent); }
-.status.needs-approval, .status.needs-answer { --tone: var(--warn); }
+.status.needs-approval, .status.needs-answer { --tone: var(--warn); animation: pulse 1.6s steps(2) infinite; }
 .status.failed, .status.interrupted { --tone: var(--bad); }
-.status.needs-approval, .status.needs-answer { animation: pulse 1.6s steps(2) infinite; }
 @keyframes pulse { 50% { color: var(--bg); background: var(--tone); } }
 
 /* Lists: rows that light, never resize. */
@@ -141,7 +140,6 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .screen { grid-area: screen; position: sticky; top: 0; }
 .screen img { width: 100%; display: block; border: 1px solid var(--line-strong); box-shadow: 6px 6px 0 var(--raised); }
 .screen p { font-size: 8px; line-height: 16px; text-align: center; color: var(--quiet); margin-top: var(--s2); }
-.screen p a { font-family: var(--pixel); }
 .report { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--s3); background: var(--bg); border: 1px solid var(--line-strong); }
 .controls { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 /* The one loud thing: the agent is waiting for the owner. */
@@ -256,8 +254,7 @@ section.cockpit { padding: 0; overflow: hidden; }
     padding-top: env(safe-area-inset-top);
     padding-left: max(var(--s3), env(safe-area-inset-left)); padding-right: max(var(--s3), env(safe-area-inset-right));
   }
-  .brand { line-height: 44px; }
-  .sign-out { line-height: 44px; }
+  .brand, .sign-out { line-height: 44px; }
   nav { order: 1; width: calc(100% + 2 * var(--s3)); margin: 0 calc(-1 * var(--s3)); height: 44px; border-top: 1px solid var(--line); }
   nav a { flex: 1; justify-content: center; padding: 0 var(--s1); font-size: 8px; }
 
@@ -302,7 +299,6 @@ section.cockpit { padding: 0; overflow: hidden; }
   .actions button { flex: 1 1 auto; padding: var(--s2) 10px; white-space: nowrap; }
 
   main > .cockpit { flex: none; height: 45dvh; }
-  .timeline { min-height: 0; }
   .timeline .follow button { min-height: 36px; }
   /* Two lines a notice: who to whom, then what. */
   .timeline li:not(.detail) {

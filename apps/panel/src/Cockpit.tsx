@@ -105,7 +105,7 @@ class Redrawn extends Component<{ children: ReactNode }, { error: Error | null; 
   }
   render() {
     const { error, tries } = this.state;
-    if (!error) return <div key={tries} style={{ display: "contents" }}>{this.props.children}</div>;
+    if (!error) return <Fragment key={tries}>{this.props.children}</Fragment>;
     return (
       <p className="quiet">
         The graph hit a problem: {error.message}{" "}

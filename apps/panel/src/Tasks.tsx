@@ -41,10 +41,8 @@ function Status({ task }: { task: Task }) {
 /** `back` (on a phone): returns to the list. */
 function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
   const steps = useFeed((after) => api.steps(task.id, after), task.id);
-  const screens = steps.filter((s) => s.screen);
   const [viewing, setViewing] = useState<Step>();
-  const latest = screens[screens.length - 1];
-  const shownScreen = viewing ?? latest;
+  const shownScreen = viewing ?? steps.findLast((s) => s.screen);
   const end = useRef<HTMLLIElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   useEffect(() => {
