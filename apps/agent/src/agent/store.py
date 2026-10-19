@@ -1,5 +1,6 @@
 """Everything that must survive a restart: the one conversation with the owner, the transcript across channels,
-every task and its steps, edited prompts, and connectors with their sign-ins. SQLite, one file in data/.
+every task and its steps, edited prompts, connectors with their sign-ins, and where the owner last was. SQLite, one
+file in data/.
 
 The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
 Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT:
@@ -67,6 +68,23 @@ class Task:
 
 
 @dataclass(frozen=True)
+class Location:
+    """Where the owner was when they last shared it."""
+
+    lat: float
+    lon: float
+    accuracy: float
+    """In metres."""
+    address: str
+    """The nearest street address, or "" if it couldn't be found."""
+    time: float
+
+    def __str__(self) -> str:
+        at = f"{self.lat:.5f}, {self.lon:.5f}, within {self.accuracy:.0f} m"
+        return f"{self.address} ({at})" if self.address else at
+
+
+@dataclass(frozen=True)
 class Step:
     """One thing a task did or saw, for watching it work."""
 
@@ -109,6 +127,9 @@ class Store:
             CREATE INDEX IF NOT EXISTS steps_by_task ON steps (task);
             CREATE TABLE IF NOT EXISTS prompts (name TEXT PRIMARY KEY, text TEXT);
             CREATE TABLE IF NOT EXISTS connectors (name TEXT PRIMARY KEY, data TEXT);
+            CREATE TABLE IF NOT EXISTS location (
+                id INTEGER PRIMARY KEY CHECK (id = 1), lat REAL, lon REAL, accuracy REAL, address TEXT, time REAL
+            );
             """
         )
         if "kind" not in {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}:  # added in M9
@@ -263,6 +284,19 @@ class Store:
                 self._db.execute("DELETE FROM connectors WHERE name = ?", (name,))
             else:
                 self._db.execute("INSERT OR REPLACE INTO connectors VALUES (?, ?)", (name, json.dumps(data)))
+
+    # Where the owner is
+
+    def location(self) -> Location | None:
+        row = self._db.execute("SELECT lat, lon, accuracy, address, time FROM location").fetchone()
+        return Location(*row) if row else None
+
+    def save_location(self, location: Location) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO location VALUES (1, ?, ?, ?, ?, ?)",
+                (location.lat, location.lon, location.accuracy, location.address, location.time),
+            )
 
 
 _TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind"

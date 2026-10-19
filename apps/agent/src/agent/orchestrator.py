@@ -8,6 +8,7 @@ order.
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from agent import activity, history, logs
 from agent.connectors import Connectors
 from agent.events import Event
 from agent.gateway import Gateway
+from agent.location import Whereabouts
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.phone.relay import PhoneError
@@ -44,6 +46,7 @@ class Orchestrator:
         researcher: Researcher,
         connectors: Connectors,
         apps: Callable[[], Awaitable[dict[str, str]]],
+        whereabouts: Whereabouts,
         instructions: Instructions = INSTRUCTIONS,
     ):
         self._store = store
@@ -53,7 +56,7 @@ class Orchestrator:
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
         self._ends = False  # the reply being written is the last word on a call
-        tasks.notify = self.handle
+        tasks.notify = whereabouts.notify = self.handle
         self._agent = Agent(
             model,
             name="orchestrator",
@@ -128,6 +131,16 @@ class Orchestrator:
                 return ", ".join(await apps())
             except PhoneError as error:
                 return f"Couldn't ask the phone: {error}"
+
+        @self._agent.tool
+        async def owner_location(ctx: RunContext[Event]) -> str:
+            """Where the owner is, for "near me" or a pickup (the phone is at home): where they last shared, how long
+            ago, and a link that shares it now in one tap. Text them the link when you need it fresh; it comes back
+            as a notice."""
+            last = whereabouts.latest()
+            known = f"Last shared {_ago(last.time)}: {last}." if last else "Never shared."
+            link = whereabouts.link(ctx.deps.reply_to)
+            return f"{known} Link: {link}" if link else f"{known} No link here (no public address): ask them."
 
         @self._agent.tool
         async def answer_task(ctx: RunContext[Event], id: int, answer: str, approve: bool = False) -> str:
@@ -213,3 +226,10 @@ class Orchestrator:
                 *lines,
             ]
         )
+
+
+def _ago(then: float) -> str:
+    minutes = round((time.time() - then) / 60)
+    if minutes < 60:
+        return f"{minutes} min ago"
+    return f"{minutes // 60} h {minutes % 60} min ago" if minutes < 24 * 60 else f"{minutes // (24 * 60)} days ago"

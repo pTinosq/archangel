@@ -65,6 +65,6 @@ Archangel on Railway, the phone on your desk, the laptop closed.
 
 Then open `https://<agent-domain>` and continue with GitHub. Only `ARCHANGEL_OWNER` gets in.
 
-To text or call it: a Twilio number, its webhooks pointed at the agent, and the `TWILIO_*` and `ARCHANGEL_PHONE` variables ([CLAUDE.md](CLAUDE.md#deploy)). Only your mobile gets an answer. On a call it does quick things while you wait; for longer ones it asks whether to ring you back, and otherwise texts. It hangs up when you're done.
+To text or call it: a Twilio number, its webhooks pointed at the agent, and the `TWILIO_*` and `ARCHANGEL_PHONE` variables ([CLAUDE.md](CLAUDE.md#deploy)). Only your mobile gets an answer. On a call it does quick things while you wait; for longer ones it asks whether to ring you back, and otherwise texts. It hangs up when you're done. For "near me" or a pickup it texts you a link that shares where you are, once (the phone stays at home); it types that address into the app.
 
 Details: [CLAUDE.md](CLAUDE.md).

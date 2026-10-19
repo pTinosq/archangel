@@ -21,9 +21,11 @@ from pydantic_ai.models.function import FunctionModel
 
 from agent import activity
 from agent.gateway import Gateway
+from agent.location import Whereabouts
 from agent.orchestrator import Orchestrator
 from agent.runs import Outcome
 from agent.tasks import Tasks
+from agent.web import Web
 
 
 def hops():
@@ -111,7 +113,16 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
     cli = FakeChannel("cli", ["open whatsapp"])
     gateway = Gateway([cli], store)
     tasks = Tasks(store, FakePilot(Outcome("done", "WhatsApp is open.")), FakeResearcher(), FakeReporter(), FakeHelper())
-    orchestrator = Orchestrator(FunctionModel(model), store, tasks, gateway, FakeResearcher(), FakeConnectors(), apps)
+    orchestrator = Orchestrator(
+        FunctionModel(model),
+        store,
+        tasks,
+        gateway,
+        FakeResearcher(),
+        FakeConnectors(),
+        apps,
+        Whereabouts(store, Web(), None),
+    )
 
     async def main():
         await gateway.run(orchestrator.handle)

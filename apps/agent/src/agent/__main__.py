@@ -14,6 +14,7 @@ from agent.events import TaskUpdate
 from agent.gateway import Gateway
 from agent.helper import Helper
 from agent.links import Links
+from agent.location import Whereabouts
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
 from agent.phone.guard import ModelGuard
@@ -64,10 +65,10 @@ def main() -> None:
 
     web = Web(config.github(), config.port())
     channels = [PanelChannel(store, prompts, connectors, web)]
+    public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
+    links = Links(store, web, config.relay_token(), public_url) if public_url else None
     if account := config.twilio():
         twilio = Twilio(account)
-        public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots with it
-        links = public_url and Links(store, web, config.relay_token(), public_url)
         channels.append(SmsChannel(twilio, web, links))
         if public_url:
             channels.append(VoiceChannel(twilio, web, public_url, links))
@@ -75,7 +76,15 @@ def main() -> None:
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
     orchestrator = Orchestrator(
-        model, store, tasks, gateway, researcher, connectors, kit.phone.apps, prompts.live("orchestrator")
+        model,
+        store,
+        tasks,
+        gateway,
+        researcher,
+        connectors,
+        kit.phone.apps,
+        Whereabouts(store, web, links),
+        prompts.live("orchestrator"),
     )
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_run(web, gateway, orchestrator, interrupted))

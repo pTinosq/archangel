@@ -59,6 +59,9 @@ Each milestone ships something usable and proves one idea.
 - **Check it took.** Some apps read Wi-Fi and cell location too; the pilot checks the results look local before trusting them.
 - **Later, if the link gets tedious:** always-on Google Maps location sharing with the home phone's account.
 
+**Progress**
+- **Sharing (done):** `owner_location` gives the last place and a signed link; its page shares the browser's location once and the orchestrator carries on. Addresses come from OpenStreetMap. The pilot types the place where an app takes one.
+
 ## M8 (done)
 
 - **SMS (done, live):** `channels/twilio.py`. Twilio posts the owner's texts to `/twilio/sms`; each is checked against Twilio's signature, and other numbers are ignored. Replies go by Twilio's API. Screenshots are a link to the panel (UK numbers can't send pictures). `web.py` is now the one server every HTTP channel adds routes to.

@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import pydantic_ai
 import pytest
@@ -25,16 +26,26 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.events import Notice, OwnerMessage
 from agent.gateway import Gateway
+from agent.links import Links
+from agent.location import Whereabouts
 from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
 from agent.runs import Outcome
+from agent.store import Location
 from agent.tasks import Tasks
+from agent.web import Web
 
 
 class Owner:
     """Talks to an orchestrator over two channels and collects every reply, including those after tasks finish."""
 
-    def __init__(self, store, respond, outcome: Outcome = Outcome("done", "WhatsApp is open.")):
+    def __init__(
+        self,
+        store,
+        respond,
+        outcome: Outcome = Outcome("done", "WhatsApp is open."),
+        whereabouts: Whereabouts | None = None,
+    ):
         self.requests: list[list[ModelMessage]] = []
         self.pilot = FakePilot(outcome)
         self.tasks = Tasks(store, self.pilot, FakeResearcher(), FakeReporter(), FakeHelper())
@@ -47,7 +58,14 @@ class Owner:
 
         gateway = Gateway([self.cli, self.email], store)
         self.orchestrator = Orchestrator(
-            FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), FakeConnectors(), apps
+            FunctionModel(recording),
+            store,
+            self.tasks,
+            gateway,
+            FakeResearcher(),
+            FakeConnectors(),
+            apps,
+            whereabouts or Whereabouts(store, Web(), None),
         )
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
@@ -318,3 +336,19 @@ def test_it_can_hang_up_after_its_last_word(store):
     (bye,) = owner.says(Text("that's all, bye"))[1:]
     assert bye.text == "Bye for now." and bye.ends
     assert not owner.cli.sent[0].ends
+
+
+def test_it_knows_where_the_owner_last_was_and_has_a_link_for_now(store):
+    web = Web()
+    whereabouts = Whereabouts(store, web, Links(store, web, "secret", "https://archangel.example"))
+    store.save_location(Location(51.5178, -0.0823, 12, "1 Liverpool Street, London", time.time() - 600))
+
+    def respond(prompt: str) -> ModelResponse:
+        return call("owner_location")
+
+    owner = Owner(store, tool_result_or(respond), whereabouts=whereabouts)
+    (reply,) = owner.says(Text("any good ramen near me?"))
+    assert reply.text.startswith(
+        "Last shared 10 min ago: 1 Liverpool Street, London (51.51780, -0.08230, within 12 m)."
+    )
+    assert "Link: https://archangel.example/where/cli/owner?expires=" in reply.text
