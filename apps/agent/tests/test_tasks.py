@@ -10,6 +10,10 @@ from agent.tasks import Tasks
 CLI = Address("cli", "local")
 
 
+def _tasks(store, pilot=None, researcher=None, reporter=None) -> Tasks:
+    return Tasks(store, pilot or FakePilot(), researcher or FakeResearcher(), reporter or FakeReporter(), FakeHelper())
+
+
 def _notified(tasks: Tasks) -> list[str]:
     updates = []
 
@@ -22,7 +26,7 @@ def _notified(tasks: Tasks) -> list[str]:
 
 def test_tasks_run_in_the_background_and_pause_for_the_owner(store):
     async def scenario():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store)
         updates = _notified(tasks)
 
         task = tasks.start("Post hello", CLI)
@@ -41,7 +45,7 @@ def test_tasks_run_in_the_background_and_pause_for_the_owner(store):
 
 def test_steps_are_recorded(store):
     async def scenario():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store)
         tasks.start("Post hello", CLI)
         await tasks.idle()
 
@@ -56,7 +60,7 @@ def test_steps_are_recorded(store):
 def test_all_the_owner_says_to_a_task_stays_with_it_so_its_not_asked_again(store):
     async def scenario():
         pilot = FakePilot(hold=asyncio.Event())
-        tasks = Tasks(store, pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, pilot)
         tasks.start("Find flights", CLI)
         await asyncio.sleep(0)
         tasks.answer(1, Answer("Clear any old filters"))  # while it runs
@@ -71,7 +75,7 @@ def test_all_the_owner_says_to_a_task_stays_with_it_so_its_not_asked_again(store
 
 def test_only_open_tasks_take_answers(store):
     async def scenario():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store)
         assert tasks.answer(7, Answer("yes")) == "Task #7 isn't open."
 
     asyncio.run(scenario())
@@ -80,7 +84,7 @@ def test_only_open_tasks_take_answers(store):
 def test_a_running_task_hears_the_owner(store):
     async def scenario():
         pilot = FakePilot(hold=asyncio.Event())
-        tasks = Tasks(store, pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, pilot)
         tasks.start("Read the latest text", CLI)
         await asyncio.sleep(0)
         assert tasks.answer(1, Answer("You can tap Continue")) == "Passed on to task #1; it sees it on its next step."
@@ -95,7 +99,7 @@ def test_one_task_drives_the_phone_at_a_time(store):
     async def scenario():
         hold = asyncio.Event()
         pilot = FakePilot(hold=hold)
-        tasks = Tasks(store, pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, pilot)
         tasks.start("first", CLI)
         tasks.start("second", CLI)
         await asyncio.sleep(0)
@@ -109,7 +113,7 @@ def test_one_task_drives_the_phone_at_a_time(store):
 
 def test_cancelling_stops_a_running_task(store):
     async def scenario():
-        tasks = Tasks(store, FakePilot(hold=asyncio.Event()), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, FakePilot(hold=asyncio.Event()))
         updates = _notified(tasks)
         tasks.start("forever", CLI)
         await asyncio.sleep(0)
@@ -126,7 +130,7 @@ def test_cancelling_stops_a_running_task(store):
 def test_research_runs_beside_a_phone_task(store):
     async def scenario():
         pilot = FakePilot(hold=asyncio.Event())
-        tasks = Tasks(store, pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, pilot)
         updates = _notified(tasks)
         tasks.start("Read the latest text", CLI)
         tasks.start("The best funds in 2026", CLI, "research")
@@ -150,7 +154,7 @@ def test_research_runs_beside_a_phone_task(store):
 
 def test_research_cant_be_told_anything_midway(store):
     async def scenario():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(hold=asyncio.Event()), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, researcher=FakeResearcher(hold=asyncio.Event()))
         tasks.start("The best funds in 2026", CLI, "research")
         await asyncio.sleep(0)
         assert tasks.answer(1, Answer("only UK ones")).startswith("Task #1 (research) can't be told")
@@ -166,7 +170,7 @@ def test_without_a_report_the_research_is_passed_on_as_it_is(store):
             raise RuntimeError("down")
 
     async def scenario():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), Broken(), FakeHelper())
+        tasks = _tasks(store, reporter=Broken())
         updates = _notified(tasks)
         tasks.start("The best funds in 2026", CLI, "research")
         await tasks.idle()
@@ -182,7 +186,7 @@ def test_failed_research_is_a_failed_task(store):
             raise RuntimeError("OpenRouter is down")
 
     async def scenario():
-        tasks = Tasks(store, FakePilot(), Broken(), FakeReporter(), FakeHelper())
+        tasks = _tasks(store, researcher=Broken())
         updates = _notified(tasks)
         tasks.start("The best funds in 2026", CLI, "research")
         await tasks.idle()

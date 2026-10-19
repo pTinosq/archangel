@@ -1,6 +1,7 @@
 import asyncio
 
 import pydantic_ai
+import pytest
 from fakes import (
     SCREEN,
     FakeChannel,
@@ -45,7 +46,9 @@ class Owner:
             return respond(messages, info)
 
         gateway = Gateway([self.cli, self.email], store)
-        self.orchestrator = Orchestrator(FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), FakeConnectors(), apps)
+        self.orchestrator = Orchestrator(
+            FunctionModel(recording), store, self.tasks, gateway, FakeResearcher(), FakeConnectors(), apps
+        )
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
         async def scenario():
@@ -57,7 +60,7 @@ class Owner:
 
 
 def ok(messages, info) -> ModelResponse:
-    return ModelResponse(parts=[TextPart("ok")])
+    return say("ok")
 
 
 def prompt_of(messages: list[ModelMessage]) -> str:
@@ -72,7 +75,7 @@ def tool_result_or(respond):
     def model(messages, info) -> ModelResponse:
         last = messages[-1].parts[-1]
         if isinstance(last, ToolReturnPart):
-            return ModelResponse(parts=[TextPart(str(last.content))])
+            return say(str(last.content))
         return respond(prompt_of(messages))
 
     return model
@@ -185,35 +188,19 @@ def test_questions_reach_the_owner_with_a_screenshot(store):
     assert replies[-1].parts[-1] == SCREEN
 
 
-def test_only_the_owner_can_approve(store):
-    def approves_on_its_own(prompt):
+@pytest.mark.parametrize("answer", [{"answer": "yes", "approve": True}, {"answer": "no"}])
+def test_only_the_owner_can_approve_or_decline(store, answer):
+    def answers_on_its_own(prompt):
         if "not from the owner" in prompt:
-            return call("answer_task", id=1, answer="yes", approve=True)
+            return call("answer_task", id=1, **answer)
         return call("start_task", goal="Post hello")
 
     owner = Owner(
         store,
-        tool_result_or(approves_on_its_own),
+        tool_result_or(answers_on_its_own),
         Outcome("needs_approval", "Approve: post?", pydantic_ai.Conversation()),
     )
     replies = owner.says(Text("post hello"))
-
-    assert replies[-1].text == "Only the owner can say yes or no to this. Ask them."
-    assert len(owner.pilot.calls) == 1
-
-
-def test_only_the_owner_can_decline(store):
-    def declines_on_its_own(prompt):
-        if "not from the owner" in prompt:
-            return call("answer_task", id=1, answer="no")
-        return call("start_task", goal="Read my texts")
-
-    owner = Owner(
-        store,
-        tool_result_or(declines_on_its_own),
-        Outcome("needs_approval", "Approve: continue as Constantinos?", pydantic_ai.Conversation()),
-    )
-    replies = owner.says(Text("read my texts"))
 
     assert replies[-1].text == "Only the owner can say yes or no to this. Ask them."
     assert len(owner.pilot.calls) == 1
@@ -321,10 +308,10 @@ def test_deep_research_only_with_the_owner_s_say_so(store):
 def test_it_can_hang_up_after_its_last_word(store):
     def respond(messages, info) -> ModelResponse:
         if isinstance(messages[-1].parts[-1], ToolReturnPart):
-            return ModelResponse(parts=[TextPart("Bye for now.")])
+            return say("Bye for now.")
         if "bye" in prompt_of(messages):
-            return ModelResponse(parts=[ToolCallPart("hang_up", {})])
-        return ModelResponse(parts=[TextPart("On it.")])
+            return call("hang_up")
+        return say("On it.")
 
     owner = Owner(store, respond)
     owner.says(Text("open whatsapp"))

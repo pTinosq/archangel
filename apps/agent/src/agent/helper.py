@@ -57,6 +57,7 @@ class Helper:
     async def _connected(self) -> str:  # async: sync ones run on a thread, away from SQLite
         return f"Connected, by profile: {self._connectors.describe(prefixes=True)}. Use the profile the task means."
 
+
 async def ask_owner(ctx: RunContext, question: str) -> str:
     """Ask the owner something only they can answer, e.g. which of two Sams. The task pauses until they reply."""
     raise CallDeferred(metadata={"question": question})

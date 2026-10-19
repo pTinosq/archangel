@@ -1,7 +1,7 @@
 """Answers from the web, never the phone: a quick search while the owner waits (Tavily: results the orchestrator
-answers from, and pages it reads in full when a result only points to the answer), or research as a background task: Perplexity's Pro Search via OpenRouter (several searches, many
-sources, under a minute, a few pence) or, when the owner agrees to the cost, its Deep Research (~4 minutes, ~60p, an
-80k-character essay whatever it's told).
+answers from, and pages it reads in full when a result only points to the answer), or research as a background task:
+Perplexity's Pro Search via OpenRouter (several searches, many sources, under a minute, a few pence) or, when the owner
+agrees to the cost, its Deep Research (~4 minutes, ~60p, an 80k-character essay whatever it's told).
 """
 
 import httpx

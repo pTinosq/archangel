@@ -2,8 +2,8 @@
 every task and its steps, edited prompts, and connectors with their sign-ins. SQLite, one file in data/.
 
 The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
-Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT: they're most of the bytes
-and only matter while a task is fresh.
+Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT:
+they're most of the bytes and only matter while a task is fresh.
 """
 
 import json
@@ -204,14 +204,17 @@ class Store:
     # Pages: research reports as web pages, kept (they're small)
 
     def save_page(self, task: int, html: str) -> None:
-        (self._pages / f"{task}.html").write_text(html)
+        self._page(task).write_text(html)
 
     def has_page(self, task: int) -> bool:
-        return (self._pages / f"{task}.html").exists()
+        return self._page(task).exists()
 
     def page(self, task: int) -> str | None:
-        path = self._pages / f"{task}.html"
+        path = self._page(task)
         return path.read_text() if path.exists() else None
+
+    def _page(self, task: int) -> Path:
+        return self._pages / f"{task}.html"
 
     # Images
 

@@ -1,7 +1,9 @@
 """The agent the owner talks to. It manages work rather than doing it: starts phone tasks, research and tasks in the
-owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to do when they fail, and keeps the owner informed on whichever channel suits.
+owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to do when they
+fail, and keeps the owner informed on whichever channel suits.
 
-One conversation whatever the channel. Events (owner messages, task updates) are handled one at a time, in order.
+One conversation whatever the channel. Events (owner messages, task updates, notices) are handled one at a time, in
+order.
 """
 
 import asyncio
@@ -95,8 +97,11 @@ class Orchestrator:
         def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
-                return f"No channel {report_via!r}. Channels: {', '.join(gateway.channels)}."
+                return no_channel(report_via)
             return f"Started task #{tasks.start(goal, report_to, kind).id}."
+
+        def no_channel(name: str) -> str:
+            return f"No channel {name!r}. Channels: {', '.join(gateway.channels)}."
 
         @self._agent.tool_plain
         async def search_web(question: str) -> str:
@@ -138,7 +143,7 @@ class Orchestrator:
         async def redirect_task(id: int, channel: str) -> str:
             """Send a started task's updates to another channel, e.g. "text me when it's done" (sms)."""
             if not (to := gateway.owner(channel)):
-                return f"No channel {channel!r}. Channels: {', '.join(gateway.channels)}."
+                return no_channel(channel)
             return tasks.redirect(id, to)
 
         @self._agent.tool_plain
@@ -160,7 +165,7 @@ class Orchestrator:
             the screen you were just shown, e.g. texting it to the owner while on a call.
             """
             if not (to := gateway.owner(channel)):
-                return f"No channel {channel!r}. Channels: {', '.join(gateway.channels)}."
+                return no_channel(channel)
             if channel == ctx.deps.reply_to.channel and not screenshot:  # or the owner gets it twice
                 return f"Your reply already goes via {channel}: say it there."
             images = ctx.deps.attachments() if screenshot else ()
@@ -174,7 +179,7 @@ class Orchestrator:
             with activity.acting("orchestrator"):
                 # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
                 # it had been there all along, and the model apologises for starting a duplicate.
-                self._arrived_to = await self._situation()
+                self._arrived_to = self._situation()
                 self._ends = False
                 try:
                     messages = self._store.history()
@@ -188,7 +193,7 @@ class Orchestrator:
                     parts = (Text(event.fallback(error)),)
                 await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends))
 
-    async def _situation(self) -> str:  # async: sync ones run on a thread, away from SQLite
+    def _situation(self) -> str:
         tasks = self._tasks.list()[::-1]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [

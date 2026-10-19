@@ -2,8 +2,8 @@
 the owner's online services (connectors).
 
 One phone, so one phone task drives it at a time; the rest queue. Research and connectors don't touch the phone, so
-run beside; the reporter writes research up as a page. Every change is saved, each step the pilot reports
-is recorded for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
+run beside; the reporter writes research up as a page. Every change is saved, each step a task reports is recorded
+for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
 """
 
 import asyncio
@@ -15,8 +15,8 @@ import pydantic_ai
 from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
-from agent.phone.pilot import Pilot
 from agent.helper import Helper
+from agent.phone.pilot import Pilot
 from agent.reports import Reporter
 from agent.research import Researcher
 from agent.runs import Answer, Outcome, Record
@@ -46,7 +46,7 @@ class Tasks:
         self._researcher = researcher
         self._helper = helper
         self._phone = asyncio.Lock()
-        self._running: dict[int, asyncio.Task] = {}  # pilots, by task id
+        self._running: dict[int, asyncio.Task] = {}  # by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
         self._said: dict[int, list[str]] = {}  # all the owner has said to an open phone task (not kept over restarts)
         self._updates: set[asyncio.Task] = set()  # updates being handled
