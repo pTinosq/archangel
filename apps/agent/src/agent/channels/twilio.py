@@ -18,7 +18,7 @@ from urllib.parse import parse_qsl
 from xml.sax.saxutils import escape, quoteattr
 
 import httpx
-from fastapi import Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 
 from agent.channels import Channel, Deliver
 from agent.events import Notice
@@ -80,11 +80,16 @@ class Twilio:
         response.raise_for_status()
         return response.json()
 
-    async def signed(self, request: Request) -> dict[str, str] | None:
-        """The form Twilio posted, or None if Twilio didn't send it."""
+    async def signed(self, request: Request) -> dict[str, str]:
+        """The form Twilio posted; 403 if Twilio didn't send it."""
         form = dict(parse_qsl((await request.body()).decode(), keep_blank_values=True))  # always urlencoded
-        expected = signature(self.account.token, str(request.url), form)
-        return form if hmac.compare_digest(expected, request.headers.get("x-twilio-signature", "")) else None
+        if not hmac.compare_digest(signature(self.account.token, str(request.url), form), _sent_signature(request)):
+            raise HTTPException(403)
+        return form
+
+
+def _sent_signature(connection: Request | WebSocket) -> str:
+    return connection.headers.get("x-twilio-signature", "")
 
 
 def signature(token: str, url: str, form: dict[str, str]) -> str:
@@ -108,8 +113,7 @@ class SmsChannel(Channel):
 
         @web.app.post("/twilio/sms")
         async def received(request: Request) -> Response:
-            if (form := await twilio.signed(request)) is None:
-                return Response(status_code=403)
+            form = await twilio.signed(request)
             sender, body = form.get("From", ""), form.get("Body", "").strip()
             if sender != twilio.account.owner:
                 log.warning("Ignored a text from %s", sender)
@@ -181,8 +185,7 @@ class VoiceChannel(Channel):
 
         @web.app.post("/twilio/voice")
         async def ringing(request: Request) -> Response:
-            if (form := await twilio.signed(request)) is None:
-                return Response(status_code=403)
+            form = await twilio.signed(request)
             if (caller := form.get("From", "")) != twilio.account.owner:
                 log.warning("Rejected a call from %s", caller)
                 return _xml(REJECT)
@@ -190,8 +193,7 @@ class VoiceChannel(Channel):
 
         @web.app.post("/twilio/voice/answered")
         async def answered(request: Request) -> Response:
-            if (form := await twilio.signed(request)) is None:
-                return Response(status_code=403)
+            form = await twilio.signed(request)
             if not (outgoing := self._outgoing.get(form.get("CallSid", ""))):
                 return _xml(self._twiml(GREETING))
             outgoing.greeted = len(outgoing.said)
@@ -199,8 +201,7 @@ class VoiceChannel(Channel):
 
         @web.app.post("/twilio/voice/machine")
         async def machine(request: Request) -> Response:
-            if (form := await twilio.signed(request)) is None:
-                return Response(status_code=403)
+            form = await twilio.signed(request)
             call, answered_by = form.get("CallSid", ""), form.get("AnsweredBy", "unknown")
             if not (outgoing := self._outgoing.get(call)):
                 return _xml(EMPTY)
@@ -219,26 +220,15 @@ class VoiceChannel(Channel):
 
         @web.app.post("/twilio/voice/ended")
         async def ended(request: Request) -> Response:
-            if (form := await twilio.signed(request)) is None:
-                return Response(status_code=403)
-            outgoing, status = self._outgoing.pop(form.get("CallSid", ""), None), form.get("CallStatus", "")
-            if outgoing and outgoing.voicemail:
-                await self._notice(f'Your call to the owner went to their voicemail. You left: "{outgoing.voicemail}"')
-            elif outgoing and (status in UNANSWERED or outgoing.person is False):
-                await self._notice(
-                    f'You rang the owner; no answer ({status}). They haven\'t heard: "{" ".join(outgoing.said)}"'
-                )
-            elif outgoing and outgoing.person is None:  # picked up, but by whom Twilio never said
-                await self._notice(
-                    f"You rang the owner and it was picked up, but maybe by their voicemail before the beep, so they "
-                    f'may not have heard: "{" ".join(outgoing.said)}"'
-                )
+            form = await twilio.signed(request)
+            outgoing = self._outgoing.pop(form.get("CallSid", ""), None)
+            if outgoing and (notice := _how_it_went(outgoing, form.get("CallStatus", ""))):
+                await self._notice(notice)
             return _xml(EMPTY)
 
         @web.app.websocket("/twilio/voice/relay")
         async def relay(websocket: WebSocket) -> None:
-            expected = signature(twilio.account.token, self._relay, {})
-            if not hmac.compare_digest(expected, websocket.headers.get("x-twilio-signature", "")):
+            if not hmac.compare_digest(signature(twilio.account.token, self._relay, {}), _sent_signature(websocket)):
                 await websocket.close(code=1008)
                 return
             await websocket.accept()
@@ -355,6 +345,21 @@ class VoiceChannel(Channel):
             await self._twilio.send_sms(self.owner.id, text)
         except httpx.HTTPError:  # e.g. the owner texted STOP; nowhere left to say it but the panel's transcript
             log.exception("Couldn't text the owner: %s", text)
+
+
+def _how_it_went(outgoing: _Outgoing, status: str) -> str | None:
+    """What the orchestrator should hear about a call Archangel made that has ended; None if it went fine."""
+    said = " ".join(outgoing.said)
+    if outgoing.voicemail:
+        return f'Your call to the owner went to their voicemail. You left: "{outgoing.voicemail}"'
+    if status in UNANSWERED or outgoing.person is False:
+        return f'You rang the owner; no answer ({status}). They haven\'t heard: "{said}"'
+    if outgoing.person is None:  # picked up, but by whom Twilio never said
+        return (
+            f"You rang the owner and it was picked up, but maybe by their voicemail before the beep, so they "
+            f'may not have heard: "{said}"'
+        )
+    return None
 
 
 def _xml(twiml: str) -> Response:

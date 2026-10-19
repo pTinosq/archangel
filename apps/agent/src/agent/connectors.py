@@ -124,7 +124,7 @@ class Connectors:
         ]
 
     def all(self) -> list[Connector]:
-        return [_connector(data) for data in self._store.connectors().values()]
+        return [Connector(**data) for data in self._store.connectors().values()]
 
     def connected(self) -> list[Connector]:
         return [connector for connector in self.all() if connector.signed_in]
@@ -303,7 +303,7 @@ class Connectors:
     def _get(self, name: str) -> Connector:
         if not (data := self._store.connectors().get(name)):
             raise KeyError(f"No connector called {name!r}")
-        return _connector(data)
+        return Connector(**data)
 
     def _save(self, connector: Connector) -> None:
         self._store.save_connector(connector.name, connector.__dict__)
@@ -379,9 +379,7 @@ class _Guarded(WrapperToolset):
         return self
 
     async def __aexit__(self, *args):
-        if not self._failed:
-            return await self.wrapped.__aexit__(*args)
-        return None
+        return None if self._failed else await self.wrapped.__aexit__(*args)
 
     async def get_tools(self, ctx: RunContext) -> dict[str, ToolsetTool]:
         return {} if self._failed else await super().get_tools(ctx)
@@ -397,10 +395,6 @@ class _Guarded(WrapperToolset):
             result = await super().call_tool(name, tool_args, ctx, tool)
             reply(result)
         return result
-
-
-def _connector(data: dict) -> Connector:
-    return Connector(**data)
 
 
 def _state(url: str) -> str:
