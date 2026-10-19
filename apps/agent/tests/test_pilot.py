@@ -74,12 +74,10 @@ class FakeGuard:
 
 
 class FakeInvestigator:
-    def __init__(self, advice: str | None = "A dialog is covering it; close it first."):
+    def __init__(self, advice: str | None = None):
         self.advice = advice
-        self.asked: list[list[str]] = []
 
     async def investigate(self, goal: str, steps: list[str], screens: list[Image]) -> str | None:
-        self.asked.append(steps)
         return self.advice
 
 
@@ -102,7 +100,7 @@ def scripted(*calls: tuple[str, dict]):
 def run(
     model, phone: FakePhone, guard: FakeGuard | None = None, investigator: FakeInvestigator | None = None, **kwargs
 ) -> Outcome:
-    kit = Kit(phone, FakeVision(), guard or FakeGuard(), investigator or FakeInvestigator(None))
+    kit = Kit(phone, FakeVision(), guard or FakeGuard(), investigator or FakeInvestigator())
     record = kwargs.pop("record", lambda text, screen: None)
     return asyncio.run(Pilot(model, kit).run("do it", record, **kwargs))
 
@@ -134,12 +132,6 @@ def test_problems_are_reported_back_to_the_model():
         "Opened whatsapp.",
     ]
     assert phone.actions == ["launch com.whatsapp", "key home"]
-
-
-def test_scrolling_through_a_list_is_not_a_loop():
-    investigator = FakeInvestigator()
-    run(scripted(*[("scroll", {"direction": "down"})] * 4), FakePhone(), investigator=investigator)
-    assert investigator.asked == []
 
 
 def test_the_model_can_give_up():

@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -227,22 +227,22 @@ async def _stuck(session: _Session, report: str) -> Outcome:
 
 async def open_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Open an installed app by its name, e.g. "WhatsApp"."""
-    apps = await ctx.deps.kit.phone.apps()
-    if not (package := _package(apps, name)):
-        return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
-    return await ctx.deps.act(ctx.deps.kit.phone.launch(package), f"Opened {name}.")
+    return await _with_app(ctx, name, ctx.deps.kit.phone.launch, f"Opened {name}.")
 
 
 async def close_app(ctx: RunContext[_Session], name: str) -> ToolReturn | str:
     """Close an app completely (as swiping it away in recents does), so it starts afresh next time."""
+    return await _with_app(ctx, name, ctx.deps.kit.phone.close, f"Closed {name}.")
+
+
+async def _with_app(
+    ctx: RunContext[_Session], name: str, action: Callable[[str], Awaitable[None]], note: str
+) -> ToolReturn | str:
     apps = await ctx.deps.kit.phone.apps()
-    if not (package := _package(apps, name)):
+    package = next((package for label, package in apps.items() if label.lower() == name.lower()), None)
+    if not package:
         return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
-    return await ctx.deps.act(ctx.deps.kit.phone.close(package), f"Closed {name}.")
-
-
-def _package(apps: dict[str, str], name: str) -> str | None:
-    return next((package for label, package in apps.items() if label.lower() == name.lower()), None)
+    return await ctx.deps.act(action(package), note)
 
 
 async def tap(ctx: RunContext[_Session], target: str, hold: bool = False) -> ToolReturn | str:

@@ -1,7 +1,7 @@
 """A second opinion when a phone task stops making progress.
 
 A separate vision model looks at the recent screens and steps, says what's in the way and how to get past it.
-It only runs when the pilot repeats itself or is stuck, so everyday steps stay on the cheaper path.
+It only runs when the pilot asks for one or runs out of steps, so everyday steps stay on the cheaper path.
 """
 
 import logging
@@ -43,7 +43,7 @@ class ModelInvestigator:
         try:
             diagnosis = (await logs.run(self._agent, prompt)).output
         except Exception as error:
-            # Advice is optional: without it the pilot still has its own judgement and the stuck limits.
+            # Advice is optional: without it the pilot still has its own judgement.
             log.warning("Investigator failed: %s", error)
             return None
         log.info("Investigator: %s", diagnosis)
