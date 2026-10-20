@@ -33,8 +33,7 @@ from agent.web import Web
 def main() -> None:
     pydantic_ai.BANNER_ENABLED = False
     logs.start()
-    # The main model talks and acts step by step, so it answers without reasoning first: fast and steady.
-    model, fallback = openrouter(config.model(), think=False), openrouter(config.fallback_vision_model())
+    model, fallback = openrouter(config.model()), openrouter(config.fallback_vision_model())
     store = Store()
     interrupted = store.interrupt_running()
     prompts = Prompts(store)
@@ -77,7 +76,9 @@ def main() -> None:
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
     orchestrator = Orchestrator(
-        model,
+        # Everything the owner says waits behind it, so it answers without reasoning first. The background agents
+        # (pilot, guard, ...) keep it: they find their way through screens and judge risk.
+        openrouter(config.model(), think=False),
         store,
         tasks,
         gateway,
