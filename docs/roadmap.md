@@ -18,6 +18,7 @@ Each milestone ships something usable and proves one idea.
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
+| M14 | Self-improvement | "add a Telegram channel" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
@@ -162,3 +163,12 @@ The owner also tests across channels and reports changes.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 
 Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+## M14 requirements (self-improvement) (from the owner)
+
+- **Builds its own features.** Ask from any channel ("add a Telegram channel", "make the panel show costs"); a coding agent works on this repo the way Claude Code does locally, following `CLAUDE.md`.
+- **Heals itself.** Failures (a stuck task, an orchestrator error, a bad deploy) are diagnosed from logs and steps, and a fix is proposed.
+
+**Plan (sketch, undecided)**
+- **In the cloud, not on the agent's box.** A coding agent (Claude Code via its GitHub Action, or Claude Code on the web) works on a branch; an orchestrator tool hands it the request, and its PR link comes back like any task's report.
+- **The owner merges.** Merging to `main` deploys, so a merge is an approval, never automatic. Tests run on the PR first; a revert undoes a bad change.
+- **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
