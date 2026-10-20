@@ -2,17 +2,34 @@ import { useEffect, useRef, useState } from "react";
 
 const EVERY_MS = 1000;
 
-/** `load()` now and every second after; the latest result, or undefined until the first arrives. */
+type Shared = { value: unknown; watchers: Set<(value: unknown) => void>; timer: number };
+const polls = new Map<() => Promise<unknown>, Shared>();
+
+/** `load()` now and every second after; the latest result, or undefined until the first arrives. Everything polling
+ * the same `load` (the task list, for the Tasks page and the panel's sounds) shares one request. */
 export function usePoll<T>(load: () => Promise<T>): T | undefined {
-  const [value, setValue] = useState<T>();
+  const [value, setValue] = useState<T | undefined>(() => polls.get(load)?.value as T | undefined);
   useEffect(() => {
-    let live = true;
-    const run = () => load().then((v) => live && setValue(v), () => {});
-    run();
-    const timer = setInterval(run, EVERY_MS);
+    let shared = polls.get(load);
+    if (!shared) {
+      const fresh: Shared = { value: undefined, watchers: new Set(), timer: 0 };
+      const run = () =>
+        load().then((v) => {
+          fresh.value = v;
+          fresh.watchers.forEach((watch) => watch(v));
+        }, () => {});
+      run();
+      fresh.timer = setInterval(run, EVERY_MS);
+      polls.set(load, (shared = fresh));
+    }
+    const watch = (v: unknown) => setValue(v as T);
+    shared.watchers.add(watch);
     return () => {
-      live = false;
-      clearInterval(timer);
+      shared.watchers.delete(watch);
+      if (!shared.watchers.size) {
+        clearInterval(shared.timer);
+        polls.delete(load);
+      }
     };
   }, []);
   return value;

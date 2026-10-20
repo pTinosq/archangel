@@ -30,7 +30,7 @@ just agent               # keep running
 just panel               # open http://localhost:5173
 ```
 
-Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, edit the prompts, and connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires). Each page has its own address (`/tasks/12`, `/connectors`). The Cockpit shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing. Local, until you deploy it.
+Watch tasks live (screen, steps, report), approve or answer waiting tasks, chat with Archangel, edit the prompts, and connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires). Each page has its own address (`/tasks/12`, `/connectors`). Small sounds for presses, messages, approvals and the cockpit's traffic; "Sound off" in the header silences them. The Cockpit shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing. Local, until you deploy it.
 
 ## Drive the phone
 

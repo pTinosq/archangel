@@ -119,7 +119,9 @@ function Report({ task }: { task: Task }) {
         Open the report
       </a>
       <span className="quiet">{isPublic ? "· public: anyone with the link" : "· private: only you"}</span>
-      <button onClick={flip}>{isPublic ? "Make private" : "Make public"}</button>
+      <button data-sound={isPublic ? "toggleOff" : "toggleOn"} onClick={flip}>
+        {isPublic ? "Make private" : "Make public"}
+      </button>
     </p>
   );
 }
@@ -135,8 +137,10 @@ function Controls({ task }: { task: Task }) {
     <div className={task.status.startsWith("needs") ? "controls waiting" : "controls"}>
       {task.status === "needs approval" && (
         <>
-          <button className="approve" onClick={() => say(`Yes, approve task #${task.id}.`)}>Approve</button>
-          <button onClick={() => say(`No, don't do it (task #${task.id}).`)}>Decline</button>
+          <button className="approve" data-sound="approve" onClick={() => say(`Yes, approve task #${task.id}.`)}>Approve</button>
+          <button data-sound="decline" onClick={() => say(`No, don't do it (task #${task.id}).`)}>
+            Decline
+          </button>
         </>
       )}
       {task.status === "needs answer" && (
@@ -151,7 +155,9 @@ function Controls({ task }: { task: Task }) {
           <button onClick={answer} disabled={!reply}>Reply</button>
         </>
       )}
-      <button onClick={() => say(`Cancel task #${task.id}.`)}>Cancel task</button>
+      <button data-sound="decline" onClick={() => say(`Cancel task #${task.id}.`)}>
+        Cancel task
+      </button>
       {sent && <p className="quiet">Sent “{sent}”</p>}
     </div>
   );

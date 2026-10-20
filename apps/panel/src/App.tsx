@@ -1,9 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { api } from "./api";
 import { Chat } from "./Chat";
 import { Cockpit } from "./Cockpit";
 import { Connectors } from "./Connectors";
 import { useNarrow } from "./narrow";
+import { usePoll } from "./poll";
 import { Prompts } from "./Prompts";
+import { play, setSoundOn, soundOn, subscribeSound } from "./sounds";
 import { go, Link, type Page, useRoute } from "./route";
 import { Tasks } from "./Tasks";
 
@@ -21,6 +24,8 @@ export function App() {
     if (shown !== route.page) history.replaceState(null, "", `/${shown}`);
   }, [shown, route.page]);
 
+  useTaskSounds();
+
   return (
     <div className="app">
       <header>
@@ -34,6 +39,7 @@ export function App() {
             </Link>
           ))}
         </nav>
+        <SoundSwitch />
         {PUBLIC && (
           <a className="sign-out" href="/auth/logout">
             Sign out
@@ -52,4 +58,37 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function SoundSwitch() {
+  const on = useSyncExternalStore(subscribeSound, soundOn);
+  return (
+    <button
+      className="sound-switch"
+      data-sound=""
+      aria-pressed={on}
+      onClick={() => {
+        // Heard either way: the switch going off, then silence; or the sound coming back on.
+        if (on) play("toggleOff").then(() => setSoundOn(false));
+        else (setSoundOn(true), play("toggleOn"));
+      }}
+    >
+      Sound {on ? "on" : "off"}
+    </button>
+  );
+}
+
+/** A ding when a task starts waiting on the owner, a softer one when one finishes; nothing for what was already so. */
+function useTaskSounds() {
+  const tasks = usePoll(api.tasks);
+  const seen = useRef<Map<number, string>>(undefined);
+  useEffect(() => {
+    if (!tasks) return;
+    const before = seen.current;
+    seen.current = new Map(tasks.map((t) => [t.id, t.status]));
+    if (!before) return;
+    const changed = tasks.filter((t) => before.get(t.id) !== t.status);
+    if (changed.some((t) => t.status.startsWith("needs"))) play("needs");
+    else if (changed.some((t) => t.status === "done")) play("done");
+  }, [tasks]);
 }

@@ -98,6 +98,14 @@ nav a:hover { color: var(--text); }
 nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
 .sign-out { margin-left: auto; color: var(--quiet); text-decoration: none; font-size: 12px; }
 .sign-out:hover { color: var(--text); }
+/* Sound on or off, like sign-out: plain words in the header. */
+button.sound-switch {
+  margin-left: auto; padding: 0; border: none; box-shadow: none; background: none;
+  font: 12px/16px var(--mono); text-transform: none; letter-spacing: 0; color: var(--quiet);
+}
+button.sound-switch[aria-pressed="true"], button.sound-switch:hover:not(:disabled) { color: var(--text); }
+button.sound-switch:active:not(:disabled) { transform: none; }
+.sound-switch + .sign-out { margin-left: 0; }
 
 main { flex: 1; display: grid; gap: var(--s2); padding: var(--s2); min-height: 0; }
 main.tasks { grid-template-columns: 280px 1fr 360px; }
@@ -255,6 +263,7 @@ section.cockpit { padding: 0; overflow: hidden; }
     padding-left: max(var(--s3), env(safe-area-inset-left)); padding-right: max(var(--s3), env(safe-area-inset-right));
   }
   .brand, .sign-out { line-height: 44px; }
+  button.sound-switch { min-height: 44px; padding: 0; }
   nav { order: 1; width: calc(100% + 2 * var(--s3)); margin: 0 calc(-1 * var(--s3)); height: 44px; border-top: 1px solid var(--line); }
   nav a { flex: 1; justify-content: center; padding: 0 var(--s1); font-size: 8px; }
 
@@ -310,3 +319,5 @@ section.cockpit { padding: 0; overflow: hidden; }
   .timeline .text { grid-area: text; }
   .timeline .request { grid-area: request; }
 }
+
+

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl } from "./api";
 import { useFeed } from "./poll";
+import { play } from "./sounds";
 
 /** `visible` false: kept mounted but hidden (a phone on another tab), so the draft survives. */
 export function Chat({ visible }: { visible: boolean }) {
@@ -11,15 +12,24 @@ export function Chat({ visible }: { visible: boolean }) {
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
   }, [lines.length, visible]); // a hidden list loses its scroll: back to the end when shown
+  const heard = useRef<number>(undefined);
+  useEffect(() => {
+    const last = lines.at(-1);
+    // Not for the history on load: only a reply that arrives while the panel is open.
+    if (heard.current !== undefined && last && last.id > heard.current && last.sender === "archangel") play("receive");
+    if (lines.length) heard.current = last!.id;
+  }, [lines.length]);
 
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
     try {
       await api.say(text);
+      play("send");
       setDraft("");
       setError("");
     } catch {
+      play("error");
       setError("Couldn't reach Archangel. Is `just agent` running?");
     }
   };
@@ -54,7 +64,9 @@ export function Chat({ visible }: { visible: boolean }) {
           placeholder="Message Archangel"
           enterKeyHint="send"
         />
-        <button type="submit">Send</button>
+        <button type="submit" data-sound="">
+          Send
+        </button>
       </form>
     </section>
   );

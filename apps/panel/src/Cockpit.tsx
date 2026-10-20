@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import { Component, type CSSProperties, Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CALLS, type Notice, openCalls, type Role, useActivity } from "./activity";
 import { useNarrow } from "./narrow";
+import { play, throttled } from "./sounds";
 
 const NODE = { width: 120, height: 44 }; // as in styles.css
 const PULSE_SECONDS = 1.2;
@@ -27,6 +28,7 @@ type Follow = number | "live" | null;
 
 export function Cockpit() {
   const notices = useActivity();
+  useTrafficSounds(notices);
   const now = useNow();
   const [follow, setFollow] = useState<Follow>("live");
   const [opened, setOpened] = useState<number | null>(null);
@@ -291,4 +293,16 @@ function useNow(): number {
     return () => clearInterval(timer);
   }, []);
   return now;
+}
+
+/** A tick for each request out (tx) and reply back (rx) as it happens; not for what's replayed on connecting. */
+function useTrafficSounds(notices: Notice[]) {
+  const heard = useRef(0);
+  const sounds = useMemo(() => ({ tx: throttled(60, () => play("tx")), rx: throttled(60, () => play("rx")) }), []);
+  useEffect(() => {
+    const fresh = notices.filter((n) => n.id > heard.current);
+    if (!fresh.length) return;
+    heard.current = fresh[fresh.length - 1].id;
+    for (const n of fresh) if (Date.now() / 1000 - n.time < 3) sounds[n.dir]();
+  }, [notices, sounds]);
 }
