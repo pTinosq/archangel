@@ -33,7 +33,8 @@ from agent.web import Web
 def main() -> None:
     pydantic_ai.BANNER_ENABLED = False
     logs.start()
-    model, fallback = openrouter(config.model()), openrouter(config.fallback_vision_model())
+    # The main model talks and acts step by step, so it answers without reasoning first: fast and steady.
+    model, fallback = openrouter(config.model(), think=False), openrouter(config.fallback_vision_model())
     store = Store()
     interrupted = store.interrupt_running()
     prompts = Prompts(store)

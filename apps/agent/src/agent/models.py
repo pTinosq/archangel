@@ -29,11 +29,15 @@ owner's order). An open model like DeepSeek has dozens, some running cut-down co
 did, for minutes). A new model may need its host added here."""
 
 
-def openrouter(name: str, timeout: float = TIMEOUT) -> Model:
+def openrouter(name: str, timeout: float = TIMEOUT, think: bool = True) -> Model:
     """Every model goes through OpenRouter, so any of its models works by name, on a `TRUSTED` host. A call taking
-    over `timeout` seconds is abandoned and retried."""
+    over `timeout` seconds is abandoned and retried. `think=False` turns reasoning off where the model allows it:
+    DeepSeek's can run to a minute on one step, and neither its effort levels nor a token cap reliably bound it.
+    Models that must reason (Claude Sonnet 5.5) keep their default."""
     provider = OpenRouterProvider(api_key=config.openrouter_api_key())
     settings = OpenRouterModelSettings(timeout=timeout, openrouter_provider={"order": TRUSTED, "only": TRUSTED})
+    if not think:
+        settings["thinking"] = False
     return OpenRouterModel(name, provider=provider, settings=settings)
 
 
