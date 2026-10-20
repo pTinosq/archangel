@@ -6,6 +6,8 @@ export type Task = {
   kind: "phone" | "research" | "deep research" | "connectors";
   /** A research report's web page, at /reports/{id}. */
   page: boolean;
+  /** Its report opens for anyone with the link; otherwise only signed in. */
+  public: boolean;
   status: string;
   open: boolean;
   report: string;
@@ -54,6 +56,8 @@ export const api = {
   /** Everything the owner does here, buttons included, is a message in the one conversation. */
   say: (text: string) => call<null>("POST", "/messages", { text }),
   tasks: () => call<Task[]>("GET", "/tasks"),
+  /** Not a message: who can open a report is the owner's own setting. */
+  makePublic: (task: number, isPublic: boolean) => call<{ public: boolean }>("PUT", `/tasks/${task}/public`, { public: isPublic }),
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
   prompts: () => call<Prompt[]>("GET", "/prompts"),
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),

@@ -152,6 +152,20 @@ class Orchestrator:
                 return "Only the owner can say yes or no to this. Ask them."
             return tasks.answer(id, Answer(answer, approve))
 
+        @self._agent.tool
+        async def report_visibility(ctx: RunContext[Event], id: int, public: bool | None = None) -> str:
+            """Whether a report's link opens for anyone (public), or only for the owner, signed in (private, the
+            default). Set `public` to change it: public to share it with someone."""
+            if not store.has_page(id):
+                return f"Task #{id} has no report."
+            if public and not ctx.deps.from_owner:
+                return "Only the owner can make a report public. Ask them."
+            if public is not None:
+                store.make_public(id, public)
+            if store.task(id).public:
+                return f"Report #{id} is public: anyone with its link can read it."
+            return f"Report #{id} is private: only the owner can open it, signed in."
+
         @self._agent.tool_plain
         async def redirect_task(id: int, channel: str) -> str:
             """Send a started task's updates to another channel, e.g. "text me when it's done" (sms)."""
@@ -212,6 +226,7 @@ class Orchestrator:
         lines = [
             f"#{t.id} [{t.status}] {'' if t.kind == 'phone' else t.kind + ': '}{t.goal}"
             + (f" → {t.report[:300]}" if t.report else "")
+            + (" (report public)" if t.public else "")
             for t in shown
         ]
         return "\n".join(

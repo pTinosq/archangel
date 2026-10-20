@@ -141,6 +141,28 @@ def test_research_reports_are_pages_that_run_nothing(store):
     assert panel.call("GET", "/reports/2").status_code == 404
 
 
+def test_a_report_opens_for_anyone_only_once_made_public(store):
+    async def start():
+        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks.start("the best funds", Address("cli", "local"), "research")
+        tasks.start("open WhatsApp", Address("cli", "local"))
+        await tasks.idle()
+
+    asyncio.run(start())
+    panel = Panel(store, GitHub("id", "secret", "owner"))
+    stranger = lambda url: panel.call("GET", url, host="archangel.up.railway.app").status_code  # noqa: E731
+    assert stranger("/reports/1") == 307  # to sign in
+
+    store.make_public(1, True)
+    assert (stranger("/reports/1"), stranger("/api/tasks")) == (200, 401)
+
+    local = Panel(store)
+    assert local.call("PUT", "/api/tasks/1/public", json={"public": False}).json() == {"public": False}
+    assert stranger("/reports/1") == 307
+    assert local.call("GET", "/api/tasks").json()[-1]["public"] is False
+    assert local.call("PUT", "/api/tasks/2/public", json={"public": True}).status_code == 404  # no report
+
+
 def test_connectors_are_added_and_listed_without_their_secrets(store):
     panel = Panel(store)
     added = panel.call("POST", "/api/connectors", json={"kind": "google", "settings": {"client_id": "id"}})

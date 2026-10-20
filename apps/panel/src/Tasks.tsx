@@ -68,13 +68,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
         <p>
           <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
         </p>
-        {task.page && (
-          <p>
-            <a href={`/reports/${task.id}`} target="_blank" rel="noreferrer">
-              Open the report
-            </a>
-          </p>
-        )}
+        {task.page && <Report task={task} />}
         {task.report && <p className="report">{task.report}</p>}
         {task.open && <Controls task={task} />}
       </div>
@@ -110,6 +104,23 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
         ))}
       </ol>
     </section>
+  );
+}
+
+/** The report's link, and who it opens for: private (signed in) by default, public to share it. */
+function Report({ task }: { task: Task }) {
+  const [isPublic, setPublic] = useState(task.public);
+  useEffect(() => setPublic(task.public), [task.public]);
+  const flip = () => api.makePublic(task.id, !isPublic).then((made) => setPublic(made.public));
+
+  return (
+    <p>
+      <a href={`/reports/${task.id}`} target="_blank" rel="noreferrer">
+        Open the report
+      </a>
+      <span className="quiet">{isPublic ? "· public: anyone with the link" : "· private: only you"}</span>
+      <button onClick={flip}>{isPublic ? "Make private" : "Make public"}</button>
+    </p>
   );
 }
 

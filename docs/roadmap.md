@@ -34,6 +34,7 @@ Each milestone ships something usable and proves one idea.
 - **Web or app.** The orchestrator sees the phone's installed apps (the bridge's `apps` command, today only the pilot uses it). The rule of thumb: general knowledge comes from the web; the owner's own accounts, app-only content and anything to act on (booking, ordering) use the phone. It can chain them: research the best Michelin restaurants nearby, then book one in the app. It asks when unsure. A stated preference ("restaurants: use the Michelin Guide") becomes a standing rule in M12.
 - **Quick questions** ("what time does Tesco close?") get a plain web search (Tavily), not deep research.
 - **A page to read on the phone.** The reporter (the main model) writes what research found as a short HTML page; the owner gets its link and a tldr.
+- **Shareable (added 2026-10-20).** Reports are private (the owner, signed in) by default; the owner makes one public to send to someone, by asking or from the panel, and can ask which it is.
 - **Not the ChatGPT app:** it's free, but has no clear "done" signal, its layout can change, and a long report is hard to get off the screen. Phone notifications as a wake-up signal belong to M13.
 
 ## M11 requirements (connectors) (from the owner)

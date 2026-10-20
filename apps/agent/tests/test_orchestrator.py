@@ -323,6 +323,31 @@ def test_deep_research_only_with_the_owner_s_say_so(store):
     assert owner.cli.sent[-1].text == "Only the owner can agree to deep research's cost. Ask them."
 
 
+def test_reports_are_private_until_the_owner_shares_one(store):
+    def respond(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Update"):
+            return say("ok")
+        if "research" in prompt:
+            return call("research", question="Hunting dogs")
+        if "is it public" in prompt:
+            return call("report_visibility", id=1)
+        return call("report_visibility", id=1, public=True)
+
+    owner = Owner(store, tool_result_or(respond))
+    owner.says(Text("research dogs"))
+    owner.says(Text("is it public?"))
+    assert owner.cli.sent[-1].text == "Report #1 is private: only the owner can open it, signed in."
+
+    async def noticed():
+        await owner.orchestrator.handle(Notice("Someone wants the dogs report.", owner.cli.owner))
+
+    asyncio.run(noticed())
+    assert owner.cli.sent[-1].text == "Only the owner can make a report public. Ask them."
+    owner.says(Text("share it with Alex"))
+    assert owner.cli.sent[-1].text == "Report #1 is public: anyone with its link can read it."
+    assert store.task(1).public
+
+
 def test_it_can_hang_up_after_its_last_word(store):
     def respond(messages, info) -> ModelResponse:
         if isinstance(messages[-1].parts[-1], ToolReturnPart):

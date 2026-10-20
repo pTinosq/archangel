@@ -7,6 +7,7 @@ then serves the built panel (apps/panel/dist) too, so the browser sees one origi
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import uvicorn
@@ -33,14 +34,19 @@ class Web:
         self._server: uvicorn.Server | None = None
         self._closed = asyncio.Event()
         self.app = FastAPI(title="Archangel")
+        self._shared: list[Callable[[str], bool]] = []
         if github:
-            protect(self.app, github)
+            protect(self.app, github, lambda path: any(shared(path) for shared in self._shared))
         else:
             self.app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS)
 
         @self.app.get("/health")
         async def health() -> dict:
             return {"ok": True}
+
+    def share(self, shared: Callable[[str], bool]) -> None:
+        """Paths `shared` says yes to open without sign-in: what the owner chose to share."""
+        self._shared.append(shared)
 
     def finish(self) -> FastAPI:
         """The app, with the built panel mounted last so it can't shadow any channel's routes."""

@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import secrets
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
@@ -35,15 +36,20 @@ class GitHub:
     """The owner's GitHub username."""
 
 
-def protect(app: FastAPI, github: GitHub, client: httpx.AsyncClient | None = None) -> None:
-    """Add the sign-in routes, and refuse everything else to anyone but the owner."""
+def protect(
+    app: FastAPI,
+    github: GitHub,
+    shared: Callable[[str], bool] = lambda path: False,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """Add the sign-in routes, and refuse everything else to anyone but the owner, unless it's `shared`."""
     client = client or httpx.AsyncClient(timeout=10)
     key = hmac.new(github.client_secret.encode(), b"session", hashlib.sha256).digest()
 
     @app.middleware("http")
     async def owner_only(request: Request, call_next) -> Response:
         path = request.url.path
-        if path.startswith(OPEN) or _signed_in(request.cookies.get(SESSION), key, github.owner):
+        if path.startswith(OPEN) or shared(path) or _signed_in(request.cookies.get(SESSION), key, github.owner):
             return await call_next(request)
         if path.startswith("/api/"):
             return JSONResponse({"detail": "Sign in first"}, status_code=401)

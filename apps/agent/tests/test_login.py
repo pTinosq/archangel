@@ -25,7 +25,7 @@ def github(user: str | None = "ptinosq") -> httpx.AsyncClient:
 
 def app(user: str | None = "ptinosq") -> FastAPI:
     app = FastAPI()
-    protect(app, GITHUB, github(user))
+    protect(app, GITHUB, client=github(user))
 
     @app.get("/api/tasks")
     async def tasks() -> list:

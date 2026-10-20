@@ -65,6 +65,8 @@ class Task:
     kind: Kind = "phone"
     """Phone tasks take turns on the phone; the rest run beside them: research (deep or not) on the web, and
     connectors in the owner's online services."""
+    public: bool = False
+    """Its report opens for anyone with the link; otherwise only for the owner, signed in."""
 
 
 @dataclass(frozen=True)
@@ -132,9 +134,12 @@ class Store:
             );
             """
         )
-        if "kind" not in {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}:  # added in M9
-            with self._db:
+        columns = {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}
+        with self._db:
+            if "kind" not in columns:  # added in M9
                 self._db.execute("ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'phone'")
+            if "public" not in columns:  # added with shared reports
+                self._db.execute("ALTER TABLE tasks ADD COLUMN public INTEGER NOT NULL DEFAULT 0")
         self.forget_old_images()
 
     # The conversation
@@ -227,6 +232,10 @@ class Store:
     def save_page(self, task: int, html: str) -> None:
         self._page(task).write_text(html)
 
+    def make_public(self, task: int, public: bool) -> None:
+        with self._db:
+            self._db.execute("UPDATE tasks SET public = ? WHERE id = ?", (public, task))
+
     def has_page(self, task: int) -> bool:
         return self._page(task).exists()
 
@@ -299,11 +308,11 @@ class Store:
             )
 
 
-_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind"
+_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public"
 
 
 def _task(row: tuple) -> Task:
-    id, goal, channel, address, status, report, run, kind = row
+    id, goal, channel, address, status, report, run, kind, public = row
     return Task(
         id,
         goal,
@@ -312,4 +321,5 @@ def _task(row: tuple) -> Task:
         report,
         ConversationTypeAdapter.validate_json(run) if run else None,
         kind,
+        bool(public),
     )

@@ -44,6 +44,7 @@ class PanelChannel(Channel):
         self._web = web
         _routes(web.app, self, store, prompts)
         _connector_routes(web.app, connectors)
+        web.share(lambda path: _public_report(store, path))
 
     async def start(self, deliver: Deliver) -> None:
         self._deliver = deliver
@@ -63,6 +64,10 @@ class PanelChannel(Channel):
 
 class Said(BaseModel):
     text: str
+
+
+class Visibility(BaseModel):
+    public: bool
 
 
 class NewConnector(BaseModel):
@@ -89,6 +94,13 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
     @app.get("/api/tasks/{id}/steps")
     async def steps(id: int, after: int = 0) -> list[Step]:
         return store.steps(id, after)
+
+    @app.put("/api/tasks/{id}/public")
+    async def make_public(id: int, visibility: Visibility) -> dict:
+        if not store.has_page(id):
+            raise HTTPException(404, "No such report")
+        store.make_public(id, visibility.public)
+        return visibility.model_dump()
 
     @app.get("/api/images/{name}")
     async def image(name: str) -> Response:
@@ -171,12 +183,18 @@ async def _events(channel: PanelChannel) -> AsyncIterator[str]:
             yield f"data: {json.dumps(asdict(notice))}\n\n" if notice else ": still here\n\n"
 
 
+def _public_report(store: Store, path: str) -> bool:
+    id = path.removeprefix("/reports/")
+    return path != id and id.isdigit() and bool((task := store.task(int(id))) and task.public)
+
+
 def _task(task: Task, page: bool) -> dict:
     return {
         "id": task.id,
         "goal": task.goal,
         "kind": task.kind,
         "page": page,
+        "public": task.public,
         "status": task.status,
         "open": task.status.open,
         "report": task.report,
