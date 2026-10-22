@@ -196,3 +196,18 @@ def test_the_helper_reads_whats_connected_from_the_store_itself(store, tmp_path)
 
     assert asyncio.run(scenario()).status == "done"
     assert "personal: Gmail and Calendar [tools personal_google_…]" in seen[0]
+
+
+def test_signing_in_again_registers_afresh(store, tmp_path):
+    # An old registration may be revoked, or send the owner back to an address Archangel has left.
+    found = connectors(store, tmp_path)
+    notion = found.add("notion", {})
+    notion.client, notion.tokens = {"client_id": "old", "redirect_uris": ["https://old.test/connectors/callback"]}, {"access_token": "old"}
+    found._save(notion)
+
+    async def connect(connector, auth):
+        assert await auth.context.storage.get_client_info() is None
+        assert await auth.context.storage.get_tokens() is None
+
+    found._connect = connect
+    assert asyncio.run(found.sign_in("notion")) is None

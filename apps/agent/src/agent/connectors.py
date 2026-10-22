@@ -175,6 +175,9 @@ class Connectors:
                     "state": state,
                 }
             )
+        # Signing in again starts afresh: the old registration may be revoked, or name a callback on an old address.
+        connector.client = connector.tokens = None
+        self._save(connector)
         # The SDK runs the whole sign-in itself, on connecting: hand the owner its link, and it the code they bring.
         link, code = asyncio.get_running_loop().create_future(), asyncio.get_running_loop().create_future()
         auth = self._oauth(connector, redirect=lambda url: _set(link, url), code=code)
