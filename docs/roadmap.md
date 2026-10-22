@@ -19,6 +19,8 @@ Each milestone ships something usable and proves one idea.
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | M14 | Self-improvement | "add a Telegram channel" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
+| M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
+| M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
@@ -173,3 +175,20 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 - **In the cloud, not on the agent's box.** A coding agent (Claude Code via its GitHub Action, or Claude Code on the web) works on a branch; an orchestrator tool hands it the request, and its PR link comes back like any task's report.
 - **The owner merges.** Merging to `main` deploys, so a merge is an approval, never automatic. Tests run on the PR first; a revert undoes a bad change.
 - **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
+
+## M15 requirements (TfL status) (from the owner)
+
+- **Live tube status** (and likely buses, Overground, Elizabeth line): whether a line is running, and why not.
+- **Already built** in `../pebble-assistant` (pebble-tino): `apps/server/src/tools/tfl.ts`, a local tool on TfL's open API (`/Line/Mode/tube/Status`, `/Line/{id}/Status`; `TFL_APP_KEY` optional, raises rate limits). Port it rather than start over.
+
+**Plan (sketch, undecided)**
+- **A connector or a built-in tool.** The orchestrator answers inline, as with `search_web`: seconds, no task. As an MCP server it would show on the Connectors page and suit the helper too; as a tool it's a few lines. Decide when building.
+
+## M16 requirements (Pebble Time 2) (from the owner)
+
+- **A new channel: the owner's Pebble Time 2.** Dictate on the wrist, the answer comes back to the watch, like `../pebble-assistant` (pebble-tino) does today with its own backend.
+- **One conversation.** What's said on the watch is the same conversation as texts, calls and the panel; results can come back to the watch.
+
+**Plan (sketch, undecided)**
+- **Reuse pebble-tino's watch app.** Watch → phone (PebbleKit JS) → HTTP; point it at Archangel instead of its own server, as a `Channel` with its own route, signed like Twilio's.
+- **Short and buttoned.** Replies sized for a watch screen; approvals (yes or no) on the watch's buttons; a buzz when a task needs the owner.
