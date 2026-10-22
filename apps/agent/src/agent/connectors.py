@@ -236,7 +236,9 @@ class Connectors:
             "USER_GOOGLE_EMAIL": connector.account,
             "WORKSPACE_MCP_DISABLED_TOOLS": ",".join(WORKSPACE_MCP_OFF),
         }
-        return StdioTransport("uvx", WORKSPACE_MCP, env=env)
+        # A fresh one each run, ended with it: kept alive (FastMCP's default), every connector task left one
+        # running, ~260 MB each, and the agent sat at 3 GB.
+        return StdioTransport("uvx", WORKSPACE_MCP, env=env, keep_alive=False)
 
     async def _google_tokens(self, connector: Connector, code: str) -> None:
         response = await self._http.post(

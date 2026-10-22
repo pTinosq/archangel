@@ -49,7 +49,7 @@ def test_signing_in_to_google_keeps_a_refresh_token_for_its_connector(store, tmp
         connector = await found.finish(query["state"][0], "the-code")
         assert (connector.account, connector.signed_in) == ("owner@gmail.com", True)
 
-        found._workspace(connector)  # what workspace-mcp starts from
+        assert found._workspace(connector).keep_alive is False  # ends with its run, not left holding memory
         credentials = json.loads((tmp_path / "google" / "google" / "owner@gmail.com.json").read_text())
         assert (credentials["refresh_token"], credentials["client_id"]) == ("rt", "id")
 
