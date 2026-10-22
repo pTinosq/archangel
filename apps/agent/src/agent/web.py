@@ -11,9 +11,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from urllib.parse import urlsplit
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from agent.channels.login import GitHub, protect
@@ -27,8 +29,8 @@ PAGES = ["/chat", "/tasks", "/tasks/{id}", "/cockpit", "/prompts", "/connectors"
 
 
 class Web:
-    def __init__(self, github: GitHub | None = None, port: int = PORT):
-        """With `github`, public behind sign-in; without, local only."""
+    def __init__(self, github: GitHub | None = None, port: int = PORT, address: str | None = None):
+        """With `github`, public behind sign-in, at `address` (e.g. https://archangel.tinos.xyz); without, local only."""
         self.public = github is not None
         self._port = port
         self._server: uvicorn.Server | None = None
@@ -37,6 +39,8 @@ class Web:
         self._shared: list[Callable[[str], bool]] = []
         if github:
             protect(self.app, github, lambda path: any(shared(path) for shared in self._shared))
+            if address:
+                _one_address(self.app, address)
         else:
             self.app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS)
 
@@ -86,3 +90,18 @@ class Web:
     async def closed(self) -> None:
         """Wait until the server has stopped."""
         await self._closed.wait()
+
+
+def _one_address(app: FastAPI, address: str) -> None:
+    """Pages asked for at another of the service's addresses (Railway's own, in links sent before a custom domain) go
+    to the same page at `address`: signed in at one, sent back by GitHub to the other, the owner would bounce
+    between them. Added after sign-in, so it runs first. Twilio's webhooks and the health check stay where they are."""
+    host = urlsplit(address).hostname
+
+    @app.middleware("http")
+    async def at_one_address(request: Request, call_next) -> Response:
+        stays = request.url.path.startswith(("/health", "/twilio/"))
+        if request.url.hostname != host and request.method in ("GET", "HEAD") and not stays:
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(f"{address}{request.url.path}{query}")  # temporary: a move can be undone
+        return await call_next(request)

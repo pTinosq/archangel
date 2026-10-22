@@ -63,7 +63,7 @@ def main() -> None:
         site,
     )
 
-    web = Web(config.github(), config.port())
+    web = Web(config.github(), config.port(), config.public_url())
     channels = [PanelChannel(store, prompts, connectors, web)]
     public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
     links = Links(store, web, config.relay_token(), public_url) if public_url else None

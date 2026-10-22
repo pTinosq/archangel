@@ -19,10 +19,10 @@ from agent.web import Web
 
 
 class Panel:
-    def __init__(self, store: Store, github: GitHub | None = None):
+    def __init__(self, store: Store, github: GitHub | None = None, address: str | None = None):
         self.store = store
         self.prompts = Prompts(store)
-        self.web = Web(github)
+        self.web = Web(github, address=address)
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
         self.channel = PanelChannel(store, self.prompts, self.connectors, self.web)
         self.delivered: list[Message] = []
@@ -100,6 +100,16 @@ def test_public_only_behind_sign_in(store):
     public = Panel(store, GitHub("id", "secret", "owner"))
     assert public.call("GET", "/api/tasks", host="archangel.up.railway.app").status_code == 401
     assert public.call("GET", "/health", host="archangel.up.railway.app").status_code == 200
+
+
+def test_other_addresses_send_the_browser_to_the_one_address(store):
+    public = Panel(store, GitHub("id", "secret", "owner"), "https://archangel.tinos.xyz")
+    old = "agent-production-e06c.up.railway.app"
+    moved = public.call("GET", "/reports/3?x=1", host=old)
+    assert (moved.status_code, moved.headers["location"]) == (307, "https://archangel.tinos.xyz/reports/3?x=1")
+    assert public.call("GET", "/health", host=old).status_code == 200  # the health check isn't moved
+    assert public.call("POST", "/twilio/sms", host=old).status_code != 307  # nor Twilio's webhooks
+    assert public.call("GET", "/reports/3", host="archangel.tinos.xyz").headers["location"].startswith("/auth/login")
 
 
 def test_serves_the_built_app(store, tmp_path, monkeypatch):
