@@ -18,7 +18,7 @@ Each milestone ships something usable and proves one idea.
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
-| M14 | Self-improvement | "add a Telegram channel" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
+| M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | Later | Telegram | message Archangel from Telegram | another channel |
@@ -169,6 +169,7 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 ## M14 requirements (self-improvement) (from the owner)
 
 - **Builds its own features.** Ask from any channel ("add a Telegram channel", "make the panel show costs"); a coding agent works on this repo the way Claude Code does locally, following `CLAUDE.md`.
+- **Investigate a bug from anywhere (added 2026-10-23).** The owner sees something wrong ("Notion sign-in says invalid state") and says so from any channel; a coding agent investigates Archangel's code and logs, reports the cause, and proposes the fix as a PR. Investigating is free to start; changing code is a PR the owner reviews.
 - **Heals itself.** Failures (a stuck task, an orchestrator error, a bad deploy) are diagnosed from logs and steps, and a fix is proposed.
 
 **Plan (sketch, undecided)**
