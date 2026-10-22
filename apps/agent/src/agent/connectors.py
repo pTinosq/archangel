@@ -190,15 +190,15 @@ class Connectors:
         self._signing_in[_state(link.result())] = _SignIn(name, code, connecting)
         return link.result()
 
-    async def finish(self, state: str, code: str) -> Connector:
-        """The owner is back from signing in, with `code`."""
+    async def finish(self, state: str, code: str, issuer: str | None = None) -> Connector:
+        """The owner is back from signing in, with `code` (and who issued it, which the SDK checks: RFC 9207)."""
         if not (signing_in := self._signing_in.pop(state, None)) or signing_in.expired:
             raise ValueError("That sign-in has expired. Try again from Connectors.")
         connector = self._get(signing_in.name)
         if connector.kind == "google":
             await self._google_tokens(connector, code)
         else:
-            signing_in.code.set_result(AuthorizationCodeResult(code=code, state=state))
+            signing_in.code.set_result(AuthorizationCodeResult(code=code, state=state, iss=issuer))
             await signing_in.connecting
             connector = self._get(connector.name)  # tokens saved meanwhile
         self._save(connector)

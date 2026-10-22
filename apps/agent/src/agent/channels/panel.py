@@ -163,11 +163,11 @@ def _connector_routes(app: FastAPI, connectors: Connectors) -> None:
         connectors.remove(name)
 
     @app.get("/connectors/callback")
-    async def callback(state: str = "", code: str = "", error: str = "") -> HTMLResponse:
+    async def callback(state: str = "", code: str = "", error: str = "", iss: str | None = None) -> HTMLResponse:
         if error or not code:
             return _done(f"Not connected: {error or 'no sign-in'}.", 400)
         try:
-            connector = await connectors.finish(state, code)
+            connector = await connectors.finish(state, code, iss)
         except Exception as failure:
             log.exception("Couldn't finish signing in")
             return _done(f"Not connected: {failure}", 400)

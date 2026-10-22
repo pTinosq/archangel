@@ -211,3 +211,22 @@ def test_signing_in_again_registers_afresh(store, tmp_path):
 
     found._connect = connect
     assert asyncio.run(found.sign_in("notion")) is None
+
+
+def test_a_hosted_sign_in_hands_the_sdk_the_code_and_its_issuer(store, tmp_path):
+    # Notion advertises RFC 9207: the SDK refuses a code that comes back without its issuer.
+    found, came_back = connectors(store, tmp_path), []
+    found.add("notion", {})
+
+    async def connect(connector, auth):
+        await auth.context.redirect_handler("https://mcp.notion.com/authorize?state=s1")
+        came_back.append(await auth.context.callback_handler())
+
+    found._connect = connect
+
+    async def scenario():
+        assert await found.sign_in("notion") == "https://mcp.notion.com/authorize?state=s1"
+        return await found.finish("s1", "the-code", "https://mcp.notion.com")
+
+    assert asyncio.run(scenario()).signed_in
+    assert (came_back[0].code, came_back[0].state, came_back[0].iss) == ("the-code", "s1", "https://mcp.notion.com")
