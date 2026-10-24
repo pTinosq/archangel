@@ -44,6 +44,10 @@ class Reader:
         """What an agent about to do `goal` should know about the owner; "" if nothing."""
         return await self._read(f"An agent is about to do this for the owner: {goal}\nWhat should it know?")
 
+    async def hear(self, said: str) -> str:
+        """What Archangel should know about the owner to answer what they just said; "" if nothing."""
+        return await self._read(f"The owner just said this to Archangel, their assistant: {said}\nWhat should it know?")
+
     async def ask(self, question: str) -> str:
         """An agent's question about the owner, mid-task."""
         return await self._read(f"An agent working for the owner asks: {question}") or "Nothing relevant."

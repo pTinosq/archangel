@@ -226,6 +226,10 @@ class Orchestrator:
                 # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
                 # it had been there all along, and the model apologises for starting a duplicate.
                 self._arrived_to = self._situation()
+                if event.from_owner and self._twin:  # what they say is answered knowing them, not just their top page
+                    said = " ".join(part.text for part in event.prompt() if isinstance(part, Text))
+                    if found := await self._twin.hear(said):
+                        self._arrived_to += f"\n\nFrom the context twin, on what the owner just said:\n{found}"
                 self._ends = False
                 try:
                     messages = self._store.history()

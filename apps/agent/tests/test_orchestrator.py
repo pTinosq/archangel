@@ -379,14 +379,14 @@ def test_it_knows_where_the_owner_last_was_and_has_a_link_for_now(store):
     assert "Link: https://archangel.example/where/cli/owner?expires=" in reply.text
 
 
-def test_the_orchestrator_has_the_owner_in_mind_and_can_ask_their_twin(store):
+def test_the_twin_is_read_for_whatever_the_owner_says_before_the_answer(store):
     from test_twin import FakeWriter, scripted, uber_graph
 
     from agent.twin import Twin
     from agent.twin.reader import Reader
 
     graph = uber_graph(store)
-    twin = Twin(store, graph, Reader(scripted(note="Google."), graph), FakeWriter(), {}.get)
+    twin = Twin(store, graph, Reader(scripted(note="Her name is Helen."), graph), FakeWriter(), {}.get)
     seen = {}
 
     def model(messages, info) -> ModelResponse:
@@ -406,5 +406,6 @@ def test_the_orchestrator_has_the_owner_in_mind_and_can_ask_their_twin(store):
         Whereabouts(store, Web(), None),
         twin=twin,
     )
-    asyncio.run(orchestrator.handle(OwnerMessage(Message(cli.owner, (Text("hi"),)))))
+    asyncio.run(orchestrator.handle(OwnerMessage(Message(cli.owner, (Text("who is my mum?"),)))))
     assert "Call him Tinos." in seen["instructions"] and "ask_twin" in seen["tools"]
+    assert "on what the owner just said:\nHer name is Helen." in seen["instructions"]  # read before answering

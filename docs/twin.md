@@ -13,7 +13,7 @@ A second brain of the owner's personal context: who is in their life, what they 
 
 ## Two agents
 
-- **Reader** (read-only, fast model, no reasoning). Before any task it walks from You, or straight to a named node, and writes the task a briefing of a few lines. Mid-task, any agent can `ask_twin(question)` ("a sign-in page: what does the owner want?"). The orchestrator sees only the You page.
+- **Reader** (read-only, fast model, no reasoning). Before any task it walks from You, or straight to a named node, and writes the task a briefing of a few lines. Mid-task, any agent can `ask_twin(question)` ("a sign-in page: what does the owner want?"). The orchestrator always has the You page, and before it answers anything the owner says, the reader walks the graph for what bears on it ("who is my mum?" opens People, then Mum), so it answers knowing them.
 - **Writer** (main model, reasoning). Reads an episode (the conversation since its last read, once it's been quiet 10 minutes, which includes the owner's answers to tasks; or "remember…" / "forget…" at once) and edits the graph, or does nothing, which is the usual outcome. Keeps only what still holds next month and changes how a future task is done: "I hate morning flights" yes, "I'm in the mood for Indian" no. An answer that generalises ("always rate them 5 stars") is the richest source. Every edit quotes the owner's words. It can't finish with a stale preview. What it noted goes to the orchestrator, which tells the owner in a line (by text rather than a call).
 
 Payments, sending and deleting always ask, whatever the twin holds.

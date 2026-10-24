@@ -60,6 +60,18 @@ class Twin:
             log.exception("Couldn't brief: %s", goal)
             return ""
 
+    async def hear(self, said: str) -> str:
+        """What bears on what the owner just said, for the orchestrator before it answers; "" if nothing, or if
+        reading failed."""
+        with activity.call("twin reader", "agent", said) as reply:
+            try:
+                found = await self._reader.hear(said)
+            except Exception:
+                log.exception("Couldn't read the twin for: %s", said)
+                found = ""
+            reply(found or "Nothing relevant.")
+            return found
+
     @property
     def tools(self) -> FunctionToolset:
         """`ask_twin`, for any agent that may need to know something about the owner mid-task."""
