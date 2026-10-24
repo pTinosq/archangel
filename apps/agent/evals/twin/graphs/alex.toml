@@ -1,0 +1,195 @@
+# A made-up owner for the twin's sandbox and evals: shaped like a real twin (routers, hubs, cross-links), nobody real.
+
+[[node]]
+name = "You"
+page = '''
+- **Name:** Alex Morgan (goes by Alex)
+- **Born:** 12 March 1994
+- **Home:** 14 Elm Row, Bristol BS1 4QA (lives with Sam)
+- **Allergy:** peanuts, severe: always check
+- UK spelling. Never buy or book anything without asking first.
+'''
+
+[[node]]
+name = "People"
+page = ""
+
+[[node]]
+name = "Helen Morgan"
+aliases = ["Mum"]
+page = '''
+- **Born:** 3 July 1962
+- **Lives:** 9 Moor Lane, Leeds LS6 2AB
+- **Phone:** +44 7700 900123
+- Prefers a call to a text.
+'''
+
+[[node]]
+name = "Sam Okafor"
+aliases = ["Sam"]
+page = '''
+- Alex's partner since 2019; lives with Alex.
+- **Born:** 21 November 1993
+- Vegan.
+'''
+
+[[node]]
+name = "Jordan Morgan"
+aliases = ["Jordan"]
+page = '''
+- Alex's younger brother, in Manchester.
+- **Born:** 8 February 1997
+'''
+
+[[node]]
+name = "Priya Shah"
+aliases = ["Priya"]
+page = '''
+- Alex's manager at Fernhill.
+- **Email:** priya@fernhill.example
+'''
+
+[[node]]
+name = "Travel"
+page = ""
+
+[[node]]
+name = "Flights"
+page = '''
+- **No departures before 09:00**, ideally 10:00 or later.
+- British Airways first; never Ryanair.
+- Window seat.
+'''
+
+[[node]]
+name = "Trains"
+page = '''
+- Standard class on personal trips; first class on work trips (expensed).
+- **Railcard:** Two Together, with Sam, until 30 June 2027.
+'''
+
+[[node]]
+name = "Uber"
+page = '''
+- **Personal:** the cheapest ride (UberX or Green).
+- **Work:** the Fernhill business profile, so it's expensed.
+- Always rate drivers 5 stars; never tip.
+'''
+
+[[node]]
+name = "Work"
+page = '''
+- Product designer at **Fernhill**, since January 2023.
+- **Office:** 2 Wharf Street, Bristol BS1 6PN; in Tuesday to Thursday.
+- **Work email:** alex@fernhill.example
+'''
+
+[[node]]
+name = "Food"
+page = '''
+- Vegetarian since 2021.
+- Loves Thai; not keen on Indian.
+- Orders on Deliveroo.
+'''
+
+[[node]]
+name = "Phone"
+page = '''
+- **Sign-ins:** "Continue with Google" with alex.morgan@example.com, except work apps (Figma, Slack, Notion): alex@fernhill.example.
+'''
+
+[[link]]
+from = "You"
+to = "People"
+relation = "people"
+preview = "family, partner, manager: who's who"
+
+[[link]]
+from = "You"
+to = "Travel"
+relation = "travel"
+preview = "flights, trains, Uber: how Alex likes to go"
+
+[[link]]
+from = "You"
+to = "Work"
+relation = "job"
+preview = "designer at Fernhill: office, work email"
+
+[[link]]
+from = "You"
+to = "Food"
+relation = "food"
+preview = "vegetarian, Thai, orders on Deliveroo"
+
+[[link]]
+from = "You"
+to = "Phone"
+relation = "phone"
+preview = "which account to sign in with, where"
+
+[[link]]
+from = "People"
+to = "Helen Morgan"
+relation = "mother"
+preview = "Mum: Leeds, birthday, phone, prefers calls"
+
+[[link]]
+from = "People"
+to = "Sam Okafor"
+relation = "partner"
+preview = "lives with Alex; vegan; birthday"
+
+[[link]]
+from = "People"
+to = "Jordan Morgan"
+relation = "brother"
+preview = "younger brother in Manchester; birthday"
+
+[[link]]
+from = "People"
+to = "Priya Shah"
+relation = "manager"
+preview = "Alex's manager at Fernhill; email"
+
+[[link]]
+from = "Travel"
+to = "Flights"
+relation = "flights"
+preview = "no early departures, BA, window seat"
+
+[[link]]
+from = "Travel"
+to = "Trains"
+relation = "trains"
+preview = "class by trip, railcard"
+
+[[link]]
+from = "Travel"
+to = "Uber"
+relation = "rides"
+preview = "cheapest personal, business profile for work, 5 stars"
+
+[[link]]
+from = "Work"
+to = "Uber"
+relation = "rides to work"
+preview = "business profile, so it's expensed"
+
+[[link]]
+from = "Work"
+to = "Priya Shah"
+relation = "manager"
+preview = "Priya, Alex's manager"
+
+[[link]]
+from = "Work"
+to = "Trains"
+relation = "work trips"
+preview = "first class on work trips, expensed"
+
+[[link]]
+from = "Food"
+to = "Sam Okafor"
+relation = "cooking for two"
+preview = "Sam is vegan"

@@ -26,9 +26,10 @@ Usually there's nothing: then change nothing.
 One node per thing, linked from every area it touches (Uber from Travel and Work): look before adding. Shallow: \
 everything about two links from {ROOT}, through routers like People, Travel, Work; link sideways rather than nest. \
 Put a fact as high as it holds (morning flights on Flights; on Travel once it holds for trains too). Write what \
-won't go stale: a date of birth, not an age; absolute dates; an end date on anything temporary. Quote the owner in \
-`said`. Pages are markdown: short bullets, a **label:** where it helps. After changing a page, rewrite the \
-previews of links to it.
+won't go stale: a date of birth, not an age (nor anything that follows from it, like a next birthday); absolute \
+dates; an end date on anything temporary. When something changes, write what holds now: the history keeps the old. \
+Quote the owner in `said`. Pages are markdown: short bullets, a **label:** where it helps. After changing a page, \
+rewrite the previews of links to it.
 
 End with one short line for the owner on what you noted ("Noted: no morning flights."), or "Nothing." if you changed \
 nothing."""
@@ -87,12 +88,14 @@ def _tools(graph: Graph) -> list:
 
     async def add(ctx: RunContext[Episode], name: str, page: str, said: str) -> str:
         """A new node. An empty page makes a router."""
+        page = _body(name, page)
         return attempt(
             f"add {name}", lambda: graph.add(name, page, said=said, origin=ctx.deps.origin), f"Added {name}."
         )
 
     async def write(ctx: RunContext[Episode], name: str, page: str, said: str) -> str:
         """Replace a node's whole page (an empty one makes it a router)."""
+        page = _body(name, page)
         return attempt(
             f"write {name}", lambda: graph.write(name, page, said=said, origin=ctx.deps.origin), f"Wrote {name}."
         )
@@ -134,6 +137,12 @@ def _tools(graph: Graph) -> list:
         return attempt(f"delete {name}", lambda: graph.delete(name, said=said, origin=ctx.deps.origin), "Deleted.")
 
     return [nodes, open, add, write, alias, link, unlink, rename, merge, delete]
+
+
+def _body(name: str, page: str) -> str:
+    """The page without a "# Name" heading: models copy the one `open` shows, and it doubles."""
+    first, _, rest = page.lstrip().partition("\n")
+    return rest.lstrip("\n") if first.startswith("# ") else page
 
 
 def attempt(what: str, edit: Callable[[], object], done: str) -> str:

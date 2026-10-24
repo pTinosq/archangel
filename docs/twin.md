@@ -35,6 +35,10 @@ Storage: four tables in `data/archangel.db` (`twin_nodes`, `twin_names`, `twin_l
 
 A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hubs settle in the middle; what's placed stays put); routers dashed, page nodes solid. The owner shapes it by hand too: add nodes, drag one onto another to link them, edit a link's relation and preview, rename, aliases, edit or delete a page. Click a node: its page, links, and history with the owner's words. Nodes the reader or writer opens or edits light up live. The cockpit shows the twin as a part too: who asked the reader, what the writer was handed, and each page opened or edited.
 
+## Evals
+
+`just twin-eval` runs the reader and writer on the real model against a made-up owner (`apps/agent/evals/twin/`), each case 3 times; `just twin` is the same by hand. Checks are code where they can be (must say, mustn't say, pages opened, nothing changed, no new nodes), a model judge where they can't ("Rosa has her own node, linked from People"). First run, 2026-10-24: 36/57. Fixed from what it found: an explained "Nothing relevant: …" was passed on as a briefing; pages got a doubled `# Name` heading; derived facts were stored ("turns 30 on…"); a changed fact kept the old beside the new. Then 54/57, the rest the reader glancing at one page before saying nothing.
+
 ## Build order
 
 1. ✅ `Graph`.

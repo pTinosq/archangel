@@ -1,0 +1,140 @@
+# The context twin's evals. Each case starts from a fresh copy of `graph`, then:
+#   say      what the owner said, each an episode for the writer, in order (optional)
+#   then one of, for the reader:
+#     hear   what the owner just said to Archangel (the orchestrator's read, before every reply)
+#     brief  a task's goal (the briefing before a phone or connectors task)
+#     ask    an agent's question mid-task (ask_twin)
+# Checks (all optional; text checks are case-insensitive, "a | b" passes on either):
+#   include, exclude   in the reader's answer
+#   nothing = true     the reader said nothing relevant
+#   opens_at_most      pages the reader opened (the root comes free)
+#   unchanged = true   the writer changed nothing
+#   new_nodes_at_most  nodes the writer added
+#   (and always, after the writer: no page starts with a "# heading": the name is the node's, not the page's)
+#   judge              criteria a model grades, seeing the input, the answer, the writer's changes and the graph after
+
+# The reader
+
+[[case]]
+name = "mum by alias"
+hear = "who is my mum?"
+include = ["Helen"]
+opens_at_most = 2
+
+[[case]]
+name = "uber to the office"
+brief = "Get me an Uber to the office"
+include = ["business", "Wharf"]
+judge = ["Says to rate the driver 5 stars and not to tip, or leaves both out; never the opposite."]
+
+[[case]]
+name = "flight briefing"
+brief = "Find Alex a flight to Athens on 14 May, back on the 21st"
+include = ["09:00 | 9am | 9 am | nine | before 9 | 10:00 | 10am", "window", "Ryanair"]
+exclude = ["Deliveroo", "Uber"]
+judge = [
+  "A few short lines an agent can act on; no padding, no preamble.",
+  "Says nothing the graph doesn't hold (no invented preferences, e.g. about legroom).",
+]
+
+[[case]]
+name = "nothing bears on it"
+brief = "What's the time in Tokyo right now?"
+nothing = true
+opens_at_most = 1  # a glance (Travel, for Tokyo: a trip?) is fair; more is waste
+
+[[case]]
+name = "hello is nothing"
+hear = "hi"
+nothing = true
+opens_at_most = 1  # a glance (Travel, for Tokyo: a trip?) is fair; more is waste
+
+[[case]]
+name = "work sign-in"
+ask = "A Figma sign-in page offers Continue with Google. Which account?"
+include = ["alex@fernhill.example"]
+judge = ["Recommends only the work account (it may mention the personal one as the one not to use)."]
+
+[[case]]
+name = "dinner for two"
+hear = "order dinner for me and Sam tonight"
+include = ["vegetarian", "vegan", "peanut"]
+judge = ["Doesn't invent preferences the graph doesn't hold."]
+
+[[case]]
+name = "mum's age from her birthday"
+hear = "how old is my mum?"
+judge = ["Gives Helen's date of birth (3 July 1962), or her correct age as of today, or both. A wrong age fails."]
+
+[[case]]
+name = "work trip by train"
+brief = "Book Alex a train to London for the client workshop on Thursday"
+include = ["first"]
+judge = ["Says it's a work trip so first class (expensed), not standard."]
+
+# The writer
+
+[[case]]
+name = "a mood isn't kept"
+say = ["I'm in the mood for Indian tonight, can you find somewhere?"]
+unchanged = true
+
+[[case]]
+name = "a one-off choice isn't kept"
+say = ["""A conversation with the owner:
+Archangel: Two rides: UberX £14, Comfort £19. Which one?
+Owner: Comfort this time, I've got a big bag."""]
+unchanged = true
+
+[[case]]
+name = "a known fact isn't duplicated"
+say = ["Remember my mother is Helen and she lives in Leeds."]
+new_nodes_at_most = 0
+
+[[case]]
+name = "a new sister"
+say = ["My sister Rosa lives in Lisbon, by the way. She's a nurse."]
+new_nodes_at_most = 1
+ask = "Where does Alex's sister live?"
+include = ["Lisbon"]
+judge = ["The writer put Rosa in her own node, linked from People (not on the root page)."]
+
+[[case]]
+name = "a preference changes"
+say = ["From now on I want aisle seats on flights, not window."]
+brief = "Book Alex a flight to Rome next month"
+include = ["aisle"]
+exclude = ["window seat"]
+judge = ["The Flights page now says aisle and no longer says window; nothing else contradicts it."]
+
+[[case]]
+name = "a temporary fact has its end date"
+say = ["I'm working from our Madrid office until 20 November."]
+judge = ["The graph records Madrid with the end date, as an absolute date (20 November, with the year), not 'for a few weeks'."]
+
+[[case]]
+name = "a birthday, not an age"
+say = ["Jordan turns 30 on 8 February, get me to remind you nearer the time."]
+judge = ["The writer added nothing that follows from Jordan's date of birth (an age, or when he turns 30): that's computed when needed, not stored. His date of birth stays 8 February 1997."]
+
+[[case]]
+name = "an answer that generalises"
+say = ["""A conversation with the owner:
+Archangel: Deliveroo is asking whether to add a tip for the rider. How much?
+Owner: Never tip on Deliveroo, ever."""]
+judge = ["The graph now says never to tip on Deliveroo, on the Food page or a Deliveroo node it links to."]
+
+[[case]]
+name = "diet change, then dinner"
+say = ["I'm not vegetarian any more, I eat fish now. Still no meat."]
+hear = "order me dinner"
+include = ["fish"]
+exclude = ["vegetarian since"]
+judge = ["The answer doesn't call Alex vegetarian.", "The Food page no longer says Alex is vegetarian."]
+
+[[case]]
+name = "forget"
+say = ["Forget that I don't like Indian food, I've come round to it."]
+hear = "find me somewhere for dinner"
+exclude = ["not keen on Indian"]
+judge = ["The Food page no longer says Alex isn't keen on Indian."]

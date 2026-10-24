@@ -34,6 +34,8 @@ just send '<json>'    # POST a command
 just screenshot       # → screenshot.jpg
 just tunnel           # ngrok, for running without the cable
 just test             # all tests
+just twin alex        # the context twin on a real model, in a terminal, from a made-up graph
+just twin-eval        # the twin's evals on a real model (pass rates; costs a little)
 just logs             # bridge logcat
 ```
 
@@ -93,7 +95,7 @@ Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalReq
 
 **Investigating a run:** the task's steps and screens in the control panel, then `tail -100 apps/agent/logs/latest/agent.log`. `jev` lines show Jev's raw answers (noul, box, confidence).
 
-Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. Shared fakes in `tests/fakes.py`; the `store` fixture is a fresh store in a temp dir.
+Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. The context twin also has evals on a real model (`apps/agent/evals/twin/`): a made-up owner's graph (`graphs/alex.toml`; never the real owner's), cases in `cases.toml` (reader: what it must and mustn't say, how much it opens; writer: what it keeps or leaves alone; checked in code where possible, by a model judge otherwise), each run 3 times for a pass rate; every run saved to `results/` (ignored). `just twin` is the same twin by hand: `hear`, `brief`, `ask`, `say`, `show`, `review` (a model judges the whole graph against the design), `save` a grown graph as a fixture. Shared fakes in `tests/fakes.py`; the `store` fixture is a fresh store in a temp dir.
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.
 New channel = one `Channel` subclass registered in `__main__.py`; the orchestrator only sees its name ("via telegram") and can route to it. Images in replies (approval screenshots) must be shown by the channel; the CLI saves them to a temp file and prints the path.
 

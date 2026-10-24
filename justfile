@@ -63,6 +63,14 @@ _phone:
     @curl -sf localhost:{{port}}/devices -H "Authorization: Bearer $ARCHANGEL_TOKEN" | python3 -c \
         'import json, sys; p = json.load(sys.stdin); print(p[0]["device"]) if len(p) == 1 else sys.exit(f"{len(p)} phones connected; set ARCHANGEL_DEVICE")'
 
+# The context twin on a real model, in a terminal: `just twin alex` starts from that graph (apps/agent/evals/twin)
+twin *graph:
+    cd {{agent}} && uv run python -m evals.twin.sandbox {{graph}}
+
+# The twin's evals on a real model (costs a little): `just twin-eval [name filter] [--runs N]`
+twin-eval *args:
+    cd {{agent}} && uv run python -m evals.twin.run {{args}}
+
 test:
     cd {{agent}} && uv run pytest -q
     cd {{relay}} && uv run pytest -q

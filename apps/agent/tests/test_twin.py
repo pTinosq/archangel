@@ -215,3 +215,14 @@ def test_the_cockpit_sees_who_asks_the_twin_and_what_it_opens(store):
 def test_the_writers_edits_are_calls_to_the_twin(store):
     notice(Writer(scripted(("add", {"name": "Flights", "page": "- No mornings.", "said": SAID})), Graph(store.db)))
     assert [n.text for n in activity._recent if n.target == "twin"] == ["add Flights"]
+
+
+def test_an_explained_nothing_is_still_nothing(store):
+    reader = Reader(scripted(note="Nothing relevant: it's only a greeting."), uber_graph(store))
+    assert asyncio.run(reader.brief("hi")) == ""
+
+
+def test_a_page_written_with_its_heading_keeps_one(store):
+    graph = Graph(store.db)
+    notice(Writer(scripted(("add", {"name": "Flights", "page": "# Flights\n- No mornings.", "said": SAID})), graph))
+    assert graph.find("Flights").page == "- No mornings."

@@ -15,8 +15,8 @@ log = logging.getLogger(__name__)
 INSTRUCTIONS = """You read the owner's context twin for another agent: a graph of what's lasting about them. Each \
 node is a markdown page; each link has a few-word preview of what's at its end. Open only what the task needs, \
 following previews: usually two or three nodes. Then answer with only what bears on it, in a few short lines: \
-concrete (names, addresses, rules, limits), nothing they'd have to second-guess, no padding. Nothing bears on it? \
-"Nothing relevant." """
+concrete (names, addresses, rules, limits), nothing they'd have to second-guess, no padding. Nothing bears on it, \
+by the root's previews? Open nothing, and say only "Nothing relevant." """
 
 
 class Reader:
@@ -56,4 +56,5 @@ class Reader:
         # The root comes with the question: every walk starts there, so it costs no call.
         result = await logs.run(self._agent, f"{prompt}\n\nYou're at the root:\n{self._graph.open(ROOT)}")
         found = result.output.strip()
-        return "" if found.rstrip(".").casefold() == "nothing relevant" else found
+        # Models explain their nothing ("Nothing relevant: it's a greeting"), and an explained nothing is still noise.
+        return "" if found.casefold().startswith("nothing relevant") else found
