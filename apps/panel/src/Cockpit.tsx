@@ -11,6 +11,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useNodesState,
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -149,19 +150,24 @@ function Graph({
   const lit = new Set(following ? followed.map((n) => pair(n.source, n.target)) : []);
   const fresh = notices.filter((n) => now - n.time < PULSE_SECONDS);
 
-  const nodes: Node<PartData>[] = names.map((name) => ({
-    id: name,
-    type: "part",
-    position: spots.get(name)!,
-    data: {
-      name,
-      kind: kindOf.get(name) ?? "part",
-      doing: open.get(name)?.text,
-      here: name === here,
-      flash: fresh.some((n) => n.source === name && n.target === name),
-      down,
-    },
+  const parts: PartData[] = names.map((name) => ({
+    name,
+    kind: kindOf.get(name) ?? "part",
+    doing: open.get(name)?.text,
+    here: name === here,
+    flash: fresh.some((n) => n.source === name && n.target === name),
+    down,
   }));
+  // React Flow's own state, so each node keeps its measurements: a fresh node object loses them, and a node it
+  // hasn't measured is hidden, its links dropped. Rebuilt on every tick, under steady traffic the graph vanished.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<PartData>>([]);
+  const drawn = JSON.stringify(parts);
+  useEffect(() => {
+    setNodes((old) => {
+      const kept = new Map(old.map((n) => [n.id, n]));
+      return parts.map((data) => ({ ...kept.get(data.name), id: data.name, type: "part", position: spots.get(data.name)!, data }));
+    });
+  }, [drawn, spots]);
   const edges: Edge<HopData>[] = links.map(([from, to]) => {
     const key = pair(from, to);
     const pulses = fresh
@@ -180,6 +186,7 @@ function Graph({
   return (
     <ReactFlow
       nodes={nodes}
+      onNodesChange={onNodesChange}
       edges={edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
