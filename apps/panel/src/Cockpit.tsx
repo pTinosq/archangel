@@ -97,7 +97,7 @@ export function Cockpit() {
 }
 
 /** If drawing the graph fails, says why and offers to try again, instead of the graph silently vanishing. */
-class Redrawn extends Component<{ children: ReactNode }, { error: Error | null; tries: number }> {
+export class Redrawn extends Component<{ children: ReactNode }, { error: Error | null; tries: number }> {
   state = { error: null as Error | null, tries: 0 };
   static getDerivedStateFromError(error: Error) {
     return { error };

@@ -9,6 +9,7 @@ import { Prompts } from "./Prompts";
 import { play, setSoundOn, soundOn, subscribeSound } from "./sounds";
 import { go, Link, type Page, useRoute } from "./route";
 import { Tasks } from "./Tasks";
+import { Twin } from "./Twin";
 
 /** Served by the agent on the internet, behind GitHub sign-in; locally there's no one to sign out. */
 const PUBLIC = !["localhost", "127.0.0.1"].includes(location.hostname);
@@ -17,7 +18,7 @@ export function App() {
   const narrow = useNarrow();
   const route = useRoute();
   // On a phone the conversation is a page of its own, and the one it opens on; on a desktop it's always beside.
-  const pages: Page[] = [...(narrow ? ["chat" as Page] : []), "tasks", "cockpit", "prompts", "connectors"];
+  const pages: Page[] = [...(narrow ? ["chat" as Page] : []), "tasks", "cockpit", "twin", "prompts", "connectors"];
   const home = narrow ? "chat" : "tasks";
   const shown = route.page && pages.includes(route.page) ? route.page : home;
   useEffect(() => {
@@ -51,6 +52,7 @@ export function App() {
           {
             tasks: <Tasks selected={route.id} select={(id) => go(id ? `/tasks/${id}` : "/tasks")} />,
             cockpit: <Cockpit />,
+            twin: <Twin />,
             prompts: <Prompts />,
             connectors: <Connectors />,
           }[shown]}

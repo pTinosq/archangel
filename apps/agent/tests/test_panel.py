@@ -15,6 +15,7 @@ from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
+from agent.twin.graph import ROOT, Graph
 from agent.web import Web
 
 
@@ -24,7 +25,7 @@ class Panel:
         self.prompts = Prompts(store)
         self.web = Web(github, address=address)
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
-        self.channel = PanelChannel(store, self.prompts, self.connectors, self.web)
+        self.channel = PanelChannel(store, self.prompts, self.connectors, Graph(store.db), self.web)
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -123,7 +124,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None, None, Web()))
+        events = panel._events(PanelChannel(None, None, None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line
@@ -199,3 +200,25 @@ def test_connectors_are_added_and_listed_without_their_secrets(store):
     assert "Not connected" in panel.call("GET", "/connectors/callback?state=unknown&code=x").text
     panel.call("DELETE", "/api/connectors/work_google")
     assert panel.call("GET", "/api/connectors").json()["connectors"] == []
+
+
+def test_the_twin_shows_its_graph_and_takes_the_owners_edits(store):
+    found = Panel(store)
+    graph = Graph(store.db)
+    graph.add("Flights", "Aisle seat.")
+    graph.link(ROOT, "Flights", "travels by", "aisle seat")
+
+    whole = found.call("GET", "/api/twin").json()
+    assert {n["name"]: n["router"] for n in whole["nodes"]} == {ROOT: True, "Flights": False}
+    assert whole["links"] == [
+        {"source": ROOT, "target": "Flights", "relation": "travels by", "preview": "aisle seat", "stale": False}
+    ]
+
+    assert found.call("PUT", "/api/twin/nodes/flights", json={"page": "Aisle. No mornings."}).status_code == 200
+    node = found.call("GET", "/api/twin/nodes/Flights").json()
+    assert node["page"] == "Aisle. No mornings." and node["to"][0]["stale"]  # the writer rewrites it next run
+    assert node["history"][0]["origin"] == "panel"
+
+    assert found.call("DELETE", f"/api/twin/nodes/{ROOT}").status_code == 400
+    assert found.call("DELETE", "/api/twin/nodes/Flights").status_code == 200
+    assert found.call("GET", "/api/twin/nodes/Flights").status_code == 404

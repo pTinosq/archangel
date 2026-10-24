@@ -34,6 +34,15 @@ export type Connector = {
   profile: string;
   signedIn: boolean;
 };
+/** The context twin's graph: every node (an empty page makes it a router) and link, without the pages. */
+export type TwinGraph = {
+  nodes: { name: string; aliases: string[]; router: boolean }[];
+  links: TwinLink[];
+};
+/** `preview`: a few words on what's at the target. `stale`: its target changed since; the writer rewrites it. */
+export type TwinLink = { source: string; target: string; relation: string; preview: string; stale: boolean };
+export type TwinChange = { time: number; node: string; what: string; before: string; after: string; said: string; origin: string };
+export type TwinNode = { name: string; aliases: string[]; page: string; from: TwinLink[]; to: TwinLink[]; history: TwinChange[] };
 /** Where to send the owner to sign in; null if they still are. */
 export type SignIn = { signIn: string | null };
 
@@ -67,6 +76,10 @@ export const api = {
     call<SignIn>("POST", "/connectors", { kind, settings, profile }),
   signIn: (name: string) => call<SignIn>("POST", `/connectors/${name}/sign-in`),
   removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
+  twin: () => call<TwinGraph>("GET", "/twin"),
+  twinNode: (name: string) => call<TwinNode>("GET", `/twin/nodes/${encodeURIComponent(name)}`),
+  editTwinNode: (name: string, page: string) => call<null>("PUT", `/twin/nodes/${encodeURIComponent(name)}`, { page }),
+  deleteTwinNode: (name: string) => call<null>("DELETE", `/twin/nodes/${encodeURIComponent(name)}`),
 };
 
 /** Images expire after a few days: `hideExpired` as `onError` shows nothing rather than a broken icon. */

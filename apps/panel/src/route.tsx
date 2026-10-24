@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 
 /** The panel's pages are real paths (/tasks/12, /connectors), so links, reloads and the back button just work.
  * The agent serves the app on each of them (PAGES in apps/agent/src/agent/web.py). */
-export type Page = "chat" | "tasks" | "cockpit" | "prompts" | "connectors";
+export type Page = "chat" | "tasks" | "cockpit" | "twin" | "prompts" | "connectors";
 
 const moved = "archangel:navigate";
 

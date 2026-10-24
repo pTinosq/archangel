@@ -67,7 +67,8 @@ def main() -> None:
     )
 
     web = Web(config.github(), config.port(), config.public_url())
-    channels = [PanelChannel(store, prompts, connectors, web)]
+    graph = Graph(store.db)
+    channels = [PanelChannel(store, prompts, connectors, graph, web)]
     public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
     links = Links(store, web, config.relay_token(), public_url) if public_url else None
     if account := config.twilio():
@@ -78,7 +79,6 @@ def main() -> None:
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
-    graph = Graph(store.db)
     twin = Twin(store, graph, Writer(model, graph, prompts.live("twin writer")), gateway.owner)
     orchestrator = Orchestrator(
         # Everything the owner says waits behind it, so it answers without reasoning first. The background agents

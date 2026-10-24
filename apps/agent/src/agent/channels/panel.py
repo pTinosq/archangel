@@ -2,6 +2,8 @@
 tasks and their steps, and the prompts. The React app in apps/panel polls it, and watches live activity as a
 stream (server-sent events: one way, so nothing can be commanded through it).
 
+The Twin page shows the context twin's graph, and lets the owner edit or delete a node (`Graph`).
+
 The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
 back to /connectors/callback.
 
@@ -26,6 +28,7 @@ from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.store import Line, Step, Store, Task
+from agent.twin.graph import Graph, Link
 from agent.web import Web
 
 log = logging.getLogger(__name__)
@@ -39,11 +42,12 @@ class PanelChannel(Channel):
     shows = "text and pictures"
     owner = Address(name, "owner")
 
-    def __init__(self, store: Store, prompts: Prompts, connectors: Connectors, web: Web):
+    def __init__(self, store: Store, prompts: Prompts, connectors: Connectors, graph: Graph, web: Web):
         self._deliver: Deliver | None = None
         self._web = web
         _routes(web.app, self, store, prompts)
         _connector_routes(web.app, connectors)
+        _twin_routes(web.app, graph)
         web.share(lambda path: _public_report(store, path))
 
     async def start(self, deliver: Deliver) -> None:
@@ -181,6 +185,57 @@ async def _events(channel: PanelChannel) -> AsyncIterator[str]:
             if channel.stopping:
                 return
             yield f"data: {json.dumps(asdict(notice))}\n\n" if notice else ": still here\n\n"
+
+
+class Page(BaseModel):
+    page: str
+
+
+def _twin_routes(app: FastAPI, graph: Graph) -> None:
+    # The owner's own edits: no words to quote, made on the panel. Previews of links to an edited page go stale
+    # until the writer's next run, which can't end before it rewrites them.
+
+    @app.get("/api/twin")
+    async def whole() -> dict:
+        stale = {(link.source, link.target) for link in graph.stale()}
+        return {
+            "nodes": [{"name": n.name, "aliases": n.aliases, "router": not n.page.strip()} for n in graph.nodes()],
+            "links": [_link(link, (link.source, link.target) in stale) for link in graph.links()],
+        }
+
+    @app.get("/api/twin/nodes/{name}")
+    async def node(name: str) -> dict:
+        found = _found(graph, name)
+        stale = {(link.source, link.target) for link in graph.stale()}
+        return {
+            "name": found.name,
+            "aliases": found.aliases,
+            "page": found.page,
+            "from": [_link(link, (link.source, link.target) in stale) for link in graph.links_from(found.name)],
+            "to": [_link(link, (link.source, link.target) in stale) for link in graph.links_to(found.name)],
+            "history": [asdict(change) for change in graph.history(found.name)],
+        }
+
+    @app.put("/api/twin/nodes/{name}")
+    async def write(name: str, page: Page) -> None:
+        graph.write(_found(graph, name).name, page.page, origin="panel")
+
+    @app.delete("/api/twin/nodes/{name}")
+    async def delete(name: str) -> None:
+        try:
+            graph.delete(_found(graph, name).name, origin="panel")
+        except ValueError as error:  # the root
+            raise HTTPException(400, str(error))
+
+
+def _found(graph: Graph, name: str):
+    if not (node := graph.find(name)):
+        raise HTTPException(404, f"No node called {name!r}")
+    return node
+
+
+def _link(link: Link, stale: bool) -> dict:
+    return {**asdict(link), "stale": stale}
 
 
 def _public_report(store: Store, path: str) -> bool:
