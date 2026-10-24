@@ -142,6 +142,11 @@ class Store:
                 self._db.execute("ALTER TABLE tasks ADD COLUMN public INTEGER NOT NULL DEFAULT 0")
         self.forget_old_images()
 
+    @property
+    def db(self) -> sqlite3.Connection:
+        """For a module that keeps its own tables in the one file (the twin's graph)."""
+        return self._db
+
     # The conversation
 
     def history(self) -> list[ModelMessage]:
