@@ -28,6 +28,7 @@ from agent.research import Researcher
 from agent.runs import Answer
 from agent.store import Kind, Status, Store
 from agent.tasks import Tasks
+from agent.twin import Twin
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class Orchestrator:
         apps: Callable[[], Awaitable[dict[str, str]]],
         whereabouts: Whereabouts,
         instructions: Instructions = INSTRUCTIONS,
+        twin: Twin | None = None,
     ):
         self._store = store
         self._tasks = tasks
@@ -200,6 +202,21 @@ class Orchestrator:
                 return "There's no screenshot to send."
             await gateway.send(Message(to, (Text(text), *images)))
             return f"Sent via {channel}."
+
+        if twin:
+
+            @self._agent.tool_plain
+            async def remember(what: str) -> str:
+                """The owner asked you to remember something lasting about them ("remember I hate morning flights"):
+                their words. Kept from now on, everywhere."""
+                twin.remember(f"remember {what}")
+                return "Noting it."
+
+            @self._agent.tool_plain
+            async def forget(what: str) -> str:
+                """The owner asked you to forget something you'd kept about them: their words."""
+                twin.remember(f"forget {what}")
+                return "Forgetting it."
 
     async def handle(self, event: Event) -> None:
         async with self._lock:

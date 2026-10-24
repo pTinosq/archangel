@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from agent import helper, orchestrator, reports
 from agent.phone import guard, investigator, pilot, vision
 from agent.store import Store
+from agent.twin import writer
 
 DEFAULTS = {
     "orchestrator": orchestrator.INSTRUCTIONS,
@@ -17,6 +18,7 @@ DEFAULTS = {
     "vision": vision.INSTRUCTIONS,
     "reporter": reports.INSTRUCTIONS,
     "helper": helper.INSTRUCTIONS,
+    "twin writer": writer.INSTRUCTIONS,
 }
 
 

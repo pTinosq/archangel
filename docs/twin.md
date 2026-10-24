@@ -14,7 +14,7 @@ A second brain of the owner's personal context: who is in their life, what they 
 ## Two agents
 
 - **Reader** (read-only, fast model, no reasoning). Before any task it walks from You, or straight to a named node, and writes the task a briefing of a few lines. Mid-task, any agent can `ask_twin(question)` ("a sign-in page: what does the owner want?"). The orchestrator sees only the You page.
-- **Writer** (main model, reasoning). Reads an episode (a finished task: goal, what the owner said to it, outcome; or the chat since its last run, after 10 quiet minutes; or "remember…" / "forget…" at once) and edits the graph, or does nothing, which is the usual outcome. Keeps only what still holds next month and changes how a future task is done: "I hate morning flights" yes, "I'm in the mood for Indian" no. An answer that generalises ("always rate them 5 stars") is the richest source. Every edit quotes the owner's words. It can't finish with a stale preview.
+- **Writer** (main model, reasoning). Reads an episode (the conversation since its last read, once it's been quiet 10 minutes, which includes the owner's answers to tasks; or "remember…" / "forget…" at once) and edits the graph, or does nothing, which is the usual outcome. Keeps only what still holds next month and changes how a future task is done: "I hate morning flights" yes, "I'm in the mood for Indian" no. An answer that generalises ("always rate them 5 stars") is the richest source. Every edit quotes the owner's words. It can't finish with a stale preview. What it noted goes to the orchestrator, which tells the owner in a line (by text rather than a call).
 
 Payments, sending and deleting always ask, whatever the twin holds.
 
@@ -24,11 +24,12 @@ Payments, sending and deleting always ask, whatever the twin holds.
 
 | File | Role |
 |---|---|
-| `graph.py` | `Graph`: the only code on the twin's tables. `open(name)` is what a model sees at a node. Keeps the invariants: unique names, every edit recorded with its source, stale previews findable. |
+| `graph.py` | `Graph`: the only code on the graph's tables. `open(name)` is what a model sees at a node. Keeps the invariants: unique names, every edit recorded with its source, stale previews findable. |
 | `reader.py` | `brief(goal)`, `ask(question)`. Tools: `open`, `find`. |
-| `writer.py` | `notice(episode)`. The reader's tools plus edits; one episode at a time. |
+| `writer.py` | `notice(episode)`. Read tools plus edits. |
+| `__init__.py` | `Twin`: when the writer reads (quiet conversations, `remember`), one episode at a time. |
 
-Storage: four tables in `data/archangel.db` (`twin_nodes`, `twin_names`, `twin_links`, `twin_changes`), on the agent's Railway volume. No graph database: every query is "a node and its links", and the model chooses the path.
+Storage: four tables in `data/archangel.db` (`twin_nodes`, `twin_names`, `twin_links`, `twin_changes`; and `twin_read`, how far the writer has read), on the agent's Railway volume. No graph database: every query is "a node and its links", and the model chooses the path.
 
 ## Panel
 

@@ -27,6 +27,9 @@ from agent.reports import Reporter
 from agent.research import DEEP, DEEP_TIMEOUT, RESEARCH, Researcher, tavily
 from agent.store import DATA, Store, Task
 from agent.tasks import Tasks
+from agent.twin import Twin
+from agent.twin.graph import Graph
+from agent.twin.writer import Writer
 from agent.web import Web
 
 
@@ -75,6 +78,8 @@ def main() -> None:
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
+    graph = Graph(store.db)
+    twin = Twin(store, graph, Writer(model, graph, prompts.live("twin writer")), gateway.owner)
     orchestrator = Orchestrator(
         # Everything the owner says waits behind it, so it answers without reasoning first. The background agents
         # (pilot, guard, ...) keep it: they find their way through screens and judge risk.
@@ -87,16 +92,19 @@ def main() -> None:
         kit.phone.apps,
         Whereabouts(store, web, links),
         prompts.live("orchestrator"),
+        twin,
     )
+    twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(web, gateway, orchestrator, interrupted))
+        asyncio.run(_run(web, gateway, orchestrator, twin, interrupted))
     print()
 
 
-async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator, interrupted: list[Task]) -> None:
+async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator, twin: Twin, interrupted: list[Task]) -> None:
     async with asyncio.TaskGroup() as group:
         group.create_task(web.serve())
         group.create_task(gateway.run(orchestrator.handle))
+        group.create_task(twin.watch())
         for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
             group.create_task(orchestrator.handle(TaskUpdate(task)))
 
