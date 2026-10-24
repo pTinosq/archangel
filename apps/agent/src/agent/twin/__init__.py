@@ -65,8 +65,8 @@ class Twin:
         """`ask_twin`, for any agent that may need to know something about the owner mid-task."""
 
         async def ask_twin(question: str) -> str:
-            """Ask what the owner would want, or a fact about them, when it isn't in your task: "a sign-in page:
-            which account?", "Mum's address?". Not for what only they can decide now: ask them."""
+            """Ask what the owner would want, or a fact about them you don't have in front of you: "a sign-in
+            page: which account?", "Mum's name?". Not for what only they can decide now: ask them."""
             with activity.call("twin reader", "agent", question) as reply:
                 try:
                     answer = await self._reader.ask(question)

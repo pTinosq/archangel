@@ -248,7 +248,12 @@ class Orchestrator:
             + (" (report public)" if t.public else "")
             for t in shown
         ]
-        about = [f"The owner, from their context twin (ask_twin for more):\n{self._twin.root()}"] if self._twin else []
+        about = []
+        if self._twin:  # only the top page: the model took it for all it knew, and said it didn't know their mum
+            about.append(
+                "The top page of the owner's context twin; far more is behind its links. Ask the twin (ask_twin) "
+                f"before saying you don't know something about them:\n{self._twin.root()}"
+            )
         return "\n".join(
             [
                 *about,
