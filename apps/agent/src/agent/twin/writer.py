@@ -27,7 +27,8 @@ One node per thing, linked from every area it touches (Uber from Travel and Work
 everything about two links from {ROOT}, through routers like People, Travel, Work; link sideways rather than nest. \
 Put a fact as high as it holds (morning flights on Flights; on Travel once it holds for trains too). Write what \
 won't go stale: a date of birth, not an age; absolute dates; an end date on anything temporary. Quote the owner in \
-`said`. After changing a page, rewrite the previews of links to it.
+`said`. Pages are markdown: short bullets, a **label:** where it helps. After changing a page, rewrite the \
+previews of links to it.
 
 End with one short line for the owner on what you noted ("Noted: no morning flights."), or "Nothing." if you changed \
 nothing."""
