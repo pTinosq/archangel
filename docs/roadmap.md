@@ -14,7 +14,7 @@ Each milestone ships something usable and proves one idea.
 | M7 ✅ | Deploy | use Archangel from anywhere with the laptop closed: the agent and relay on Railway, the phone on the desk, the panel behind "Continue with GitHub" | runs detached from localhost; one owner, no auth platform |
 | M8 ✅ | Twilio | text, then call, your Twilio number to talk to Archangel; it texts or rings you for approvals | SMS, then voice, as channels; no orchestrator change |
 | M9 ✅ | Research | "do deep research into the best funds in 2026": a cited report a minute or two later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
-| M10 | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
+| M10 ✅ | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
@@ -66,7 +66,7 @@ Each milestone ships something usable and proves one idea.
 **Progress**
 - **Sharing (done):** `owner_location` gives the last place and a signed link; its page shares the browser's location once and the orchestrator carries on. Addresses come from OpenStreetMap. The pilot types the place where an app takes one.
 - **Faking (done):** the bridge's `location` command (mock location app); the pilot's `set_location`, only for GPS-only apps, put back when its run ends or pauses. It checks the results look local.
-- **To try live:** "restaurants near me" in Maps and the Michelin Guide, and an Uber pickup.
+- **Tried live (2026-10-24):** the faked location moves Maps' dot and its "near me" results. Still to see: the pilot choosing it itself, from a texted "restaurants near me", and an Uber pickup typed.
 
 ## M8 (done)
 
