@@ -165,6 +165,7 @@ The owner also tests across channels and reports changes.
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 - **Design (2026-10-24):** `docs/twin.md`. Not a table of memories but a graph of pages with previewed links, walked by a reader and grown by a writer that usually keeps nothing; one-offs stay out. Visible as a Twin tab in the panel.
+- **Progress (2026-10-24):** graph, writer, reader and the Context twin tab built and deployed; the owner's graph seeded from a questionnaire (kept out of the repo). Still to see live: a briefing changing what a task does; the writer's "Noted".
 
 Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
 ## M14 requirements (self-improvement) (from the owner)

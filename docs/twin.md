@@ -25,7 +25,7 @@ Payments, sending and deleting always ask, whatever the twin holds.
 | File | Role |
 |---|---|
 | `graph.py` | `Graph`: the only code on the graph's tables. `open(name)` is what a model sees at a node. Keeps the invariants: unique names, every edit recorded with its source, stale previews findable. |
-| `reader.py` | `brief(goal)`, `ask(question)`. Tools: `open`, `find`. |
+| `reader.py` | `brief(goal)`, `ask(question)`. One tool, `open` (by name or alias); the root comes with the question. |
 | `writer.py` | `notice(episode)`. Read tools plus edits. |
 | `__init__.py` | `Twin`: when the writer reads (quiet conversations, `remember`), one episode at a time. |
 
@@ -33,12 +33,12 @@ Storage: four tables in `data/archangel.db` (`twin_nodes`, `twin_names`, `twin_l
 
 ## Panel
 
-A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hubs settle in the middle; what's placed stays put); routers dashed, page nodes solid. The owner shapes it by hand too: add nodes, drag one onto another to link them, edit a link's relation and preview, rename, aliases, edit or delete a page. Click a node: its page, links, and history with the owner's words. Later: nodes the reader opens light up live.
+A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hubs settle in the middle; what's placed stays put); routers dashed, page nodes solid. The owner shapes it by hand too: add nodes, drag one onto another to link them, edit a link's relation and preview, rename, aliases, edit or delete a page. Click a node: its page, links, and history with the owner's words. Nodes the reader opens light up live.
 
 ## Build order
 
-1. `Graph`.
-2. Writer: finished tasks, quiet chat, remember / forget, a "Noted: …" line to the owner.
-3. The Twin tab.
-4. Reader: briefings, `ask_twin`, You in the orchestrator's prompt.
-5. Live, then: nightly tidying (merges, tendencies, fading), skills, search as an entry point.
+1. ✅ `Graph`.
+2. ✅ Writer: quiet conversations, remember / forget, a "Noted: …" line to the owner.
+3. ✅ The Context twin tab, editable by hand.
+4. ✅ Reader: briefings before phone and connectors tasks, `ask_twin` for the orchestrator, pilot and helper, the root in the orchestrator's prompt, nodes lit as they're read.
+5. Next: try it live; nightly tidying (merges, tendencies, fading), skills, search as an entry point.
