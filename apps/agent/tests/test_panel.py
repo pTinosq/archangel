@@ -244,3 +244,19 @@ def test_the_owner_can_build_the_twin_by_hand(store):
     assert found.call("DELETE", "/api/twin/links", params={"source": ROOT, "target": "Helen"}).status_code == 200
     assert graph.links() == []
     assert found.call("PUT", "/api/twin/links", json={**link, "target": ROOT}).status_code == 400  # not to itself
+
+
+def test_the_twins_evals_are_shown_locally_only(store, tmp_path, monkeypatch):
+    from agent import evals_tab
+
+    monkeypatch.setattr(evals_tab, "RESULTS", tmp_path)
+    report = {"id": "1", "started": 0, "finished": 1, "model": "m", "filter": "", "runs": 2, "cases": [{}, {}]}
+    (tmp_path / "1.json").write_text(json.dumps({**report, "results": [{"passed": True}, {"passed": False}]}))
+    panel = Panel(store)
+    [summary] = panel.call("GET", "/api/evals").json()["results"]
+    assert (summary["total"], summary["done"], summary["passed"]) == (4, 2, 1)
+    assert panel.call("GET", "/api/evals/1").json()["model"] == "m"
+    assert panel.call("GET", "/api/evals/..%2Fsecrets").status_code == 404
+
+    public = Panel(store, GitHub("id", "secret", "owner"))
+    assert public.call("GET", "/api/evals").status_code != 200

@@ -25,7 +25,7 @@ import { api, type TwinGraph, type TwinLink, type TwinNode } from "./api";
 import { Redrawn } from "./Cockpit";
 import { usePoll } from "./poll";
 
-const ROOT = "You";
+export const ROOT = "You";
 const READ_SECONDS = 8; // how long a node the reader opened stays lit
 const NODE = { width: 132, height: 40 }; // as in styles.css
 
@@ -70,8 +70,16 @@ function still(selection: Selection, graph: TwinGraph): Selection {
 const same = (a: { source: string; target: string }, b: { source: string; target: string }) =>
   a.source === b.source && a.target === b.target;
 
-type ThoughtData = { name: string; router: boolean; links: number; selected: boolean; reading: boolean };
-type TieData = { lit: boolean; stale: boolean; selected: boolean };
+export type ThoughtData = {
+  name: string;
+  router: boolean;
+  links: number;
+  selected: boolean;
+  reading: boolean;
+  /** For an eval's graph: what the run did to it. */
+  mark?: "added" | "changed" | "opened";
+};
+export type TieData = { lit: boolean; stale: boolean; selected: boolean };
 
 const nodeTypes = { thought: Thought };
 const edgeTypes = { tie: Tie };
@@ -201,7 +209,7 @@ function AddNode({ added }: { added: (name: string) => void }) {
 
 /** A node: solid if it has a page, a dashed outline if it's only a router. Its square (the grip) starts a link; while one is being
  * drawn, every other node is a target as a whole. */
-function Thought({ id, data }: NodeProps<Node<ThoughtData>>) {
+export function Thought({ id, data }: NodeProps<Node<ThoughtData>>) {
   const connection = useConnection();
   const target = connection.inProgress && connection.fromNode.id !== id;
   const classes = [
@@ -211,6 +219,7 @@ function Thought({ id, data }: NodeProps<Node<ThoughtData>>) {
     data.name === ROOT && "root",
     target && "target",
     data.reading && "reading",
+    data.mark,
   ];
   return (
     <div className={classes.filter(Boolean).join(" ")} title={data.router ? "Router: links only" : "Page"}>
@@ -223,7 +232,7 @@ function Thought({ id, data }: NodeProps<Node<ThoughtData>>) {
 }
 
 /** A straight line between centres: in a web of cross-links there's no side a link naturally leaves from. */
-function Tie({ id, source, target, data }: EdgeProps<Edge<TieData>>) {
+export function Tie({ id, source, target, data }: EdgeProps<Edge<TieData>>) {
   const from = useInternalNode(source);
   const to = useInternalNode(target);
   if (!from || !to) return null;
@@ -434,13 +443,15 @@ function LinkPage({ link, select }: { link?: TwinLink; select: (s: Selection) =>
   );
 }
 
-type Point = { x: number; y: number };
+/** All the layout needs of a graph. */
+type Shape = { nodes: { name: string }[]; links: { source: string; target: string }[] };
+export type Point = { x: number; y: number };
 type Spot = SimulationNodeDatum & { id: string };
 
 /** A force layout: links pull, nodes push apart, You held in the middle; hubs settle where their links meet. Nodes
  * already `kept` stay put and only new ones move, starting beside something they link to. Run to rest at once, not
  * animated: the picture is the result, not the physics. */
-function layout(graph: TwinGraph, kept = new Map<string, Point>()): Map<string, Point> {
+export function layout(graph: Shape, kept = new Map<string, Point>()): Map<string, Point> {
   const neighbour = (name: string) =>
     graph.links.map((l) => kept.get(l.source === name ? l.target : l.target === name ? l.source : "")).find(Boolean);
   const spots: Spot[] = graph.nodes.map((n) => {
@@ -462,7 +473,7 @@ function layout(graph: TwinGraph, kept = new Map<string, Point>()): Map<string, 
   return new Map(spots.map((s) => [s.id, { x: s.x ?? 0, y: s.y ?? 0 }]));
 }
 
-function bounds(spots: Map<string, Point>) {
+export function bounds(spots: Map<string, Point>) {
   const xs = [...spots.values()].map((p) => p.x);
   const ys = [...spots.values()].map((p) => p.y);
   const [left, top] = [Math.min(...xs) - NODE.width / 2, Math.min(...ys) - NODE.height / 2];

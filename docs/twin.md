@@ -37,7 +37,7 @@ A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hub
 
 ## Evals
 
-`just twin-eval` runs the reader and writer on the real model against a made-up owner (`apps/agent/evals/twin/`), each case 3 times; `just twin` is the same by hand. Checks are code where they can be (must say, mustn't say, pages opened, nothing changed, no new nodes), a model judge where they can't ("Rosa has her own node, linked from People"). First run, 2026-10-24: 36/57. Fixed from what it found: an explained "Nothing relevant: …" was passed on as a briefing; pages got a doubled `# Name` heading; derived facts were stored ("turns 30 on…"); a changed fact kept the old beside the new. Then 54/57, the rest the reader glancing at one page before saying nothing.
+`just twin-eval`, or the panel's Evals tab on a local agent (pass rates, a case-by-run grid against the run before, and each run's input, checks, answer, edits and resulting graph), runs the reader and writer on the real model against a made-up owner (`apps/agent/evals/twin/`), each case 3 times; `just twin` is the same by hand. Checks are code where they can be (must say, mustn't say, pages opened, nothing changed, no new nodes), a model judge where they can't ("Rosa has her own node, linked from People"). First run, 2026-10-24: 36/57. Fixed from what it found: an explained "Nothing relevant: …" was passed on as a briefing; pages got a doubled `# Name` heading; derived facts were stored ("turns 30 on…"); a changed fact kept the old beside the new. Then 54/57, the rest the reader glancing at one page before saying nothing.
 
 ## Build order
 

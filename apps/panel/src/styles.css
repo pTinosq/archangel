@@ -113,6 +113,7 @@ main.prompts { grid-template-columns: 240px 1fr 360px; }
 main.cockpit { grid-template-columns: 1fr 340px 320px; }
 main.connectors { grid-template-columns: 1fr 1fr 360px; }
 main.twin { grid-template-columns: 1fr 380px 320px; }
+main.evals { grid-template-columns: 260px 1fr 320px; }
 main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background: var(--pane); border: 1px solid var(--line); }
 
 /* Status: a pixel tag in its colour; amber when it waits for the owner. */
@@ -126,12 +127,12 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 @keyframes pulse { 50% { color: var(--bg); background: var(--tone); } }
 
 /* Lists: rows that light, never resize. */
-.task-list li, .prompt-list li {
+.task-list li, .prompt-list li, .eval-list li {
   padding: var(--s2) var(--s3); margin: 0 calc(-1 * var(--s3)); cursor: pointer;
   border-left: 1px solid transparent;
 }
-.task-list li:hover, .prompt-list li:hover { background: var(--raised); }
-.task-list li.selected, .prompt-list li.selected { background: var(--accent-wash); border-left-color: var(--accent); }
+.task-list li:hover, .prompt-list li:hover, .eval-list li:hover { background: var(--raised); }
+.task-list li.selected, .prompt-list li.selected, .eval-list li.selected { background: var(--accent-wash); border-left-color: var(--accent); }
 .task-list li > div:first-child { display: flex; align-items: center; gap: var(--s2); margin-bottom: 2px; }
 .task-list .goal { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prompt-list p { margin-top: var(--s4); }
@@ -357,7 +358,7 @@ button.to:hover:not(:disabled) { color: var(--accent); }
   button { min-height: 44px; padding: var(--s2) var(--s4); }
   input, textarea { font-size: 16px; min-height: 44px; }
 
-  main, main.tasks, main.prompts, main.cockpit, main.connectors, main.twin { display: flex; flex-direction: column; padding: 0; gap: 0; }
+  main, main.tasks, main.prompts, main.cockpit, main.connectors, main.twin, main.evals { display: flex; flex-direction: column; padding: 0; gap: 0; }
   .connector-list, .add-connector { flex: none !important; }
   main > section {
     flex: 1; border: none; border-bottom: 1px solid var(--line); background: var(--bg);
@@ -408,3 +409,72 @@ button.to:hover:not(:disabled) { color: var(--accent); }
 }
 
 
+
+/* Evals (local only): the twin's eval runs, a case-by-run grid, and one run opened: its graph beside what went in,
+   what was checked and what changed. Pass is the accent, fail is red; nothing waits on the owner here, so no amber. */
+.eval-list ul { list-style: none; margin: var(--s4) 0 0; padding: 0; }
+.eval-list li > div:first-child { display: flex; align-items: center; gap: var(--s2); }
+.eval-list .score { font-variant-numeric: tabular-nums; }
+.eval-list li .quiet { font-size: 11px; }
+.eval-run { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.eval-run select { flex: 1 1 100%; min-width: 0; }
+.eval-run label { display: flex; align-items: center; gap: var(--s1); color: var(--quiet); }
+.eval-run input { width: 48px; }
+.eval-run button { margin-left: auto; }
+.eval-run p { flex: 1 1 100%; margin: 0; font-size: 11px; }
+.rate { font-size: 11px; font-variant-numeric: tabular-nums; }
+.rate.all { color: var(--accent); }
+.rate.most { color: var(--text); }
+.rate.few { color: var(--bad); }
+
+.eval-head { display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap; }
+.eval-head h2 { margin-bottom: var(--s3); }
+.eval-grid { border-collapse: collapse; margin-bottom: var(--s4); }
+.eval-grid th { text-align: left; font-weight: normal; padding: 2px var(--s3) 2px 0; cursor: pointer; white-space: nowrap; }
+.eval-grid th:hover { color: var(--accent); }
+.eval-grid td { padding: 2px var(--s1); white-space: nowrap; }
+.eval-grid td.kind { font-size: 11px; padding-right: var(--s3); }
+.eval-grid .cell { width: 26px; height: 22px; padding: 0; box-shadow: none; font-size: 12px; line-height: 1; }
+.eval-grid .cell.pass { color: var(--accent); border-color: var(--accent-deep); }
+.eval-grid .cell.fail { color: var(--bad); border-color: var(--bad); }
+.eval-grid .cell.pending { color: var(--quiet); border-style: dashed; }
+.eval-grid .cell.chosen { background: var(--accent-wash); border-color: var(--accent); }
+.eval-grid .cell.fail.chosen { background: rgba(255, 90, 71, 0.12); border-color: var(--bad); }
+.eval-grid .delta { font-size: 11px; font-variant-numeric: tabular-nums; }
+.delta .up { color: var(--accent); }
+.delta .down { color: var(--bad); }
+
+.eval-run-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--s4); border-top: 1px solid var(--line); padding-top: var(--s4); }
+.eval-run-detail { align-items: start; scroll-margin-top: var(--s4); }
+/* Stays in view beside the run's text, however long that is. */
+.eval-graph { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.eval-graph .canvas { height: min(560px, 70vh); border: 1px solid var(--line); background: var(--bg); }
+.eval-graph .react-flow__node { cursor: pointer; }
+.eval-graph .react-flow__handle { opacity: 0; pointer-events: none; }
+.eval-graph .react-flow__edge-path.lit { stroke: var(--accent); stroke-width: 1.5; }
+.eval-graph .react-flow__attribution { background: transparent; }
+.eval-graph .react-flow__attribution a { color: var(--quiet); text-decoration: none; }
+.eval-graph .legend { font-size: 11px; margin: 0; }
+.legend span { padding: 0 5px; border: 1px solid; }
+.thought.added, .legend .added { border-color: var(--accent); border-style: solid; background: var(--accent-wash); }
+.thought.changed, .legend .changed { border-color: var(--text); border-style: solid; }
+.thought.opened, .legend .opened { border-color: var(--accent-deep); border-style: dashed; }
+.legend .added { color: var(--accent); }
+.eval-text { min-width: 0; }
+.eval-text h3 { font-size: 13px; margin: var(--s4) 0 var(--s2); color: var(--text); }
+.eval-text h3:first-child { margin-top: 0; }
+.eval-text .block { margin-bottom: var(--s3); }
+.eval-text .label { margin: 0 0 2px; font-size: 11px; color: var(--quiet); }
+.eval-text pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; padding: var(--s2) var(--s3); background: var(--raised); border: 1px solid var(--line); }
+.checks, .edits, .eval-links { list-style: none; margin: 0; padding: 0; }
+.checks li { padding: var(--s1) 0; }
+.checks li .mark { display: inline-block; width: 1.2em; }
+.checks li.pass .mark { color: var(--accent); }
+.checks li.fail .mark, .checks li.fail { color: var(--bad); }
+.checks li p { margin: 2px 0 0 1.2em; font-size: 12px; }
+.edits li { margin-bottom: var(--s3); }
+.edits pre, .eval-text .diff { margin-top: var(--s1); }
+.diff .gone { color: var(--bad); }
+.diff .new { color: var(--accent); }
+.diff .same { color: var(--quiet); }
+.eval-links li { font-size: 12px; padding: 2px 0; }

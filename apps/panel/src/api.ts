@@ -43,6 +43,68 @@ export type TwinGraph = {
 export type TwinLink = { source: string; target: string; relation: string; preview: string; stale: boolean };
 export type TwinChange = { time: number; node: string; what: string; before: string; after: string; said: string; origin: string };
 export type TwinNode = { name: string; aliases: string[]; page: string; from: TwinLink[]; to: TwinLink[]; history: TwinChange[] };
+/** The context twin's evals (apps/agent/evals/twin), on a local agent only. One eval run, summed up. */
+export type EvalSummary = {
+  id: string;
+  started: number;
+  finished: number | null;
+  model: string;
+  filter: string;
+  total: number;
+  done: number;
+  passed: number;
+  unreadable?: boolean;
+};
+/** A graph as an eval saw it: pages included. */
+export type EvalGraph = {
+  nodes: { name: string; page: string; aliases: string[] }[];
+  links: { source: string; target: string; relation: string; preview: string }[];
+};
+/** One case, as written in cases.toml. */
+export type EvalCase = {
+  name: string;
+  graph?: string;
+  say?: string[];
+  hear?: string;
+  brief?: string;
+  ask?: string;
+  include?: string[];
+  exclude?: string[];
+  nothing?: boolean;
+  opens_at_most?: number;
+  unchanged?: boolean;
+  new_nodes_at_most?: number;
+  judge?: string[];
+};
+export type EvalCheck = { name: string; passed: boolean; why: string };
+export type EvalChange = { node: string; what: string; before: string; after: string; said: string };
+/** One run of one case. */
+export type EvalRun = {
+  case: string;
+  run: number;
+  kind: "hear" | "brief" | "ask" | "";
+  input: string;
+  answer: string;
+  opened: string[];
+  notes: string[];
+  changes: EvalChange[];
+  checks: EvalCheck[];
+  graph: EvalGraph;
+  seconds: number;
+  error: string;
+  passed: boolean;
+};
+export type EvalReport = {
+  id: string;
+  started: number;
+  finished: number | null;
+  model: string;
+  filter: string;
+  runs: number;
+  cases: EvalCase[];
+  graphs: Record<string, EvalGraph>;
+  results: EvalRun[];
+};
 /** Where to send the owner to sign in; null if they still are. */
 export type SignIn = { signIn: string | null };
 
@@ -76,6 +138,9 @@ export const api = {
     call<SignIn>("POST", "/connectors", { kind, settings, profile }),
   signIn: (name: string) => call<SignIn>("POST", `/connectors/${name}/sign-in`),
   removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
+  evals: () => call<{ cases: string[]; results: EvalSummary[] }>("GET", "/evals"),
+  evalReport: (id: string) => call<EvalReport>("GET", `/evals/${id}`),
+  runEvals: (filter: string, runs: number) => call<{ id: string }>("POST", "/evals", { filter, runs }),
   twin: () => call<TwinGraph>("GET", "/twin"),
   twinNode: (name: string) => call<TwinNode>("GET", `/twin/nodes/${encodeURIComponent(name)}`),
   editTwinNode: (name: string, page: string) => call<null>("PUT", `/twin/nodes/${encodeURIComponent(name)}`, { page }),

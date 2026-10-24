@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agent import activity
+from agent import activity, evals_tab
 from agent.channels import Channel, Deliver
 from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Message, Text
@@ -48,6 +48,8 @@ class PanelChannel(Channel):
         _routes(web.app, self, store, prompts)
         _connector_routes(web.app, connectors)
         _twin_routes(web.app, graph)
+        if not web.public:  # the twin's evals: for working on it locally, never on the internet
+            evals_tab.routes(web.app)
         web.share(lambda path: _public_report(store, path))
 
     async def start(self, deliver: Deliver) -> None:

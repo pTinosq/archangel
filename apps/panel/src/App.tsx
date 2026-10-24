@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api } from "./api";
 import { Chat } from "./Chat";
 import { Cockpit } from "./Cockpit";
+import { Evals } from "./Evals";
 import { Connectors } from "./Connectors";
 import { useNarrow } from "./narrow";
 import { usePoll } from "./poll";
@@ -21,7 +22,13 @@ export function App() {
   const narrow = useNarrow();
   const route = useRoute();
   // On a phone the conversation is a page of its own, and the one it opens on; on a desktop it's always beside.
-  const pages: Page[] = [...(narrow ? ["chat" as Page] : []), "tasks", "cockpit", "twin", "prompts", "connectors"];
+  // Evals only locally: they're for working on the twin, run on this machine, and the agent serves them nowhere else.
+  const pages: Page[] = [
+    ...(narrow ? ["chat" as Page] : []),
+    ...(["tasks", "cockpit", "twin"] as Page[]),
+    ...(PUBLIC ? [] : ["evals" as Page]),
+    ...(["prompts", "connectors"] as Page[]),
+  ];
   const home = narrow ? "chat" : "tasks";
   const shown = route.page && pages.includes(route.page) ? route.page : home;
   useEffect(() => {
@@ -56,6 +63,7 @@ export function App() {
             tasks: <Tasks selected={route.id} select={(id) => go(id ? `/tasks/${id}` : "/tasks")} />,
             cockpit: <Cockpit />,
             twin: <Twin />,
+            evals: <Evals />,
             prompts: <Prompts />,
             connectors: <Connectors />,
           }[shown]}
