@@ -16,7 +16,7 @@ Each milestone ships something usable and proves one idea.
 | M9 ✅ | Research | "do deep research into the best funds in 2026": a cited report a minute or two later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 ✅ | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
-| M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | self-learning memory: rules captured from chat, retrieved before each task |
+| M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
@@ -164,6 +164,7 @@ The owner also tests across channels and reports changes.
 - **Learns as it goes.** Standing instructions said in any channel become memories with no extra step. Examples: "never return sponsored results for restaurant recommendations"; "Uber: always the cheapest ride, rate drivers 5 stars, no tip".
 - **Recalled before acting.** Before a task, the orchestrator looks up relevant memories (RAG or similar, still undecided) and hands them to the sub-agent that does the work. Example: booking an Uber pulls in the Uber rules.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
+- **Design (2026-10-24):** `docs/twin.md`. Not a table of memories but a graph of pages with previewed links, walked by a reader and grown by a writer that usually keeps nothing; one-offs stay out. Visible as a Twin tab in the panel.
 
 Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
 ## M14 requirements (self-improvement) (from the owner)
