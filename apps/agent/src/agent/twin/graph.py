@@ -140,6 +140,14 @@ class Graph:
             self._db.execute("INSERT INTO twin_names VALUES (?, ?)", (alias, node.id))
             self._record(node.name, "alias", "", alias, said, origin)
 
+    def unalias(self, alias: str, *, said: str = "", origin: str = "panel") -> None:
+        node = self._get(alias)
+        if alias.strip().casefold() == node.name.casefold():
+            raise ValueError(f"{alias!r} is {node.name}'s name, not an alias: rename it instead.")
+        with self._db:
+            self._db.execute("DELETE FROM twin_names WHERE name = ?", (alias.strip(),))
+            self._record(node.name, "unalias", alias.strip(), "", said, origin)
+
     def rename(self, name: str, new: str, *, said: str = "", origin: str = "panel") -> None:
         node, new = self._get(name), new.strip()
         if node.name == ROOT:

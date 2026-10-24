@@ -80,6 +80,15 @@ export const api = {
   twinNode: (name: string) => call<TwinNode>("GET", `/twin/nodes/${encodeURIComponent(name)}`),
   editTwinNode: (name: string, page: string) => call<null>("PUT", `/twin/nodes/${encodeURIComponent(name)}`, { page }),
   deleteTwinNode: (name: string) => call<null>("DELETE", `/twin/nodes/${encodeURIComponent(name)}`),
+  addTwinNode: (name: string) => call<null>("POST", "/twin/nodes", { name }),
+  renameTwinNode: (name: string, to: string) => call<null>("PUT", `/twin/nodes/${encodeURIComponent(name)}/name`, { name: to }),
+  aliasTwinNode: (name: string, alias: string) => call<null>("POST", `/twin/nodes/${encodeURIComponent(name)}/aliases`, { name: alias }),
+  unaliasTwin: (alias: string) => call<null>("DELETE", `/twin/aliases/${encodeURIComponent(alias)}`),
+  /** Adds a link, or rewrites one's relation and preview. */
+  linkTwin: (link: { source: string; target: string; relation: string; preview: string }) =>
+    call<null>("PUT", "/twin/links", { source: link.source, target: link.target, relation: link.relation, preview: link.preview }),
+  unlinkTwin: (source: string, target: string) =>
+    call<null>("DELETE", `/twin/links?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`),
 };
 
 /** Images expire after a few days: `hideExpired` as `onError` shows nothing rather than a broken icon. */

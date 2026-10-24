@@ -222,3 +222,25 @@ def test_the_twin_shows_its_graph_and_takes_the_owners_edits(store):
     assert found.call("DELETE", f"/api/twin/nodes/{ROOT}").status_code == 400
     assert found.call("DELETE", "/api/twin/nodes/Flights").status_code == 200
     assert found.call("GET", "/api/twin/nodes/Flights").status_code == 404
+
+
+def test_the_owner_can_build_the_twin_by_hand(store):
+    found = Panel(store)
+    graph = Graph(store.db)
+    assert found.call("POST", "/api/twin/nodes", json={"name": "Mom"}).status_code == 200
+    taken = found.call("POST", "/api/twin/nodes", json={"name": "mom"})
+    assert (taken.status_code, taken.json()["detail"]) == (400, "'mom' is already Mom: link to it, or merge.")
+
+    assert found.call("PUT", "/api/twin/nodes/Mom/name", json={"name": "Helen"}).status_code == 200
+    assert found.call("POST", "/api/twin/nodes/Helen/aliases", json={"name": "Mum"}).status_code == 200
+    assert graph.find("mum").name == "Helen"
+    assert found.call("DELETE", "/api/twin/aliases/Helen").status_code == 400  # her name, not an alias
+    assert found.call("DELETE", "/api/twin/aliases/Mum").status_code == 200 and graph.find("Mum") is None
+
+    link = {"source": ROOT, "target": "Helen", "relation": "mother", "preview": "birthday 14 May"}
+    assert found.call("PUT", "/api/twin/links", json=link).status_code == 200
+    assert found.call("PUT", "/api/twin/links", json={**link, "preview": "birthday 14 May, lilies"}).status_code == 200
+    assert [(l.relation, l.preview) for l in graph.links()] == [("mother", "birthday 14 May, lilies")]
+    assert found.call("DELETE", "/api/twin/links", params={"source": ROOT, "target": "Helen"}).status_code == 200
+    assert graph.links() == []
+    assert found.call("PUT", "/api/twin/links", json={**link, "target": ROOT}).status_code == 400  # not to itself

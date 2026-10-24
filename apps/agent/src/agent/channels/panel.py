@@ -191,6 +191,22 @@ class Page(BaseModel):
     page: str
 
 
+class NewNode(BaseModel):
+    name: str
+    page: str = ""
+
+
+class Name(BaseModel):
+    name: str
+
+
+class NewLink(BaseModel):
+    source: str
+    target: str
+    relation: str = ""
+    preview: str = ""
+
+
 def _twin_routes(app: FastAPI, graph: Graph) -> None:
     # The owner's own edits: no words to quote, made on the panel. Previews of links to an edited page go stale
     # until the writer's next run, which can't end before it rewrites them.
@@ -216,22 +232,53 @@ def _twin_routes(app: FastAPI, graph: Graph) -> None:
             "history": [asdict(change) for change in graph.history(found.name)],
         }
 
+    @app.post("/api/twin/nodes")
+    async def add(new: NewNode) -> None:
+        _refused(lambda: graph.add(new.name, new.page, origin="panel"))
+
     @app.put("/api/twin/nodes/{name}")
     async def write(name: str, page: Page) -> None:
         graph.write(_found(graph, name).name, page.page, origin="panel")
 
+    @app.put("/api/twin/nodes/{name}/name")
+    async def rename(name: str, new: Name) -> None:
+        _refused(lambda: graph.rename(_found(graph, name).name, new.name, origin="panel"))
+
+    @app.post("/api/twin/nodes/{name}/aliases")
+    async def alias(name: str, alias: Name) -> None:
+        _refused(lambda: graph.alias(_found(graph, name).name, alias.name, origin="panel"))
+
+    @app.delete("/api/twin/aliases/{alias}")
+    async def unalias(alias: str) -> None:
+        _found(graph, alias)
+        _refused(lambda: graph.unalias(alias, origin="panel"))
+
     @app.delete("/api/twin/nodes/{name}")
     async def delete(name: str) -> None:
-        try:
-            graph.delete(_found(graph, name).name, origin="panel")
-        except ValueError as error:  # the root
-            raise HTTPException(400, str(error))
+        _refused(lambda: graph.delete(_found(graph, name).name, origin="panel"))
+
+    @app.put("/api/twin/links")
+    async def link(new: NewLink) -> None:
+        """Adds a link, or rewrites one's relation and preview."""
+        _refused(lambda: graph.link(new.source, new.target, new.relation, new.preview, origin="panel"))
+
+    @app.delete("/api/twin/links")
+    async def unlink(source: str, target: str) -> None:
+        _refused(lambda: graph.unlink(source, target, origin="panel"))
 
 
 def _found(graph: Graph, name: str):
     if not (node := graph.find(name)):
         raise HTTPException(404, f"No node called {name!r}")
     return node
+
+
+def _refused(edit) -> None:
+    """What the graph won't do (a taken name, the root) goes back to the owner as the reason."""
+    try:
+        edit()
+    except ValueError as error:
+        raise HTTPException(400, str(error))
 
 
 def _link(link: Link, stale: bool) -> dict:

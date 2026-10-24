@@ -222,39 +222,80 @@ section.cockpit { padding: 0; overflow: hidden; }
 .part.busy { border-color: var(--warn); }
 .part.flash, .part.here { border-color: var(--accent); }
 
-/* Twin: the owner's second brain. Pages are solid, routers only an outline; the open node and its links are lit. */
+/* Twin: the owner's second brain. Pages are solid, routers only a dashed outline; the open node and its links are
+   lit. Each node's grip starts a link; while one is drawn, every other node is a target. */
 section.twin-graph { padding: 0; overflow: hidden; }
 .twin-graph .react-flow {
   --xy-background-color: transparent; --xy-background-pattern-color: #262626;
   --xy-edge-stroke: var(--line-strong); --xy-edge-stroke-width: 1;
 }
-.twin-graph .react-flow__handle { opacity: 0; pointer-events: none; }
 .twin-graph .react-flow__node { transition: transform 0.4s ease; cursor: pointer; }
+.twin-graph .react-flow__edge { cursor: pointer; }
+.twin-graph .react-flow__edge:hover .react-flow__edge-path { stroke: var(--text); }
 .twin-graph .react-flow__edge-path.lit { stroke: var(--accent); stroke-width: 1.5; }
+.twin-graph .react-flow__edge-path.chosen { stroke: var(--accent); stroke-width: 3; }
 .twin-graph .react-flow__edge-path.stale { stroke-dasharray: 4 4; }
 .twin-graph .react-flow__attribution { background: transparent; }
 .twin-graph .react-flow__attribution a { color: var(--quiet); text-decoration: none; }
+.twin-graph .react-flow__panel { margin: var(--s3); }
+.twin-hint { font-size: 11px; color: var(--quiet); pointer-events: none; }
+.graph-tools { display: flex; gap: var(--s2); align-items: flex-start; }
+.graph-tools > button.small { padding: 7px 12px; font-size: 11px; line-height: 16px; background: var(--bg); }
+.add-node { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; padding: var(--s2); background: var(--bg); border: 1px solid var(--line-strong); }
+.add-node input { width: 200px; }
+.add-node .error { width: 100%; font-size: 12px; max-width: 280px; }
+
 .thought {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
   width: 132px; height: 40px; padding: 0 var(--s3); background: var(--raised);
   border: 1px solid var(--line-strong); box-shadow: inset 0 2px 0 var(--accent-deep); transition: border-color 0.2s;
 }
 .thought.router { background: var(--bg); border-style: dashed; box-shadow: none; }
 .thought.root { box-shadow: inset 0 2px 0 var(--accent); }
-.thought:hover { border-color: var(--text); }
+.thought:hover, .thought.target:hover { border-color: var(--text); }
+.thought.target { border-color: var(--accent-deep); }
 .thought.selected { border-color: var(--accent); border-style: solid; }
 .thought .name { font-size: 8px; line-height: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thought.router .name { color: var(--quiet); }
 .thought.selected .name { color: var(--accent); }
 .thought .links { font-size: 10px; line-height: 12px; color: var(--quiet); font-variant-numeric: tabular-nums; }
+/* The grip: a square on the right edge, shown on hover; drag it to another node. */
+.thought .react-flow__handle.grip {
+  width: 9px; height: 9px; right: -5px; border-radius: 0; background: var(--bg); border: 1px solid var(--accent);
+  opacity: 0; transition: opacity 0.12s;
+}
+.thought:hover .react-flow__handle.grip, .thought.selected .react-flow__handle.grip { opacity: 1; }
+.thought .react-flow__handle.grip:hover { background: var(--accent); }
+/* Every link ends here (React Flow needs a target on each node); while one is drawn, the whole node catches the drop. */
+.thought .react-flow__handle.whole {
+  inset: 0; width: 100%; height: 100%; transform: none; border: none; border-radius: 0; background: transparent; opacity: 0;
+  pointer-events: none;
+}
+.thought.target .react-flow__handle.whole { pointer-events: all; }
 
 .twin-page { display: flex; flex-direction: column; gap: var(--s3); }
-.twin-page h2 { margin: 0; }
+.twin-page .title { display: flex; align-items: center; gap: var(--s2); min-height: 32px; }
+.twin-page .title h2 { margin: 0 auto 0 0; }
+.twin-page .title input { flex: 1; }
 .twin-page h3 { font-size: 8px; line-height: 16px; color: var(--accent); margin-top: var(--s3); }
-.twin-page textarea { min-height: 220px; resize: vertical; line-height: 1.6; padding: var(--s3); }
-.ties li { padding: var(--s2) var(--s3); margin: 0 calc(-1 * var(--s3)); cursor: pointer; border-left: 1px solid transparent; }
-.ties li:hover { background: var(--raised); border-left-color: var(--accent); }
-.ties .to { font-weight: 600; }
+.twin-page textarea { min-height: 200px; resize: vertical; line-height: 1.6; padding: var(--s3); }
+.twin-page label { display: flex; flex-direction: column; gap: var(--s1); color: var(--quiet); font-size: 12px; }
+.twin-page .count { align-self: flex-end; font-size: 11px; font-variant-numeric: tabular-nums; }
+.twin-page .count.over { color: var(--warn); }
+.twin-page p.stale { color: var(--warn); font-size: 12px; }
+button.small { font-size: 10px; line-height: 14px; padding: 3px 8px; box-shadow: none; border-color: var(--line); color: var(--quiet); }
+.aliases { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.alias { display: inline-flex; align-items: center; gap: var(--s1); padding: 0 0 0 var(--s2); font-size: 12px; border: 1px solid var(--line-strong); }
+.alias button { padding: 0 6px; border: none; box-shadow: none; background: none; color: var(--quiet); font-size: 13px; }
+.aliases form { flex: 1; min-width: 140px; }
+.aliases input { width: 100%; padding: 3px 8px; font-size: 12px; border-color: var(--line); }
+/* A name in a link: a plain word that goes there. */
+button.to { padding: 0; border: none; box-shadow: none; background: none; font: 600 13px/1.55 var(--mono); text-transform: none; letter-spacing: 0; color: var(--text); }
+button.to:hover:not(:disabled) { color: var(--accent); }
+.ends { display: flex; align-items: center; gap: var(--s1); }
+.ties li { position: relative; padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
+.ties .edit { position: absolute; right: 0; top: var(--s2); opacity: 0; }
+.ties li:hover .edit, .ties .edit:focus-visible { opacity: 1; }
 .ties p { color: var(--quiet); font-size: 12px; }
 .ties p.stale { color: var(--warn); }
 .ties p.stale::after { content: " · being rewritten"; }

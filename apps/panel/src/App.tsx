@@ -11,6 +11,9 @@ import { go, Link, type Page, useRoute } from "./route";
 import { Tasks } from "./Tasks";
 import { Twin } from "./Twin";
 
+/** A tab's label, where it isn't just its page's name. */
+const LABELS: Partial<Record<Page, string>> = { twin: "Context twin" };
+
 /** Served by the agent on the internet, behind GitHub sign-in; locally there's no one to sign out. */
 const PUBLIC = !["localhost", "127.0.0.1"].includes(location.hostname);
 
@@ -36,7 +39,7 @@ export function App() {
         <nav>
           {pages.map((name) => (
             <Link key={name} to={`/${name}`} className={shown === name ? "active" : ""}>
-              {name[0].toUpperCase() + name.slice(1)}
+              {LABELS[name] ?? name[0].toUpperCase() + name.slice(1)}
             </Link>
           ))}
         </nav>

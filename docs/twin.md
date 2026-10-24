@@ -33,7 +33,7 @@ Storage: four tables in `data/archangel.db` (`twin_nodes`, `twin_names`, `twin_l
 
 ## Panel
 
-A Twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hubs settle in the middle); routers hollow, page nodes solid; nodes the reader opens light up live. Click a node: its page (editable), links, and history with the owner's words.
+A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hubs settle in the middle; what's placed stays put); routers dashed, page nodes solid. The owner shapes it by hand too: add nodes, drag one onto another to link them, edit a link's relation and preview, rename, aliases, edit or delete a page. Click a node: its page, links, and history with the owner's words. Later: nodes the reader opens light up live.
 
 ## Build order
 
