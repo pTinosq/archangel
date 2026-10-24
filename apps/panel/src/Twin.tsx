@@ -90,10 +90,12 @@ function Brain({ graph, selection, select }: { graph: TwinGraph; selection: Sele
   const degree = (name: string) => graph.links.filter((l) => l.source === name || l.target === name).length;
   const node = "node" in selection ? selection.node : null;
   const link = "link" in selection ? selection.link : null;
-  // What the reader is opening right now, briefing a task or answering an agent: lit as it goes.
+  // What the reader or writer is opening or editing right now ("open Uber", "link Uber → Work"): lit as it goes.
   const notices = useActivity();
   const reading = new Set(
-    notices.filter((n) => n.target === "twin" && Date.now() / 1000 - n.time < READ_SECONDS).map((n) => n.text.toLowerCase()),
+    notices
+      .filter((n) => n.target === "twin" && n.dir === "tx" && Date.now() / 1000 - n.time < READ_SECONDS)
+      .map((n) => n.text.match(/^\w+ (.+?)(?: [→=] .*)?$/)?.[1].toLowerCase() ?? ""),
   );
   const lit = graph.nodes.filter((n) => reading.has(n.name.toLowerCase()) || n.aliases.some((a) => reading.has(a.toLowerCase())));
   const readingNow = lit.map((n) => n.name).join();

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from pydantic_ai import FunctionToolset
 
+from agent import activity
 from agent.events import Event, Notice
 from agent.messages import Address
 from agent.store import Line, Store
@@ -66,11 +67,14 @@ class Twin:
         async def ask_twin(question: str) -> str:
             """Ask what the owner would want, or a fact about them, when it isn't in your task: "a sign-in page:
             which account?", "Mum's address?". Not for what only they can decide now: ask them."""
-            try:
-                return await self._reader.ask(question)
-            except Exception as error:  # the model: the agent carries on without
-                log.exception("Couldn't answer: %s", question)
-                return f"Couldn't read the twin ({error})."
+            with activity.call("twin reader", "agent", question) as reply:
+                try:
+                    answer = await self._reader.ask(question)
+                except Exception as error:  # the model: the agent carries on without
+                    log.exception("Couldn't answer: %s", question)
+                    answer = f"Couldn't read the twin ({error})."
+                reply(answer)
+                return answer
 
         return FunctionToolset([ask_twin])
 
@@ -91,7 +95,9 @@ class Twin:
         self._mark(lines[-1].id)
         said = [line for line in lines if line.sender == "owner"]
         if said:
-            await self._write(Episode(_conversation(lines), "chat"), self._tell(said[-1].channel)).wait()
+            with activity.acting("transcript"):  # in the cockpit, what the writer was handed
+                done = self._write(Episode(_conversation(lines), "chat"), self._tell(said[-1].channel))
+            await done.wait()
 
     async def idle(self) -> None:
         while self._pending:
@@ -102,11 +108,13 @@ class Twin:
 
         async def write() -> None:
             async with self._writing:
-                try:
-                    note = await self._writer.notice(episode)
-                except Exception:  # the model: what was said is still in the transcript and the history
-                    log.exception("The twin couldn't read %s", episode.origin)
-                    note = ""
+                with activity.call("twin writer", "agent", episode.text) as reply:
+                    try:
+                        note = await self._writer.notice(episode)
+                    except Exception:  # the model: what was said is still in the transcript and the history
+                        log.exception("The twin couldn't read %s", episode.origin)
+                        note = ""
+                    reply(note or "Nothing.")
             done.set()
             if note and tell and self.notify:
                 await self.notify(Notice(f"You noted, from what the owner said: {note} Tell them, briefly.", tell))

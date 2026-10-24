@@ -29,12 +29,12 @@ RECENT = 200
 QUEUED_PER_LISTENER = 1000
 MAX_TEXT = 2000  # enough to read in full when opened in the cockpit
 
-Kind = Literal["message", "agent", "model", "tool", "phone", "service", "task"]
-"""agent, model, phone and service (a connector) are always calls: a tx, then an rx when it's done. The rest are
-one-way hops."""
-Role = Literal["channel", "agent", "model", "device", "service", "part"]
+Kind = Literal["message", "agent", "model", "tool", "phone", "service", "twin", "task"]
+"""agent, model, phone, service (a connector) and twin (a page of the context twin, read or edited) are always calls:
+a tx, then an rx when it's done. The rest are one-way hops."""
+Role = Literal["channel", "agent", "model", "device", "service", "twin", "part"]
 # What a call says about its callee.
-_CALLED: dict[str, Role] = {"agent": "agent", "model": "model", "phone": "device", "service": "service"}
+_CALLED: dict[str, Role] = {"agent": "agent", "model": "model", "phone": "device", "service": "service", "twin": "twin"}
 
 
 @dataclass(frozen=True)

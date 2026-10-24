@@ -9,8 +9,9 @@ export type Notice = {
   target: string;
   /** tx: a request or message going out; rx: the reply coming back. */
   dir: "tx" | "rx";
-  /** agent, model, phone and service (a connector) are always calls (a tx, then an rx); the rest are one-way. */
-  kind: "message" | "agent" | "model" | "tool" | "phone" | "service" | "task";
+  /** agent, model, phone, service (a connector) and twin (a page of the context twin) are always calls (a tx, then
+   * an rx); the rest are one-way. */
+  kind: "message" | "agent" | "model" | "tool" | "phone" | "service" | "twin" | "task";
   text: string;
   request: number | null;
   task: number | null;
@@ -19,12 +20,12 @@ export type Notice = {
   source_role: Role;
   target_role: Role;
 };
-export type Role = "channel" | "agent" | "model" | "device" | "service" | "part";
+export type Role = "channel" | "agent" | "model" | "device" | "service" | "twin" | "part";
 
 const KEPT = 400;
 const RETRY_MS = 2000;
 /** Kinds that are always calls: a tx from the caller, then an rx back. */
-export const CALLS = new Set(["agent", "model", "phone", "service"]);
+export const CALLS = new Set(["agent", "model", "phone", "service", "twin"]);
 const CALL_GIVEN_UP_SECONDS = 120; // a reply lost in the stream mustn't leave a node busy forever
 
 /** The latest notices, oldest first. On reconnecting, the agent replays its recent ones. */

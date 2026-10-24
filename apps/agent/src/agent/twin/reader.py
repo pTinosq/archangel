@@ -25,11 +25,13 @@ class Reader:
 
         async def open(name: str) -> str:  # async: sync tools run on a thread, and SQLite belongs to this one
             """A node's page and its links, by name or alias."""
-            activity.hop("twin", "tool", name)  # the Context twin tab lights the node up
-            try:
-                return graph.open(name)
-            except ValueError as error:
-                return f"{error} Nodes: {', '.join(n.name for n in graph.nodes())}."
+            with activity.call("twin", "twin", f"open {name}") as reply:  # the Context twin tab lights the node up
+                try:
+                    page = graph.open(name)
+                except ValueError as error:
+                    page = f"{error} Nodes: {', '.join(n.name for n in graph.nodes())}."
+                reply(page)
+                return page
 
         self._agent = Agent(
             model,

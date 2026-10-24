@@ -219,6 +219,7 @@ section.cockpit { padding: 0; overflow: hidden; }
 .part.model { --tone: #b18cff; }
 .part.channel, .part.device { --tone: #4fd1c5; }
 .part.service { --tone: #ff8a3d; }
+.part.twin { --tone: #ff7eb6; }
 .part.busy { border-color: var(--warn); }
 .part.flash, .part.here { border-color: var(--accent); }
 

@@ -8,7 +8,7 @@ from datetime import date
 from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.models import Model
 
-from agent import logs
+from agent import activity, logs
 from agent.models import Instructions
 from agent.twin.graph import ROOT, Graph
 
@@ -76,53 +76,83 @@ def _tools(graph: Graph) -> list:
 
     async def nodes() -> str:
         """Every node's name, and its aliases."""
-        return "; ".join(n.name + (f" (also {', '.join(n.aliases)})" if n.aliases else "") for n in graph.nodes())
+        return touch(
+            "nodes",
+            lambda: "; ".join(n.name + (f" (also {', '.join(n.aliases)})" if n.aliases else "") for n in graph.nodes()),
+        )
 
     async def open(name: str) -> str:
         """A node's page and its links, by name or alias."""
-        try:
-            return graph.open(name)
-        except ValueError as error:
-            return str(error)
+        return touch(f"open {name}", lambda: graph.open(name))
 
     async def add(ctx: RunContext[Episode], name: str, page: str, said: str) -> str:
         """A new node. An empty page makes a router."""
-        return attempt(lambda: graph.add(name, page, said=said, origin=ctx.deps.origin), f"Added {name}.")
+        return attempt(
+            f"add {name}", lambda: graph.add(name, page, said=said, origin=ctx.deps.origin), f"Added {name}."
+        )
 
     async def write(ctx: RunContext[Episode], name: str, page: str, said: str) -> str:
         """Replace a node's whole page (an empty one makes it a router)."""
-        return attempt(lambda: graph.write(name, page, said=said, origin=ctx.deps.origin), f"Wrote {name}.")
+        return attempt(
+            f"write {name}", lambda: graph.write(name, page, said=said, origin=ctx.deps.origin), f"Wrote {name}."
+        )
 
     async def alias(ctx: RunContext[Episode], name: str, alias: str, said: str) -> str:
         """Another name for a node, e.g. Mum for Helen."""
-        return attempt(lambda: graph.alias(name, alias, said=said, origin=ctx.deps.origin), "Done.")
+        return attempt(
+            f"alias {name} = {alias}", lambda: graph.alias(name, alias, said=said, origin=ctx.deps.origin), "Done."
+        )
 
     async def link(ctx: RunContext[Episode], source: str, target: str, relation: str, preview: str, said: str) -> str:
         """Link two nodes, or rewrite a link. `preview`: 5-10 words on what's at the target that matters from here."""
         return attempt(
-            lambda: graph.link(source, target, relation, preview, said=said, origin=ctx.deps.origin), "Linked."
+            f"link {source} → {target}",
+            lambda: graph.link(source, target, relation, preview, said=said, origin=ctx.deps.origin),
+            "Linked.",
         )
 
     async def unlink(ctx: RunContext[Episode], source: str, target: str, said: str) -> str:
-        return attempt(lambda: graph.unlink(source, target, said=said, origin=ctx.deps.origin), "Unlinked.")
+        return attempt(
+            f"unlink {source} → {target}",
+            lambda: graph.unlink(source, target, said=said, origin=ctx.deps.origin),
+            "Unlinked.",
+        )
 
     async def rename(ctx: RunContext[Episode], name: str, new: str, said: str) -> str:
-        return attempt(lambda: graph.rename(name, new, said=said, origin=ctx.deps.origin), "Renamed.")
+        return attempt(
+            f"rename {name} → {new}", lambda: graph.rename(name, new, said=said, origin=ctx.deps.origin), "Renamed."
+        )
 
     async def merge(ctx: RunContext[Episode], name: str, into: str, said: str) -> str:
         """Two nodes that are one thing: write the combined page to `into` first; `name` becomes its alias."""
-        return attempt(lambda: graph.merge(name, into, said=said, origin=ctx.deps.origin), "Merged.")
+        return attempt(
+            f"merge {name} → {into}", lambda: graph.merge(name, into, said=said, origin=ctx.deps.origin), "Merged."
+        )
 
     async def delete(ctx: RunContext[Episode], name: str, said: str) -> str:
         """Remove a node that no longer holds, with its links."""
-        return attempt(lambda: graph.delete(name, said=said, origin=ctx.deps.origin), "Deleted.")
+        return attempt(f"delete {name}", lambda: graph.delete(name, said=said, origin=ctx.deps.origin), "Deleted.")
 
     return [nodes, open, add, write, alias, link, unlink, rename, merge, delete]
 
 
-def attempt(edit: Callable[[], object], done: str) -> str:
-    try:
-        edit()
-    except ValueError as error:
-        return f"Refused: {error}"
-    return done
+def attempt(what: str, edit: Callable[[], object], done: str) -> str:
+    def run() -> str:
+        try:
+            edit()
+        except ValueError as error:
+            return f"Refused: {error}"
+        return done
+
+    return touch(what, run)
+
+
+def touch(what: str, act: Callable[[], str]) -> str:
+    """`act` on the graph, shown in the cockpit as a call to the twin ("write Uber") and lit on its tab."""
+    with activity.call("twin", "twin", what) as reply:
+        try:
+            result = act()
+        except ValueError as error:
+            result = str(error)
+        reply(result)
+        return result

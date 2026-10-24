@@ -3,6 +3,7 @@ import asyncio
 from pydantic_ai import ModelResponse, RetryPromptPart, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
+from agent import activity
 from agent.messages import Address, Message, Text
 from agent.twin import QUIET, Twin
 from agent.twin.graph import ROOT, Graph
@@ -193,3 +194,24 @@ def test_a_failing_reader_leaves_the_task_unbriefed(store):
     graph = uber_graph(store)
     found = Twin(store, graph, Broken(scripted(), graph), FakeWriter(), {}.get)
     assert asyncio.run(found.brief("Uber home")) == ""
+
+
+def test_the_cockpit_sees_who_asks_the_twin_and_what_it_opens(store):
+    graph = uber_graph(store)
+    reader = Reader(scripted(("open", {"name": "Uber"}), note="Cheapest ride."), graph)
+    found = Twin(store, graph, reader, FakeWriter(), {}.get)
+    with activity.acting("pilot"):
+        asyncio.run(found.tools.tools["ask_twin"].function("Which ride?"))
+    calls = [(n.source, n.target, n.dir) for n in activity._recent if n.kind in ("agent", "twin")]
+    assert calls == [
+        ("pilot", "twin reader", "tx"),
+        ("twin reader", "twin", "tx"),
+        ("twin", "twin reader", "rx"),
+        ("twin reader", "pilot", "rx"),
+    ]
+    assert [n.text for n in activity._recent if n.target == "twin"] == ["open Uber"]
+
+
+def test_the_writers_edits_are_calls_to_the_twin(store):
+    notice(Writer(scripted(("add", {"name": "Flights", "page": "- No mornings.", "said": SAID})), Graph(store.db)))
+    assert [n.text for n in activity._recent if n.target == "twin"] == ["add Flights"]
