@@ -24,6 +24,7 @@ const NODE = { width: 120, height: 44 }; // as in styles.css
 const PULSE_SECONDS = 1.2;
 const TICK_MS = 400;
 const SHOWN = 150;
+const SAVED = "cockpit-map"; // the parts and who calls whom, kept in the browser: the agent replays only its last few notices
 
 type Follow = number | "live" | null;
 
@@ -33,6 +34,7 @@ export function Cockpit() {
   const now = useNow();
   const [follow, setFollow] = useState<Follow>("live");
   const [opened, setOpened] = useState<number | null>(null);
+  const [drawing, setDrawing] = useState(0); // a new one starts the map afresh
   const request = follow === "live" ? (notices.findLast((n) => n.request !== null)?.request ?? null) : follow;
   const inRequest = (n: Notice) => request === null || n.request === request;
 
@@ -40,7 +42,7 @@ export function Cockpit() {
     <>
       <section className="cockpit">
         <Redrawn>
-          <ReactFlowProvider>
+          <ReactFlowProvider key={drawing}>
             <Graph notices={notices} now={now} inRequest={inRequest} following={request !== null} />
           </ReactFlowProvider>
         </Redrawn>
@@ -53,6 +55,15 @@ export function Cockpit() {
           </button>
           <button className={follow === null ? "active" : ""} onClick={() => setFollow(null)}>
             All
+          </button>
+          <button
+            title="Forget the parts kept from before, and draw only what's happening now"
+            onClick={() => {
+              localStorage.removeItem(SAVED);
+              setDrawing((n) => n + 1);
+            }}
+          >
+            Forget
           </button>
         </div>
         {notices.length === 0 && <p className="quiet">Quiet. Say something to Archangel and watch it travel.</p>}
@@ -136,8 +147,7 @@ function Graph({
   inRequest: (n: Notice) => boolean;
   following: boolean;
 }) {
-  const kindOf = roles(notices);
-  const { names, links } = useTopology(notices, kindOf);
+  const { names, links, kindOf } = useTopology(notices);
   // A phone held upright has room down, not across.
   const down = useNarrow();
   const shape = names.join() + "|" + links.map((l) => l.join(">")).join() + (down ? "|down" : "");
@@ -232,32 +242,55 @@ function Hop({ id, data, ...ends }: EdgeProps<Edge<HopData>>) {
   );
 }
 
-/** Every part and link seen since the cockpit opened, each link pointing from caller to callee. Calls say
- * who's calling; channels always feed the gateway; for other messages, the first one in a request we saw begin
- * (a page opened mid-request sees replies before what they answer). */
-function useTopology(notices: Notice[], kindOf: Map<string, Role>): { names: string[]; links: [string, string][] } {
-  const seen = useRef({
-    names: new Set<string>(),
-    links: new Map<string, [string, string]>(),
-    whole: new Map<number, boolean>(), // requests, by whether we saw them begin
-  }).current;
+/** Every part and link seen, kept in the browser across visits, each link pointing from caller to callee, and each
+ * part's role (as the agent declared it; the latest word wins, as a part's role becomes known). Calls say who's
+ * calling; channels always feed the gateway; for other messages, the first one in a request we saw begin (a page
+ * opened mid-request sees replies before what they answer). */
+function useTopology(notices: Notice[]): { names: string[]; links: [string, string][]; kindOf: Map<string, Role> } {
+  const seen = useRef<{
+    kindOf: Map<string, Role>;
+    links: Map<string, [string, string]>;
+    whole: Map<number, boolean>; // requests, by whether we saw them begin
+  } | null>(null);
+  if (!seen.current) {
+    const saved = load();
+    seen.current = {
+      kindOf: new Map(Object.entries(saved.roles)),
+      links: new Map(saved.links.map(([from, to]) => [pair(from, to), [from, to]])),
+      whole: new Map(),
+    };
+  }
+  const { kindOf, links, whole } = seen.current;
   for (const n of notices) {
-    seen.names.add(n.source).add(n.target);
-    if (n.request !== null && !seen.whole.has(n.request)) seen.whole.set(n.request, kindOf.get(n.source) === "channel");
+    if (n.source_role !== "part" || !kindOf.has(n.source)) kindOf.set(n.source, n.source_role);
+    if (n.target_role !== "part" || !kindOf.has(n.target)) kindOf.set(n.target, n.target_role);
+  }
+  for (const n of notices) {
+    if (n.request !== null && !whole.has(n.request)) whole.set(n.request, kindOf.get(n.source) === "channel");
     if (n.source === n.target || n.dir !== "tx") continue;
     const key = pair(n.source, n.target);
-    if (kindOf.get(n.target) === "channel") seen.links.set(key, [n.target, n.source]);
-    else if (CALLS.has(n.kind) || kindOf.get(n.source) === "channel") seen.links.set(key, [n.source, n.target]);
-    else if (!seen.links.has(key) && n.request !== null && seen.whole.get(n.request)) {
-      seen.links.set(key, [n.source, n.target]);
-    }
+    if (kindOf.get(n.target) === "channel") links.set(key, [n.target, n.source]);
+    else if (CALLS.has(n.kind) || kindOf.get(n.source) === "channel") links.set(key, [n.source, n.target]);
+    else if (!links.has(key) && n.request !== null && whole.get(n.request)) links.set(key, [n.source, n.target]);
   }
   // A link with no direction yet still belongs in the picture.
   for (const n of notices) {
     const key = pair(n.source, n.target);
-    if (n.source !== n.target && !seen.links.has(key)) seen.links.set(key, [n.source, n.target]);
+    if (n.source !== n.target && !links.has(key)) links.set(key, [n.source, n.target]);
   }
-  return { names: [...seen.names].sort(), links: [...seen.links.values()] };
+  const saved = JSON.stringify({ roles: Object.fromEntries(kindOf), links: [...links.values()] });
+  useEffect(() => localStorage.setItem(SAVED, saved), [saved]);
+  return { names: [...kindOf.keys()].sort(), links: [...links.values()], kindOf };
+}
+
+function load(): { roles: Record<string, Role>; links: [string, string][] } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVED) ?? "");
+    if (saved && typeof saved.roles === "object" && Array.isArray(saved.links)) return saved;
+  } catch {
+    // nothing kept yet, or something unreadable: start afresh
+  }
+  return { roles: {}, links: [] };
 }
 
 /** Left to right (or top to bottom, `down`) in the order things call each other: channels, gateway, orchestrator,
@@ -278,16 +311,6 @@ function bounds(spots: Map<string, { x: number; y: number }>) {
   const ys = [...spots.values()].map((p) => p.y);
   const [left, top] = [Math.min(...xs) - NODE.width / 2, Math.min(...ys) - NODE.height / 2];
   return { x: left, y: top, width: Math.max(...xs) + NODE.width / 2 - left, height: Math.max(...ys) + NODE.height / 2 - top };
-}
-
-/** Each node's role, as the agent declared it; the latest word wins, as a part's role becomes known. */
-function roles(notices: Notice[]): Map<string, Role> {
-  const roles = new Map<string, Role>();
-  for (const n of notices) {
-    if (n.source_role !== "part" || !roles.has(n.source)) roles.set(n.source, n.source_role);
-    if (n.target_role !== "part" || !roles.has(n.target)) roles.set(n.target, n.target_role);
-  }
-  return roles;
 }
 
 const pair = (a: string, b: string) => [a, b].sort().join("|");
