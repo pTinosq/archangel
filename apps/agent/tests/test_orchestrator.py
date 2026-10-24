@@ -377,3 +377,34 @@ def test_it_knows_where_the_owner_last_was_and_has_a_link_for_now(store):
         "Last shared 10 min ago: 1 Liverpool Street, London (51.51780, -0.08230, within 12 m)."
     )
     assert "Link: https://archangel.example/where/cli/owner?expires=" in reply.text
+
+
+def test_the_orchestrator_has_the_owner_in_mind_and_can_ask_their_twin(store):
+    from test_twin import FakeWriter, scripted, uber_graph
+
+    from agent.twin import Twin
+    from agent.twin.reader import Reader
+
+    graph = uber_graph(store)
+    twin = Twin(store, graph, Reader(scripted(note="Google."), graph), FakeWriter(), {}.get)
+    seen = {}
+
+    def model(messages, info) -> ModelResponse:
+        seen["instructions"], seen["tools"] = info.instructions, [t.name for t in info.function_tools]
+        return say("ok")
+
+    cli = FakeChannel("cli")
+    tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+    orchestrator = Orchestrator(
+        FunctionModel(model),
+        store,
+        tasks,
+        Gateway([cli], store),
+        FakeResearcher(),
+        FakeConnectors(),
+        apps,
+        Whereabouts(store, Web(), None),
+        twin=twin,
+    )
+    asyncio.run(orchestrator.handle(OwnerMessage(Message(cli.owner, (Text("hi"),)))))
+    assert "Call him Tinos." in seen["instructions"] and "ask_twin" in seen["tools"]

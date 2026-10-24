@@ -36,9 +36,18 @@ _STATUSES = {
 
 class Tasks:
     def __init__(
-        self, store: Store, pilot: Pilot, researcher: Researcher, reporter: Reporter, helper: Helper, site: str = ""
+        self,
+        store: Store,
+        pilot: Pilot,
+        researcher: Researcher,
+        reporter: Reporter,
+        helper: Helper,
+        site: str = "",
+        brief: Callable[[str], Awaitable[str]] | None = None,
     ):
-        """`site`: where Archangel's web server (and the panel) is, for links to reports."""
+        """`site`: where Archangel's web server (and the panel) is, for links to reports. `brief`: what the agent
+        doing a goal should know about the owner (the context twin), told it as it starts."""
+        self._brief = brief
         self._site = site
         self._reporter = reporter
         self._store = store
@@ -115,17 +124,19 @@ class Tasks:
         try:
             if task.kind == "connectors":
                 self._started(task)
+                goal = await self._briefed(task, paused)
                 with activity.call("helper", "agent", task.goal) as reply:
-                    outcome = await self._helper.run(task.goal, self._recorder(task), paused, answer)
+                    outcome = await self._helper.run(goal, self._recorder(task), paused, answer)
                     reply(f"{outcome.status}: {outcome.report}")
             elif task.kind != "phone":
                 outcome = await self._research(task)
             else:
+                goal = await self._briefed(task, paused)  # while it waits for the phone
                 async with self._phone:
                     self._started(task)
                     with activity.call("pilot", "agent", task.goal) as reply:
                         outcome = await self._pilot.run(
-                            task.goal,
+                            goal,
                             self._recorder(task),
                             paused,
                             answer,
@@ -171,6 +182,19 @@ class Tasks:
             return Outcome("done", found)
         self._store.save_page(task.id, report.html)
         return Outcome("done", f"Report: {self._site}/reports/{task.id}\ntldr: {report.tldr}")
+
+    async def _briefed(self, task: Task, paused: pydantic_ai.Conversation | None) -> str:
+        """The goal, with what the context twin says bears on it. Not for a resumed run: it was told at the start.
+        Not for research either: that question goes to a web search, and the owner's life needn't."""
+        if paused or not self._brief:
+            return task.goal
+        with activity.call("twin reader", "agent", task.goal) as reply:
+            briefing = await self._brief(task.goal)
+            reply(briefing or "Nothing relevant.")
+        if not briefing:
+            return task.goal
+        self._store.add_step(task.id, f"Briefing from the context twin:\n{briefing}")
+        return f"{task.goal}\n\nWhat you know about the owner that bears on it (their context twin):\n{briefing}"
 
     def _started(self, task: Task) -> None:
         task.status = Status.RUNNING

@@ -3,10 +3,12 @@ Slack…), never the phone. Pauses, resumably, for the owner's approval of anyth
 """
 
 import logging
+from collections.abc import Sequence
 
 import pydantic_ai
 from pydantic_ai import Agent, CallDeferred, DeferredToolRequests, RunContext
 from pydantic_ai.models import Model
+from pydantic_ai.toolsets import AbstractToolset
 
 from agent import logs
 from agent.connectors import Connectors
@@ -21,11 +23,19 @@ know. End with what you found or did: complete, but short enough to text."""
 
 
 class Helper:
-    def __init__(self, model: Model, connectors: Connectors, instructions: Instructions = INSTRUCTIONS):
+    def __init__(
+        self,
+        model: Model,
+        connectors: Connectors,
+        instructions: Instructions = INSTRUCTIONS,
+        toolsets: Sequence[AbstractToolset] = (),
+    ):
+        """`toolsets`: more tools beside the connectors', e.g. asking the context twin."""
         self._connectors = connectors
         self._agent = Agent(
             model,
             name="helper",
+            toolsets=toolsets,
             instructions=[instructions, self._connected],
             output_type=[str, DeferredToolRequests],
             tools=[ask_owner],

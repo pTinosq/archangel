@@ -20,11 +20,13 @@ import {
 import "@xyflow/react/dist/style.css";
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum } from "d3-force";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useActivity } from "./activity";
 import { api, type TwinGraph, type TwinLink, type TwinNode } from "./api";
 import { Redrawn } from "./Cockpit";
 import { usePoll } from "./poll";
 
 const ROOT = "You";
+const READ_SECONDS = 8; // how long a node the reader opened stays lit
 const NODE = { width: 132, height: 40 }; // as in styles.css
 
 /** What the side pane shows: a node's page, or one link between two. */
@@ -68,7 +70,7 @@ function still(selection: Selection, graph: TwinGraph): Selection {
 const same = (a: { source: string; target: string }, b: { source: string; target: string }) =>
   a.source === b.source && a.target === b.target;
 
-type ThoughtData = { name: string; router: boolean; links: number; selected: boolean };
+type ThoughtData = { name: string; router: boolean; links: number; selected: boolean; reading: boolean };
 type TieData = { lit: boolean; stale: boolean; selected: boolean };
 
 const nodeTypes = { thought: Thought };
@@ -88,6 +90,13 @@ function Brain({ graph, selection, select }: { graph: TwinGraph; selection: Sele
   const degree = (name: string) => graph.links.filter((l) => l.source === name || l.target === name).length;
   const node = "node" in selection ? selection.node : null;
   const link = "link" in selection ? selection.link : null;
+  // What the reader is opening right now, briefing a task or answering an agent: lit as it goes.
+  const notices = useActivity();
+  const reading = new Set(
+    notices.filter((n) => n.target === "twin" && Date.now() / 1000 - n.time < READ_SECONDS).map((n) => n.text.toLowerCase()),
+  );
+  const lit = graph.nodes.filter((n) => reading.has(n.name.toLowerCase()) || n.aliases.some((a) => reading.has(a.toLowerCase())));
+  const readingNow = lit.map((n) => n.name).join();
 
   // React Flow's own state, so each node keeps its measured size: a fresh node object without one is hidden until
   // measured again, and an unchanged box never is.
@@ -101,10 +110,10 @@ function Brain({ graph, selection, select }: { graph: TwinGraph; selection: Sele
         id: n.name,
         type: "thought",
         position: spots.get(n.name) ?? { x: 0, y: 0 },
-        data: { name: n.name, router: n.router, links: degree(n.name), selected: n.name === node },
+        data: { name: n.name, router: n.router, links: degree(n.name), selected: n.name === node, reading: lit.includes(n) },
       }));
     });
-  }, [spots, routers, node]);
+  }, [spots, routers, node, readingNow]);
   const edges: Edge<TieData>[] = graph.links.map((l) => ({
     id: `${l.source}>${l.target}`,
     source: l.source,
@@ -193,7 +202,14 @@ function AddNode({ added }: { added: (name: string) => void }) {
 function Thought({ id, data }: NodeProps<Node<ThoughtData>>) {
   const connection = useConnection();
   const target = connection.inProgress && connection.fromNode.id !== id;
-  const classes = ["thought", data.router ? "router" : "page", data.selected && "selected", data.name === ROOT && "root", target && "target"];
+  const classes = [
+    "thought",
+    data.router ? "router" : "page",
+    data.selected && "selected",
+    data.name === ROOT && "root",
+    target && "target",
+    data.reading && "reading",
+  ];
   return (
     <div className={classes.filter(Boolean).join(" ")} title={data.router ? "Router: links only" : "Page"}>
       <Handle type="source" position={Position.Right} className="grip" />

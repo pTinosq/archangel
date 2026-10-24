@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -25,6 +25,7 @@ from pydantic_ai import (
 )
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
+from pydantic_ai.toolsets import AbstractToolset
 
 from agent import activity, logs
 from agent.history import forget_old_screenshots
@@ -146,11 +147,15 @@ class Pilot:
     Pauses, resumably, when the owner must answer a question or approve a consequential tap.
     """
 
-    def __init__(self, model: Model, kit: Kit, instructions: Instructions = INSTRUCTIONS):
+    def __init__(
+        self, model: Model, kit: Kit, instructions: Instructions = INSTRUCTIONS, toolsets: Sequence[AbstractToolset] = ()
+    ):
+        """`toolsets`: more tools beside the phone's, e.g. asking the context twin."""
         self._kit = kit
         self._agent = Agent(
             model,
             name="pilot",
+            toolsets=toolsets,
             instructions=instructions,
             deps_type=_Session,
             output_type=[ToolOutput(done, name="done"), ToolOutput(give_up, name="give_up"), DeferredToolRequests],

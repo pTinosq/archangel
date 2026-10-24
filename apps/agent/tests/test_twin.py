@@ -6,6 +6,7 @@ from pydantic_ai.models.function import FunctionModel
 from agent.messages import Address, Message, Text
 from agent.twin import QUIET, Twin
 from agent.twin.graph import ROOT, Graph
+from agent.twin.reader import Reader
 from agent.twin.writer import Episode, Writer
 
 SAID = "I hate morning flights"
@@ -97,7 +98,8 @@ class FakeWriter:
 def twin(store, writer: FakeWriter) -> tuple[Twin, list]:
     told = []
     owners = {"sms": Address("sms", "+44"), "panel": Address("panel", "owner")}
-    found = Twin(store, Graph(store.db), writer, owners.get)
+    graph = Graph(store.db)
+    found = Twin(store, graph, Reader(scripted(note="Nothing relevant."), graph), writer, owners.get)
 
     async def notify(event):
         told.append(event)
@@ -143,3 +145,51 @@ def test_remember_is_written_at_once_and_not_announced(store):
 
     asyncio.run(scenario())
     assert writer.read == [Episode("The owner asked: remember my mum is Helen", "chat")] and told == []
+
+
+def uber_graph(store) -> Graph:
+    graph = Graph(store.db)
+    graph.write(ROOT, "- Call him Tinos.")
+    graph.add("Uber", "- **Personal:** the cheapest ride.\n- Always 5 stars, never tip.")
+    graph.link(ROOT, "Uber", "rides", "cheapest, 5 stars, no tip")
+    return graph
+
+
+def test_a_briefing_follows_previews_and_says_only_what_bears_on_the_task(store):
+    graph, seen = uber_graph(store), []
+
+    def model(messages, info) -> ModelResponse:
+        seen.append(messages[-1].parts)
+        if len(messages) == 1:
+            return ModelResponse(parts=[ToolCallPart("open", {"name": "uber"})])
+        return ModelResponse(parts=[TextPart("Cheapest ride; rate 5 stars; no tip.")])
+
+    briefing = asyncio.run(Reader(FunctionModel(model), graph).brief("Get me an Uber home"))
+    assert briefing == "Cheapest ride; rate 5 stars; no tip."
+    asked = seen[0][-1].content
+    assert "Get me an Uber home" in asked and "→ Uber (rides): cheapest, 5 stars, no tip" in asked  # starts at the root
+    assert "Always 5 stars, never tip." in seen[1][-1].content  # what it opened
+
+
+def test_nothing_relevant_is_no_briefing(store):
+    reader = Reader(scripted(note="Nothing relevant."), uber_graph(store))
+    assert asyncio.run(reader.brief("What's the time in Tokyo?")) == ""
+    assert asyncio.run(reader.ask("Favourite colour?")) == "Nothing relevant."
+
+
+def test_any_agent_can_ask_the_twin_mid_task(store):
+    graph = uber_graph(store)
+    found = Twin(store, graph, Reader(scripted(note="Google."), graph), FakeWriter(), {}.get)
+    ask = found.tools.tools["ask_twin"].function
+    assert asyncio.run(ask("A sign-in page: which account?")) == "Google."
+    assert "Call him Tinos." in found.root()
+
+
+def test_a_failing_reader_leaves_the_task_unbriefed(store):
+    class Broken(Reader):
+        async def brief(self, goal):
+            raise RuntimeError("429")
+
+    graph = uber_graph(store)
+    found = Twin(store, graph, Broken(scripted(), graph), FakeWriter(), {}.get)
+    assert asyncio.run(found.brief("Uber home")) == ""

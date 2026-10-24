@@ -255,6 +255,9 @@ section.twin-graph { padding: 0; overflow: hidden; }
 .thought:hover, .thought.target:hover { border-color: var(--text); }
 .thought.target { border-color: var(--accent-deep); }
 .thought.selected { border-color: var(--accent); border-style: solid; }
+/* The reader has just opened it, briefing a task: a wash of the accent, never a change of size. */
+.thought.reading { background: var(--accent-wash); border-color: var(--accent); border-style: solid; animation: reading 1.2s steps(2) infinite; }
+@keyframes reading { 50% { border-color: var(--accent-deep); } }
 .thought .name { font-size: 8px; line-height: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thought.router .name { color: var(--quiet); }
 .thought.selected .name { color: var(--accent); }

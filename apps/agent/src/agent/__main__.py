@@ -29,6 +29,7 @@ from agent.store import DATA, Store, Task
 from agent.tasks import Tasks
 from agent.twin import Twin
 from agent.twin.graph import Graph
+from agent.twin.reader import Reader
 from agent.twin.writer import Writer
 from agent.web import Web
 
@@ -57,17 +58,29 @@ def main() -> None:
     researcher = Researcher(openrouter(RESEARCH), openrouter(DEEP, DEEP_TIMEOUT), search)
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
     connectors = Connectors(store, site, DATA)
+    # Everything the owner says waits behind the orchestrator, so it answers without reasoning first; the twin's
+    # reader too, as every task waits for its briefing. The background agents (pilot, guard, ...) keep reasoning:
+    # they find their way through screens and judge risk.
+    quick = openrouter(config.model(), think=False)
+    graph = Graph(store.db)
+    twin = Twin(
+        store,
+        graph,
+        Reader(quick, graph, prompts.live("twin reader")),
+        Writer(model, graph, prompts.live("twin writer")),
+        lambda channel: gateway.owner(channel),  # the gateway comes later, with the channels
+    )
     tasks = Tasks(
         store,
-        Pilot(model, kit, prompts.live("pilot")),
+        Pilot(model, kit, prompts.live("pilot"), [twin.tools]),
         researcher,
         Reporter(model, prompts.live("reporter")),
-        Helper(model, connectors, prompts.live("helper")),
+        Helper(model, connectors, prompts.live("helper"), [twin.tools]),
         site,
+        twin.brief,
     )
 
     web = Web(config.github(), config.port(), config.public_url())
-    graph = Graph(store.db)
     channels = [PanelChannel(store, prompts, connectors, graph, web)]
     public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
     links = Links(store, web, config.relay_token(), public_url) if public_url else None
@@ -79,11 +92,8 @@ def main() -> None:
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
-    twin = Twin(store, graph, Writer(model, graph, prompts.live("twin writer")), gateway.owner)
     orchestrator = Orchestrator(
-        # Everything the owner says waits behind it, so it answers without reasoning first. The background agents
-        # (pilot, guard, ...) keep it: they find their way through screens and judge risk.
-        openrouter(config.model(), think=False),
+        quick,
         store,
         tasks,
         gateway,

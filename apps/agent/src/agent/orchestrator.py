@@ -66,7 +66,9 @@ class Orchestrator:
             instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
+            toolsets=[twin.tools] if twin else [],
         )
+        self._twin = twin
 
         @self._agent.tool
         async def start_task(ctx: RunContext[Event], goal: str, report_via: str | None = None) -> str:
@@ -246,8 +248,10 @@ class Orchestrator:
             + (" (report public)" if t.public else "")
             for t in shown
         ]
+        about = [f"The owner, from their context twin (ask_twin for more):\n{self._twin.root()}"] if self._twin else []
         return "\n".join(
             [
+                *about,
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
                 "Connected services, by profile: "
                 + (self._connectors.describe() or "none (added on the panel, under Connectors)")

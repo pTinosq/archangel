@@ -193,3 +193,26 @@ def test_failed_research_is_a_failed_task(store):
         assert updates == ["#1 failed: Research failed: OpenRouter is down"]
 
     asyncio.run(scenario())
+
+
+def test_tasks_start_briefed_by_the_context_twin_but_research_doesnt(store):
+    briefed = []
+
+    async def brief(goal):
+        briefed.append(goal)
+        return "Cheapest ride; 5 stars; no tip."
+
+    async def scenario():
+        pilot, researcher = FakePilot(), FakeResearcher()
+        tasks = Tasks(store, pilot, researcher, FakeReporter(), FakeHelper(), brief=brief)
+        tasks.start("Uber home", CLI)
+        tasks.start("Best funds in 2026", CLI, "research")
+        await tasks.idle()
+        assert "Uber home" in pilot.calls[0][0] and "Cheapest ride; 5 stars; no tip." in pilot.calls[0][0]
+        assert "Briefing from the context twin:\nCheapest ride; 5 stars; no tip." in [s.text for s in store.steps(1)]
+
+        tasks.answer(1, Answer("yes", approved=True))  # resumed: it was told at the start
+        await tasks.idle()
+        assert briefed == ["Uber home"]
+
+    asyncio.run(scenario())

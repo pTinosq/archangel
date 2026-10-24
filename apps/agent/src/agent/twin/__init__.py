@@ -1,6 +1,6 @@
 """The context twin: the owner's second brain, a graph that grows from what they say. See docs/twin.md.
 
-The writer reads each conversation once it has gone quiet (the owner's answers to tasks are said in it too), and
+The reader briefs each task before it starts and answers agents' questions mid-task (`ask_twin`). The writer reads each conversation once it has gone quiet (the owner's answers to tasks are said in it too), and
 what the owner asks to be remembered or forgotten at once, one episode at a time.
 """
 
@@ -10,10 +10,13 @@ import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
+from pydantic_ai import FunctionToolset
+
 from agent.events import Event, Notice
 from agent.messages import Address
 from agent.store import Line, Store
-from agent.twin.graph import Graph
+from agent.twin.graph import ROOT, Graph
+from agent.twin.reader import Reader
 from agent.twin.writer import Episode, Writer
 
 log = logging.getLogger(__name__)
@@ -24,10 +27,17 @@ CHECK = 60
 
 
 class Twin:
-    def __init__(self, store: Store, graph: Graph, writer: Writer, owner: Callable[[str], Address | None]):
+    def __init__(
+        self,
+        store: Store,
+        graph: Graph,
+        reader: Reader,
+        writer: Writer,
+        owner: Callable[[str], Address | None],
+    ):
         """`owner`: the owner's address on a channel, for telling them what was noted."""
         self.graph = graph
-        self._store, self._writer, self._owner = store, writer, owner
+        self._store, self._reader, self._writer, self._owner = store, reader, writer, owner
         self._writing = asyncio.Lock()  # one episode at a time: two mustn't edit the same node at once
         self._pending: set[asyncio.Task] = set()
         self.notify: Callable[[Event], Awaitable[None]] | None = None
@@ -35,6 +45,34 @@ class Twin:
         if self._read_up_to() is None:  # from now: the transcript before the twin isn't read back
             lines = store.lines()
             self._mark(lines[-1].id if lines else 0)
+
+    def root(self) -> str:
+        """The root page and where it links: what the orchestrator always has in mind."""
+        return self.graph.open(ROOT)
+
+    async def brief(self, goal: str) -> str:
+        """What an agent about to do `goal` should know about the owner; "" if nothing, or if reading failed (the
+        task goes ahead without)."""
+        try:
+            return await self._reader.brief(goal)
+        except Exception:
+            log.exception("Couldn't brief: %s", goal)
+            return ""
+
+    @property
+    def tools(self) -> FunctionToolset:
+        """`ask_twin`, for any agent that may need to know something about the owner mid-task."""
+
+        async def ask_twin(question: str) -> str:
+            """Ask what the owner would want, or a fact about them, when it isn't in your task: "a sign-in page:
+            which account?", "Mum's address?". Not for what only they can decide now: ask them."""
+            try:
+                return await self._reader.ask(question)
+            except Exception as error:  # the model: the agent carries on without
+                log.exception("Couldn't answer: %s", question)
+                return f"Couldn't read the twin ({error})."
+
+        return FunctionToolset([ask_twin])
 
     def remember(self, what: str) -> None:
         """The owner asked to remember or forget something: written now, in the background."""
