@@ -21,6 +21,10 @@ Each milestone ships something usable and proves one idea.
 | M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
+| M17 | Windows PC | "do X on my PC" from anywhere, the PC unattended at home, even locked | a second device behind the same relay and pilot; Windows' lock screen and UAC passed without the model seeing a password |
+| M17a | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (tray app) speaks the phone's protocol; Jev finds things on desktop screens |
+| M17b | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
+| M17c | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
@@ -195,3 +199,15 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 **Plan (sketch, undecided)**
 - **Reuse pebble-tino's watch app.** Watch → phone (PebbleKit JS) → HTTP; point it at Archangel instead of its own server, as a `Channel` with its own route, signed like Twilio's.
 - **Short and buttoned.** Replies sized for a watch screen; approvals (yes or no) on the watch's buttons; a buzz when a task needs the owner.
+
+## M17 requirements (Windows PC) (from the owner)
+
+- **The phone setup, for the owner's Windows PC.** Same agent, pilot and Jev; the PC is another device.
+- **Logs in too** if possible: a locked PC shouldn't stop a task.
+
+**Plan (sketch, 2026-11-15)**
+- **First: does Jev work on desktop screens?** Denser than a phone's, small text; try it on real screenshots before building. Screenshot size and quality need retuning (half-scale at 30 suits a phone, likely not a 1440p monitor).
+- **M17a, PC hands.** A Windows bridge in C#/.NET (a tray app) dials the relay like the Android one: `SendInput` for clicks (right, double, drag) and hotkeys, UI Automation for the tree, Desktop Duplication for screenshots. `hello` gains a `platform`; the protocol grows only what a desktop needs. The PC signs in at boot (Sysinternals Autologon) and never locks, like the phone's no-lock setup. `start_task` names a device; one task per device at a time, so phone and PC tasks run side by side.
+- **M17b, unlock.** Windows walls off the lock screen, Ctrl+Alt+Del and UAC on a secure desktop no ordinary app can see or click, and blocks input to elevated windows. A service running as SYSTEM starts a helper on that desktop, as TeamViewer, AnyDesk and RustDesk (open source) do. An `unlock` command types the PIN, kept by the bridge on the PC: the model never sees it, as with the phone's `press unlock`.
+- **M17c, wake.** A sleeping PC can't dial the relay. The Android bridge, on the same Wi-Fi, sends a Wake-on-LAN packet; or the PC never sleeps.
+- **Later, maybe:** running commands (PowerShell, files) directly, far faster than clicking, far more dangerous; its own guard.
