@@ -18,8 +18,9 @@ log = logging.getLogger(__name__)
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 VISIBLE_THRESHOLD = 0.5
 INSTRUCTIONS = """\
-You locate UI elements in phone screenshots. Return the tightest box around the described element as fractions \
-(0-1) of the image's width and height, measured from the top-left. If it isn't on the screen, return found=false.\
+You locate UI elements in screenshots of a phone or a PC. Return the tightest box around the described element as \
+fractions (0-1) of the image's width and height, measured from the top-left. If it isn't on the screen, return \
+found=false.\
 """
 
 

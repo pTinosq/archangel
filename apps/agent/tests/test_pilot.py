@@ -14,10 +14,13 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from agent.history import forget_old_screenshots
 from agent.messages import Image
-from agent.phone import pilot as pilot_module
-from agent.phone.pilot import Kit, Pilot
-from agent.phone.relay import PhoneError
-from agent.phone.vision import Box
+from agent.devices import phone as phone_module
+from agent.devices import pilot as pilot_module
+from agent.devices.pc import PC
+from agent.devices.phone import PHONE
+from agent.devices.pilot import Kit, Pilot
+from agent.devices.relay import DeviceError
+from agent.devices.vision import Box
 from agent.runs import Answer, Outcome
 
 SCREEN = Image(b"jpg", "image/jpeg")
@@ -26,9 +29,12 @@ SCREEN = Image(b"jpg", "image/jpeg")
 @pytest.fixture(autouse=True)
 def no_settling(monkeypatch):
     monkeypatch.setattr(pilot_module, "SETTLE_SECONDS", 0)
+    monkeypatch.setattr(phone_module, "CLOSE_PAUSE_SECONDS", 0)
 
 
 class FakePhone:
+    label = "phone"
+
     def __init__(self):
         self.actions: list[str] = []
 
@@ -39,7 +45,7 @@ class FakePhone:
         self.actions.append(f"tap {x:.2f},{y:.2f}")
 
     async def type(self, text: str) -> None:
-        raise PhoneError("No focused input field")
+        raise DeviceError("No focused input field")
 
     async def apps(self) -> dict[str, str]:
         return {"WhatsApp": "com.whatsapp"}
@@ -53,11 +59,24 @@ class FakePhone:
     async def key(self, key: str) -> None:
         self.actions.append(f"key {key}")
 
-    async def close(self, package: str) -> None:
-        self.actions.append(f"close {package}")
-
     async def location(self, lat: float | None = None, lon: float | None = None) -> None:
         self.actions.append(f"location {lat},{lon}")
+
+
+class FakePC(FakePhone):
+    label = "PC"
+
+    async def type(self, text: str) -> None:
+        self.actions.append(f"type {text}")
+
+    async def click(self, x: float, y: float, button: str = "left", double: bool = False) -> None:
+        self.actions.append(f"click {x:.2f},{y:.2f} {button}{' double' if double else ''}")
+
+    async def scroll(self, x: float, y: float, dx: int = 0, dy: int = 0) -> None:
+        self.actions.append(f"scroll {x:.2f},{y:.2f} by {dx},{dy}")
+
+    async def unlock(self) -> None:
+        self.actions.append("unlock")
 
 
 class FakeVision:
@@ -105,7 +124,8 @@ def run(
 ) -> Outcome:
     kit = Kit(phone, FakeVision(), guard or FakeGuard(), investigator or FakeInvestigator())
     record = kwargs.pop("record", lambda text, screen: None)
-    return asyncio.run(Pilot(model, kit).run("do it", record, **kwargs))
+    platform = PC if isinstance(phone, FakePC) else PHONE
+    return asyncio.run(Pilot(model, kit, platform).run("do it", record, **kwargs))
 
 
 def test_taps_the_centre_of_the_located_box():
@@ -231,7 +251,8 @@ def test_done_goes_home_unless_asked_to_leave_it_open():
 def test_close_app_closes_it_by_name():
     phone = FakePhone()
     run(scripted(("close_app", {"name": "whatsapp"})), phone)
-    assert phone.actions == ["close com.whatsapp", "key home"]
+    # As swiping it away in recents does, then home as the task ends.
+    assert phone.actions == ["launch com.whatsapp", "key recents", "swipe", "key home", "key home"]
 
 
 def test_unlock_swipes_instead_of_pressing_a_key():
@@ -266,3 +287,59 @@ def test_a_paused_task_gives_the_phone_back_where_it_is():
     model = scripted(("set_location", {"lat": 51.5, "lon": -0.08}), ("tap", {"target": "the Send button"}))
     assert run(model, phone).status == "needs_approval"
     assert phone.actions == ["location 51.5,-0.08", "location None,None"]
+
+
+def test_a_pc_clicks_and_never_goes_home():
+    pc = FakePC()
+    outcome = run(scripted(("click", {"target": "the Start button", "button": "right"})), pc)
+    assert pc.actions == ["click 0.30,0.50 right"]
+    assert outcome.report == "Right-clicked the Start button."
+
+
+def test_a_consequential_click_waits_for_approval():
+    pc, guard = FakePC(), FakeGuard()
+    waiting = run(scripted(("click", {"target": "the Send button", "double": True})), pc, guard)
+    assert waiting.status == "needs_approval" and pc.actions == []
+    assert guard.checked == ["double-click the Send button"]
+
+
+def test_moving_around_isnt_checked_but_other_keys_are():
+    pc, guard = FakePC(), FakeGuard()
+    run(
+        scripted(("press", {"keys": "ctrl+L"}), ("press", {"keys": "Tab"}), ("press", {"keys": "ctrl+enter"})),
+        pc,
+        guard,
+    )
+    assert guard.checked == ["press ctrl+enter"]
+    assert pc.actions == ["key ctrl+L", "key Tab", "key ctrl+enter"]
+
+
+def test_scroll_over_a_described_area():
+    pc = FakePC()
+    run(
+        scripted(
+            ("scroll", {"direction": "down", "within": "the message button list"}), ("scroll", {"direction": "up"})
+        ),
+        pc,
+    )
+    assert pc.actions == ["scroll 0.30,0.50 by 0,5", "scroll 0.50,0.50 by 0,-5"]
+
+
+def test_a_pc_it_unlocked_is_locked_again_when_the_task_ends_or_pauses():
+    pc = FakePC()
+    run(scripted(("unlock", {}), ("type_text", {"text": "hi"})), pc)
+    assert pc.actions == ["unlock", "type hi", "key lock"]
+
+    pc = FakePC()
+    waiting = run(scripted(("unlock", {}), ("click", {"target": "the Send button"})), pc)
+    assert waiting.status == "needs_approval"
+    assert pc.actions == ["unlock", "key lock"]
+
+
+def test_a_pc_task_that_cant_reach_it_says_which_device():
+    class Asleep(FakePC):
+        async def screenshot(self):
+            raise DeviceError("The PC has been offline for 150 s")
+
+    outcome = run(scripted(), Asleep())
+    assert outcome == Outcome("failed", "Couldn't use the PC: The PC has been offline for 150 s")

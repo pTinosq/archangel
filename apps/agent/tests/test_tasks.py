@@ -11,7 +11,9 @@ CLI = Address("cli", "local")
 
 
 def _tasks(store, pilot=None, researcher=None, reporter=None) -> Tasks:
-    return Tasks(store, pilot or FakePilot(), researcher or FakeResearcher(), reporter or FakeReporter(), FakeHelper())
+    return Tasks(
+        store, {"phone": pilot or FakePilot()}, researcher or FakeResearcher(), reporter or FakeReporter(), FakeHelper()
+    )
 
 
 def _notified(tasks: Tasks) -> list[str]:
@@ -111,6 +113,25 @@ def test_one_task_drives_the_phone_at_a_time(store):
     asyncio.run(scenario())
 
 
+def test_the_phone_and_pc_each_run_a_task_at_once(store):
+    async def scenario():
+        phone, pc = FakePilot(hold=asyncio.Event()), FakePilot(hold=asyncio.Event())
+        tasks = Tasks(store, {"phone": phone, "pc": pc}, FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks.start("on the phone", CLI)
+        tasks.start("on the pc", CLI, "pc")
+        tasks.start("on the pc, next", CLI, "pc")
+        await asyncio.sleep(0)
+        assert [goal for goal, _ in phone.calls] == ["on the phone"]
+        assert [goal for goal, _ in pc.calls] == ["on the pc"]
+        assert pc.inbox == []  # it can be told things as it goes, like the phone's
+        phone.hold.set()
+        pc.hold.set()
+        await tasks.idle()
+        assert [goal for goal, _ in pc.calls] == ["on the pc", "on the pc, next"]
+
+    asyncio.run(scenario())
+
+
 def test_cancelling_stops_a_running_task(store):
     async def scenario():
         tasks = _tasks(store, FakePilot(hold=asyncio.Event()))
@@ -204,7 +225,7 @@ def test_tasks_start_briefed_by_the_context_twin_but_research_doesnt(store):
 
     async def scenario():
         pilot, researcher = FakePilot(), FakeResearcher()
-        tasks = Tasks(store, pilot, researcher, FakeReporter(), FakeHelper(), brief=brief)
+        tasks = Tasks(store, {"phone": pilot}, researcher, FakeReporter(), FakeHelper(), brief=brief)
         tasks.start("Uber home", CLI)
         tasks.start("Best funds in 2026", CLI, "research")
         await tasks.idle()

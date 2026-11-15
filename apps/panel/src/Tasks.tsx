@@ -16,7 +16,7 @@ export function Tasks({ selected, select }: { selected?: number; select: (id?: n
       {!(narrow && shown) && (
         <section className="task-list">
           <h2>Tasks</h2>
-          {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone, or to research something.</p>}
+          {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone or PC, or to research something.</p>}
           <ul>
             {tasks?.map((task) => (
               <li key={task.id} className={task.id === shown?.id ? "selected" : ""} onClick={() => select(task.id)}>
@@ -55,7 +55,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
   }, [viewing]);
 
   return (
-    <section className="detail">
+    <section className={task.kind === "pc" ? "detail wide" : "detail"}>
       <div className="head">
         {back && (
           <button className="back" onClick={back}>
@@ -75,7 +75,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
       <div className="screen" ref={screen}>
         {shownScreen ? (
           <>
-            <img src={imageUrl(shownScreen.screen!)} alt="Phone screen" onError={hideExpired} />
+            <img src={imageUrl(shownScreen.screen!)} alt="Screen" onError={hideExpired} />
             <p className="quiet">
               {viewing ? (
                 <>
@@ -87,7 +87,9 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
             </p>
           </>
         ) : (
-          <p className="quiet">{task.kind !== "phone" ? "Research is on the web, not the phone." : "No screens yet."}</p>
+          <p className="quiet">
+            {task.kind === "phone" || task.kind === "pc" ? "No screens yet." : "Not done on a device, so no screens."}
+          </p>
         )}
       </div>
       <ol className="steps">

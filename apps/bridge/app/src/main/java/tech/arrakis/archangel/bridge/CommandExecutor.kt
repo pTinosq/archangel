@@ -61,6 +61,7 @@ class CommandExecutor(private val device: Device) {
                 }
                 device.location(command.lat, command.lon)
             }
+            is Command.Wake -> device.wake(parseMac(command.mac))
         }
         return null
     }

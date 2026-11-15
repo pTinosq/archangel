@@ -58,7 +58,7 @@ def test_transcript_and_its_images(store):
 
 def test_tasks_steps_and_screens(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = Tasks(store, {"phone": FakePilot()}, FakeResearcher(), FakeReporter(), FakeHelper())
         tasks.start("post hello", Address("cli", "local"))
         await tasks.idle()
 
@@ -90,6 +90,14 @@ def test_prompts_edit_and_reset(store):
     assert reset["edited"] is False
     assert panel.prompts["guard"] == reset["default"]
     assert panel.call("PUT", "/api/prompts/nope", json={"text": "x"}).status_code == 404
+
+
+def test_an_edit_to_the_pilot_from_before_the_pc_stays_the_phone_pilot_s(store):
+    store.save_prompt("pilot", "Be quick.")
+    prompts = Prompts(store)
+    assert prompts["phone pilot"] == "Be quick."
+    assert prompts["pc pilot"] == prompts.get("pc pilot").default
+    assert store.prompts() == {"phone pilot": "Be quick."}
 
 
 def test_refuses_other_hosts(store):
@@ -137,7 +145,7 @@ def test_activity_streams_as_server_sent_events():
 
 def test_research_reports_are_pages_that_run_nothing(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = Tasks(store, {"phone": FakePilot()}, FakeResearcher(), FakeReporter(), FakeHelper())
         tasks.start("the best funds", Address("cli", "local"), "research")
         await tasks.idle()
 
@@ -154,7 +162,7 @@ def test_research_reports_are_pages_that_run_nothing(store):
 
 def test_a_report_opens_for_anyone_only_once_made_public(store):
     async def start():
-        tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+        tasks = Tasks(store, {"phone": FakePilot()}, FakeResearcher(), FakeReporter(), FakeHelper())
         tasks.start("the best funds", Address("cli", "local"), "research")
         tasks.start("open WhatsApp", Address("cli", "local"))
         await tasks.idle()

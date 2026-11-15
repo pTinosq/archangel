@@ -11,7 +11,7 @@ from fakes import (
     FakePilot,
     FakeReporter,
     FakeResearcher,
-    apps,
+    devices,
 )
 from pydantic_ai import (
     BinaryContent,
@@ -45,10 +45,13 @@ class Owner:
         respond,
         outcome: Outcome = Outcome("done", "WhatsApp is open."),
         whereabouts: Whereabouts | None = None,
+        pc: str | None = None,
     ):
+        """`pc`: the PC's state (None: there isn't one)."""
         self.requests: list[list[ModelMessage]] = []
-        self.pilot = FakePilot(outcome)
-        self.tasks = Tasks(store, self.pilot, FakeResearcher(), FakeReporter(), FakeHelper())
+        self.pilot, self.pc_pilot = FakePilot(outcome), FakePilot(Outcome("done", "Excel is open."))
+        pilots = {"phone": self.pilot, "pc": self.pc_pilot}
+        self.tasks = Tasks(store, pilots, FakeResearcher(), FakeReporter(), FakeHelper())
         self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
         self.store = store
 
@@ -64,7 +67,7 @@ class Owner:
             gateway,
             FakeResearcher(),
             FakeConnectors(),
-            apps,
+            devices(pc),
             whereabouts or Whereabouts(store, Web(), None),
         )
 
@@ -288,7 +291,7 @@ def test_research_and_quick_answers_come_from_the_web(store):
         if "Tesco" in prompt:
             return call("search_web", question="When does Tesco close?")
         if "apps" in prompt:
-            return call("phone_apps")
+            return call("installed_apps")
         return call("research", question="The best funds in 2026")
 
     owner = Owner(store, tool_result_or(respond))
@@ -394,7 +397,7 @@ def test_the_twin_is_read_for_whatever_the_owner_says_before_the_answer(store):
         return say("ok")
 
     cli = FakeChannel("cli")
-    tasks = Tasks(store, FakePilot(), FakeResearcher(), FakeReporter(), FakeHelper())
+    tasks = Tasks(store, {"phone": FakePilot()}, FakeResearcher(), FakeReporter(), FakeHelper())
     orchestrator = Orchestrator(
         FunctionModel(model),
         store,
@@ -402,10 +405,38 @@ def test_the_twin_is_read_for_whatever_the_owner_says_before_the_answer(store):
         Gateway([cli], store),
         FakeResearcher(),
         FakeConnectors(),
-        apps,
+        devices(),
         Whereabouts(store, Web(), None),
         twin=twin,
     )
     asyncio.run(orchestrator.handle(OwnerMessage(Message(cli.owner, (Text("who is my mum?"),)))))
     assert "Call him Tinos." in seen["instructions"] and "ask_twin" in seen["tools"]
     assert "on what the owner just said:\nHer name is Helen." in seen["instructions"]  # read before answering
+
+
+def on_the_pc(prompt: str) -> ModelResponse:
+    if "not from the owner" in prompt:
+        return say(f"Relayed: {prompt}")
+    if "apps" in prompt:
+        return call("installed_apps", on="pc")
+    return call("start_task", goal="Open Excel", on="pc")
+
+
+def test_tasks_can_run_on_the_pc(store):
+    owner = Owner(store, tool_result_or(on_the_pc), pc="offline (it's woken when a task needs it)")
+    replies = owner.says(Text("open excel on my pc"))
+
+    assert owner.pc_pilot.calls == [("Open Excel", None)] and owner.pilot.calls == []
+    assert store.task(1).kind == "pc"
+    assert replies[-1].text.endswith("done: Excel is open.")
+    assert (
+        "Devices: phone (online); PC (offline (it's woken when a task needs it))." in owner.requests[0][-1].instructions
+    )
+    assert owner.says(Text("what apps are on it?"))[-1].text == "Excel"
+
+
+def test_without_a_pc_it_isnt_offered_or_used(store):
+    owner = Owner(store, tool_result_or(on_the_pc))
+    assert owner.says(Text("open excel on my pc"))[-1].text == "There's no PC: none has ever connected."
+    assert "Devices: phone (online)." in owner.requests[0][-1].instructions
+    assert owner.pc_pilot.calls == []

@@ -58,6 +58,11 @@ sealed interface Command {
     @Serializable
     @SerialName("location")
     data class Location(override val id: String, val lat: Double? = null, val lon: Double? = null) : Command
+
+    /** Wake a PC asleep on the phone's network: `aa:bb:cc:dd:ee:ff`. */
+    @Serializable
+    @SerialName("wake")
+    data class Wake(override val id: String, val mac: String) : Command
 }
 
 @Serializable
@@ -91,7 +96,13 @@ object ErrorCode {
 }
 
 @Serializable
-data class Hello(val device: String, val screen: Screen, val version: String, val type: String = "hello") {
+data class Hello(
+    val device: String,
+    val screen: Screen,
+    val version: String,
+    val platform: String = "android",
+    val type: String = "hello",
+) {
     @Serializable
     data class Screen(val width: Int, val height: Int, val density: Float)
 }

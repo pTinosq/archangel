@@ -8,7 +8,7 @@ from fakes import (
     FakePilot,
     FakeReporter,
     FakeResearcher,
-    apps,
+    devices,
 )
 from pydantic_ai import (
     ModelResponse,
@@ -33,22 +33,22 @@ def hops():
 
 
 def test_a_call_and_its_reply_nest_under_the_actor():
-    with activity.acting("pilot"), activity.call("vision", "agent", "the Send button") as reply:
+    with activity.acting("phone pilot"), activity.call("vision", "agent", "the Send button") as reply:
         activity.hop("jev", "model", "find it")
         reply("found")
 
     assert hops() == [
-        ("pilot", "vision", "tx", "the Send button", True),
+        ("phone pilot", "vision", "tx", "the Send button", True),
         ("vision", "jev", "tx", "find it", True),
-        ("vision", "pilot", "rx", "found", True),
+        ("vision", "phone pilot", "rx", "found", True),
     ]
 
 
 def test_a_failed_call_says_so():
-    with pytest.raises(RuntimeError), activity.acting("pilot"), activity.call("phone", "phone", "tap"):
+    with pytest.raises(RuntimeError), activity.acting("phone pilot"), activity.call("phone", "device", "tap"):
         raise RuntimeError("offline")
 
-    assert hops()[-1] == ("phone", "pilot", "rx", "RuntimeError: offline", False)
+    assert hops()[-1] == ("phone", "phone pilot", "rx", "RuntimeError: offline", False)
 
 
 def test_ids_follow_a_request_into_its_tasks():
@@ -112,7 +112,13 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
 
     cli = FakeChannel("cli", ["open whatsapp"])
     gateway = Gateway([cli], store)
-    tasks = Tasks(store, FakePilot(Outcome("done", "WhatsApp is open.")), FakeResearcher(), FakeReporter(), FakeHelper())
+    tasks = Tasks(
+        store,
+        {"phone": FakePilot(Outcome("done", "WhatsApp is open."))},
+        FakeResearcher(),
+        FakeReporter(),
+        FakeHelper(),
+    )
     orchestrator = Orchestrator(
         FunctionModel(model),
         store,
@@ -120,7 +126,7 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
         gateway,
         FakeResearcher(),
         FakeConnectors(),
-        apps,
+        devices(),
         Whereabouts(store, Web(), None),
     )
 
@@ -136,17 +142,17 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
         ("cli", "gateway"),
         ("gateway", "orchestrator"),
         ("orchestrator", "tasks"),
-        ("tasks", "pilot"),
-        ("pilot", "tasks"),
+        ("tasks", "phone pilot"),
+        ("phone pilot", "tasks"),
         ("tasks", "orchestrator"),
         ("orchestrator", "gateway"),
         ("gateway", "cli"),
     } <= edges
     assert {n.request for n in notices} == {notices[0].request} != {None}
-    assert all(n.task == 1 for n in notices if "pilot" in (n.source, n.target))
+    assert all(n.task == 1 for n in notices if "phone pilot" in (n.source, n.target))
     assert [n.text for n in notices if n.target == "cli"] == ["On it.", "Done."]
     roles = {n.source: n.source_role for n in notices} | {n.target: n.target_role for n in notices}
-    assert (roles["cli"], roles["gateway"], roles["orchestrator"], roles["pilot"]) == (
+    assert (roles["cli"], roles["gateway"], roles["orchestrator"], roles["phone pilot"]) == (
         "channel",
         "part",
         "agent",

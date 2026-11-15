@@ -17,11 +17,13 @@ from agent.links import Links
 from agent.location import Whereabouts
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
-from agent.phone.guard import ModelGuard
-from agent.phone.investigator import ModelInvestigator
-from agent.phone.pilot import Kit, Pilot
-from agent.phone.relay import Phone
-from agent.phone.vision import FallbackVision, ModelVision, create_vision
+from agent.devices.guard import ModelGuard
+from agent.devices.investigator import ModelInvestigator
+from agent.devices.pc import PC
+from agent.devices.phone import PHONE
+from agent.devices.pilot import Kit, Pilot
+from agent.devices.relay import Device
+from agent.devices.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
 from agent.reports import Reporter
 from agent.research import DEEP, DEEP_TIMEOUT, RESEARCH, Researcher, tavily
@@ -45,14 +47,14 @@ def main() -> None:
     relay = httpx.AsyncClient(
         base_url=config.relay_url(), headers={"Authorization": f"Bearer {config.relay_token()}"}, timeout=30
     )
-    kit = Kit(
-        phone=Phone(relay, config.device()),
-        vision=FallbackVision(
-            create_vision(config.vision_model(), prompts.live("vision")),
-            ModelVision(fallback, prompts.live("vision")),
-        ),
-        guard=ModelGuard(model, prompts.live("guard")),
-        investigator=ModelInvestigator(fallback, prompts.live("investigator")),
+    phone = Device(relay, "android", config.devices(), store)
+    devices = {"phone": phone, "pc": Device(relay, "windows", config.devices(), store, wake=phone.wake)}
+    vision = FallbackVision(
+        create_vision(config.vision_model(), prompts.live("vision")), ModelVision(fallback, prompts.live("vision"))
+    )
+    guard, investigator = (
+        ModelGuard(model, prompts.live("guard")),
+        ModelInvestigator(fallback, prompts.live("investigator")),
     )
     search = (key := config.tavily_api_key()) and tavily(key)
     researcher = Researcher(openrouter(RESEARCH), openrouter(DEEP, DEEP_TIMEOUT), search)
@@ -70,9 +72,19 @@ def main() -> None:
         Writer(model, graph, prompts.live("twin writer")),
         lambda channel: gateway.owner(channel),  # the gateway comes later, with the channels
     )
+    pilots = {
+        kind: Pilot(
+            model,
+            Kit(devices[kind], vision, guard, investigator),
+            platform,
+            prompts.live(f"{kind} pilot"),
+            [twin.tools],
+        )
+        for kind, platform in (("phone", PHONE), ("pc", PC))
+    }
     tasks = Tasks(
         store,
-        Pilot(model, kit, prompts.live("pilot"), [twin.tools]),
+        pilots,
         researcher,
         Reporter(model, prompts.live("reporter")),
         Helper(model, connectors, prompts.live("helper"), [twin.tools]),
@@ -99,7 +111,7 @@ def main() -> None:
         gateway,
         researcher,
         connectors,
-        kit.phone.apps,
+        devices,
         Whereabouts(store, web, links),
         prompts.live("orchestrator"),
         twin,

@@ -1,6 +1,7 @@
 set dotenv-load
 
 bridge := "apps/bridge"
+bridge_windows := "apps/bridge-windows"
 relay := "apps/relay"
 agent := "apps/agent"
 panel := "apps/panel"
@@ -47,21 +48,29 @@ reverse:
 tunnel:
     ngrok http {{port}}
 
-# Send a command, e.g. just send '{"type":"tap","x":540,"y":1200}'
+# Send a command to the phone, e.g. just send '{"type":"tap","x":540,"y":1200}'
 send command device=env("ARCHANGEL_DEVICE", ""):
-    @d="{{device}}"; curl -s -X POST localhost:{{port}}/devices/${d:-$(just _phone)}/commands \
+    @d="{{device}}"; curl -s -X POST localhost:{{port}}/devices/${d:-$(just _device android)}/commands \
         -H "Authorization: Bearer $ARCHANGEL_TOKEN" -H "Content-Type: application/json" -d '{{command}}'; echo
 
 # Save the phone's screen to screenshot.jpg
 screenshot device=env("ARCHANGEL_DEVICE", ""):
-    @d="{{device}}"; curl -sf -o screenshot.jpg localhost:{{port}}/devices/${d:-$(just _phone)}/screenshot.jpg \
+    @d="{{device}}"; curl -sf -o screenshot.jpg localhost:{{port}}/devices/${d:-$(just _device android)}/screenshot.jpg \
         -H "Authorization: Bearer $ARCHANGEL_TOKEN" && echo "screenshot.jpg"
 
-# The connected phone's name, when there's only one
+# Send a command to the PC, e.g. just pc-send '{"type":"key","key":"win"}'
+pc-send command:
+    @just send '{{command}}' $(just _device windows)
+
+# Save the PC's screen to screenshot.jpg
+pc-screenshot:
+    @just screenshot $(just _device windows)
+
+# The connected device of a platform (android, windows), when there's only one
 [private]
-_phone:
+_device platform:
     @curl -sf localhost:{{port}}/devices -H "Authorization: Bearer $ARCHANGEL_TOKEN" | python3 -c \
-        'import json, sys; p = json.load(sys.stdin); print(p[0]["device"]) if len(p) == 1 else sys.exit(f"{len(p)} phones connected; set ARCHANGEL_DEVICE")'
+        'import json, sys; p = [d for d in json.load(sys.stdin) if d.get("platform", "android") == sys.argv[1]]; print(p[0]["device"]) if len(p) == 1 else sys.exit(f"{len(p)} {sys.argv[1]} devices connected; name one")' {{platform}}
 
 # The context twin on a real model, in a terminal: `just twin alex` starts from that graph (apps/agent/evals/twin)
 twin *graph:
@@ -76,6 +85,11 @@ test:
     cd {{relay}} && uv run pytest -q
     cd {{panel}} && npm install --silent && npx tsc --noEmit
     cd {{bridge}} && ./gradlew testDebugUnitTest -q
+    cd {{bridge_windows}} && uv run pytest -q
+
+# The Windows bridge's tests that run anywhere (CI runs the rest on a real Windows desktop)
+bridge-windows-test:
+    cd {{bridge_windows}} && uv run pytest -q
 
 # Follow the bridge's logs on the phone
 logs:

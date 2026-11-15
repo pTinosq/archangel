@@ -40,10 +40,11 @@ class ProtocolTest {
     }
 
     @Test
-    fun `hello carries its type`() {
+    fun `hello carries its type and platform`() {
         val hello = Hello("pixel-6", Hello.Screen(1080, 2400, 2.625f), "0.1.0")
         assertEquals(
-            """{"device":"pixel-6","screen":{"width":1080,"height":2400,"density":2.625},"version":"0.1.0","type":"hello"}""",
+            """{"device":"pixel-6","screen":{"width":1080,"height":2400,"density":2.625},"version":"0.1.0",""" +
+                """"platform":"android","type":"hello"}""",
             BridgeJson.encodeToString(hello),
         )
     }

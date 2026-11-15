@@ -1,4 +1,5 @@
-"""Code-level safety: before any tap, a separate model judges whether it commits something the owner must approve.
+"""Code-level safety: before any tap or click, a separate model judges whether it commits something the owner must
+approve.
 
 Kept apart from the pilot so a pilot that misreads its task, or is talked into something by what's on screen,
 still can't send, pay or log in on its own.
@@ -18,13 +19,14 @@ from agent.models import Instructions, content
 log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-You check one action on an Android phone (a tap, or Enter) before it happens. Decide whether it would \
-commit something the phone's owner must approve first:
+You check one action on the owner's Android phone or Windows PC (a tap or click, or a key) before it \
+happens. Decide whether it would commit something the owner must approve first:
 - sending or posting anything (messages, emails, posts, comments, reviews, ratings, tips)
 - paying, purchasing, booking, ordering or subscribing
-- logging in, signing up, or granting access or permissions
+- logging in, signing up, or granting access or permissions (a PC's administrator prompt too)
 - deleting, archiving or unsending anything
-- changing a setting (the app's or phone's own: toggles, preferences, account details)
+- changing a setting (the app's or device's own: toggles, preferences, account details)
+- saving over, moving or renaming the owner's files
 
 Navigation doesn't need approval: opening apps, menus or settings pages (a settings row usually opens a page; \
 only its switch changes anything), scrolling, searching, filtering or sorting results, focusing text fields and \
@@ -41,8 +43,8 @@ class Verdict(BaseModel):
 
 class Guard(Protocol):
     async def check(self, screen: Image, action: str, task: str, said: list[str]) -> str | None:
-        """What `action` (e.g. "tap the Send button") would commit, if the owner must approve it first; otherwise None. `said`: what the owner has
-        said about the task so far (answers, approvals)."""
+        """What `action` (e.g. "tap the Send button") would commit, if the owner must approve it first; otherwise None.
+        `said`: what the owner has said about the task so far (answers, approvals)."""
         ...
 
 

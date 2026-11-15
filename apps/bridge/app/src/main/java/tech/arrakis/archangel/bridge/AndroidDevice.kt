@@ -163,6 +163,8 @@ class AndroidDevice(private val service: AccessibilityService) : Device {
         if (lat != null && lon != null) mockLocation.set(lat, lon) else mockLocation.stop()
     }
 
+    override suspend fun wake(mac: ByteArray) = sendMagicPacket(mac)
+
     override fun uiTree() = UiTree(service.windows.mapNotNull { it.root?.toNode() })
 
     private fun AccessibilityNodeInfo.toNode(): Node {

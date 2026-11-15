@@ -6,13 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent import helper, orchestrator, reports
-from agent.phone import guard, investigator, pilot, vision
+from agent.devices import guard, investigator, pc, phone, vision
 from agent.store import Store
 from agent.twin import reader, writer
 
 DEFAULTS = {
     "orchestrator": orchestrator.INSTRUCTIONS,
-    "pilot": pilot.INSTRUCTIONS,
+    "phone pilot": phone.INSTRUCTIONS,
+    "pc pilot": pc.INSTRUCTIONS,
     "guard": guard.INSTRUCTIONS,
     "investigator": investigator.INSTRUCTIONS,
     "vision": vision.INSTRUCTIONS,
@@ -38,6 +39,9 @@ class Prompts:
     def __init__(self, store: Store):
         self._store = store
         self._edits = store.prompts()  # in memory: agents read prompts on every run
+        if "pilot" in self._edits:  # its name before there was a PC
+            self.edit("phone pilot", self._edits.pop("pilot"))
+            store.save_prompt("pilot", None)
 
     def __getitem__(self, name: str) -> str:
         return self._edits.get(name, DEFAULTS[name])

@@ -1,9 +1,9 @@
 # Archangel
 
-AI agent that operates a real Android phone. No cable, ADB or root at runtime. Progress: `docs/roadmap.md`.
+AI agent that operates a real Android phone and a Windows PC. No cable, ADB or root at runtime. Progress: `docs/roadmap.md`.
 
 ```
-channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilot ──▶ relay ◀──WebSocket── bridge (phone)
+channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilots ──▶ relay ◀──WebSocket── bridges (phone, PC)
  (any medium,  (events in,  (one conversation,  (background     (action)
   one owner)    routing out)  talks, manages)    sub-agents)
 ```
@@ -12,11 +12,12 @@ channels ⇄ gateway ⇄ orchestrator ──▶ tasks ──▶ pilot ──▶ 
 
 | Path | What |
 |---|---|
-| `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, phone pilot. |
-| `apps/bridge/` | Android app, Kotlin. AccessibilityService that dials the relay and runs commands. |
-| `apps/relay/` | Python relay, FastAPI + uv. Holds phone connections, exposes the HTTP API. |
+| `apps/agent/` | Python, Pydantic AI + uv. Channels, gateway, orchestrator, tasks, device pilots (phone, PC). |
+| `apps/bridge/` | Android bridge, Kotlin. AccessibilityService that dials the relay and runs commands. |
+| `apps/bridge-windows/` | Windows bridge, Python, built into an exe by CI. A service that dials the relay and runs commands, the lock screen included ([README](apps/bridge-windows/README.md)). |
+| `apps/relay/` | Python relay, FastAPI + uv. Holds device connections, exposes the HTTP API. |
 | `apps/panel/` | Control panel, React + Vite + plain CSS. Pages at real paths (`route.tsx`; the agent serves the app on each, `web.PAGES`): `/chat`, `/tasks`, `/tasks/{id}`, `/cockpit`, `/twin`, `/evals` (local only), `/prompts`, `/connectors`. The look: black, JetBrains Mono to read, Silkscreen (8/12/16px only) for labels, one acid accent, amber only when the owner is needed; a state changes colour, never size (top of `styles.css`). Polls the agent's API every second; the Cockpit tab draws the live activity stream with React Flow, laid out by dagre from who calls whom, fitted to the layout's own bounds (React Flow's measurements lag new parts); parts kept in React Flow's state, or rebuilt each tick they lost their measurements and the graph vanished under steady traffic). The context twin is a part of its own: who asks the reader or hands the writer a conversation (`transcript`), and each page they open or edit (`open Uber`, `link Uber → Work`), each a call to `twin`. The map (parts, their roles, who calls whom) is kept in the browser, so a refresh starts from all of it, not just the agent's last few notices; Forget starts it afresh. Click a notice to read it in full (the agent keeps 2000 characters of each). The Context twin tab (`/twin`) draws the twin's graph with React Flow, laid out by d3-force (run to rest at once; placed nodes stay put and only new ones move, then a collide-only pass makes room; Tidy lays it all out afresh; nodes kept in React Flow's state, or a fresh node object hides until measured; each node always has a target handle, or React Flow drops its edges; the Delete key is off, deleting is the page's button). The owner edits it by hand: + Node, drag a node's grip onto another to link them, click a line to edit its relation and preview or unlink, and on a node's page rename it, add or remove aliases, edit or delete its page; edits are recorded as from the panel. Routers dashed, the open node's links lit, stale previews dashed; nodes the reader or writer opens or edits light up live (the activity stream's calls to `twin`). Small sounds (`sounds.ts`, `public/sounds/<cue>.wav`, made with earshot and chosen by the owner): presses, tabs, the owner's own scrolling, switches, messages each way, approvals, a task needing them or done, and the cockpit's tx/rx; Web Audio so a click lands with the press; "Sound on/off" in the header, kept per browser. `data-sound` on an element picks its cue, or `""` for none. Phones (≤760px, `useNarrow()`, same breakpoint in `styles.css`): one column at a time, Chat its own tab and the default, Tasks as list then detail, the cockpit graph top to bottom above the timeline. |
-| `docs/protocol.md` | Phone wire contract. Change it first, then bridge and relay. |
+| `docs/protocol.md` | Device wire contract, one for every bridge (platform-specific commands marked). Change it first, then bridges and relay. |
 | `docs/roadmap.md` | Milestones. Tick them off as they land. |
 | `justfile` | All dev tasks. `just` lists them. |
 | `.env` | `ARCHANGEL_TOKEN`, `OPENROUTER_API_KEY`, `TAVILY_API_KEY` (optional). |
@@ -30,8 +31,11 @@ just relay            # relay on :8080, reload
 just reverse          # phone localhost:8080 → Mac (USB)
 just bridge-install   # build, install, enable the service
 just bridge-enable    # re-enable the service only
-just send '<json>'    # POST a command
+just send '<json>'    # POST a command to the phone
 just screenshot       # → screenshot.jpg
+just pc-send '<json>' # the same, to the PC
+just pc-screenshot
+just bridge-windows-test  # the Windows bridge's tests that run anywhere (CI runs the rest on Windows)
 just tunnel           # ngrok, for running without the cable
 just test             # all tests
 just twin alex        # the context twin on a real model, in a terminal, from a made-up graph
@@ -55,10 +59,10 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `links.py` | Signed links that open without sign-in and expire after a day: screenshots (`/screenshots/…`), for texts (on a call, an approval's screenshot is texted this way and the call says so), and the location page. Only with a public address. |
 | `location.py` | Where the owner is (the phone stays at home): `owner_location` gives the last shared place, how long ago, and a link (`/where/…`) whose page shares the browser's location once, on opening. Nothing runs on the owner's phone. The address comes from OpenStreetMap (Nominatim); it's kept in the store and arrives as a `Notice` where the link was asked from. |
 | `gateway.py` | Both ways: owner messages → `OwnerMessage` events, handled concurrently; outgoing messages → the channel in their address. Records the transcript. A failing channel is logged, not raised. |
-| `orchestrator.py` | The agent the owner talks to; never acts on the phone. `handle(event)`, one at a time. Tools: `start_task(goal, report_via?)`, `use_connectors(goal, report_via?)` (a background task in the owner's connected services; sees which are connected), `research(question, deep?, report_via?)` (a background task; `deep` only from the owner's own message, once they've agreed to its cost), `search_web(question)` and `read_page(url)` (answers inline; read what a result only points to), `phone_apps` (what's installed, to choose between the web and an app), `answer_task` (a waiting task's answer, or the owner's word to a running one), `report_visibility(id, public?)` (says whether a report is public, or changes it; public only from the owner's own message), `redirect_task(id, channel)` ("text me when it's done"), `cancel_task`, `send(channel, text, screenshot?)`, `hang_up` (on a call, after this reply), `owner_location` (for "near me"; tasks get the address typed), `remember` and `forget` (the owner's words, to the context twin's writer at once), `ask_twin`. Sees the twin's root page every turn, and, before answering anything the owner says, what the twin's reader finds bears on it (a few seconds: each page opened is a model call). Sees the channels and task list (public reports marked) every turn. Replies go to `event.reply_to`; approvals (yes or no) only when `event.from_owner`: it never decides one for the owner. |
-| `tasks.py` | Runs pilots in the background, one on the phone at a time, the rest queued; research and connector tasks run beside them. Briefs each new phone or connectors task from the context twin first (a step shows the briefing; not research: its question goes to a web search, and the owner's life needn't); resumes waiting tasks with the owner's answer; passes what the owner says to a running one (its pilot reads it on its next step); cancels. Records each step; sends a `TaskUpdate` when a task finishes or needs the owner. |
-| `store.py` | `data/archangel.db`: the one history (continuous), transcript, tasks (with `report_to`, `kind`: phone, research, deep research or connectors, and `public`: its report opens without sign-in) and research pages (`data/pages/`, kept) and their steps, edited prompts, connectors (settings and sign-ins, as JSON), where the owner last shared they were, and the context twin's tables (`twin/graph.py` owns them). Images (screens, chat pictures) are files in `data/images/`, deleted after 3 days. Paused runs keep only their latest screen. |
-| `prompts.py` | Every prompt by name. Defaults live in code beside their agents; panel edits live in the store and win from the agent's next run (`Prompts.live(name)`). |
+| `orchestrator.py` | The agent the owner talks to; never acts on the phone. `handle(event)`, one at a time. Tools: `start_task(goal, report_via?, on?)` (`on` the phone or the PC), `use_connectors(goal, report_via?)` (a background task in the owner's connected services; sees which are connected), `research(question, deep?, report_via?)` (a background task; `deep` only from the owner's own message, once they've agreed to its cost), `search_web(question)` and `read_page(url)` (answers inline; read what a result only points to), `installed_apps(on?)` (what's installed, to choose between the web and an app), `answer_task` (a waiting task's answer, or the owner's word to a running one), `report_visibility(id, public?)` (says whether a report is public, or changes it; public only from the owner's own message), `redirect_task(id, channel)` ("text me when it's done"), `cancel_task`, `send(channel, text, screenshot?)`, `hang_up` (on a call, after this reply), `owner_location` (for "near me"; tasks get the address typed), `remember` and `forget` (the owner's words, to the context twin's writer at once), `ask_twin`. Sees the twin's root page every turn, and, before answering anything the owner says, what the twin's reader finds bears on it (a few seconds: each page opened is a model call). Sees the channels, devices (online, offline, woken when needed; a PC that never connected isn't listed) and task list (public reports marked) every turn. Replies go to `event.reply_to`; approvals (yes or no) only when `event.from_owner`: it never decides one for the owner. |
+| `tasks.py` | Runs pilots in the background, one task on each device (phone, PC) at a time, the rest queued for it; research and connector tasks run beside them. Briefs each new device or connectors task from the context twin first (a step shows the briefing; not research: its question goes to a web search, and the owner's life needn't); resumes waiting tasks with the owner's answer; passes what the owner says to a running one (its pilot reads it on its next step); cancels. Records each step; sends a `TaskUpdate` when a task finishes or needs the owner. |
+| `store.py` | `data/archangel.db`: the one history (continuous), transcript, tasks (with `report_to`, `kind`: phone, pc, research, deep research or connectors, and `public`: its report opens without sign-in) and research pages (`data/pages/`, kept) and their steps, edited prompts, connectors (settings and sign-ins, as JSON), where the owner last shared they were, each device's latest hello (a sleeping PC is woken by the card it named), and the context twin's tables (`twin/graph.py` owns them). Images (screens, chat pictures) are files in `data/images/`, deleted after 3 days. Paused runs keep only their latest screen. |
+| `prompts.py` | Every prompt by name (the pilots: "phone pilot", "pc pilot"). Defaults live in code beside their agents; panel edits live in the store and win from the agent's next run (`Prompts.live(name)`). |
 | `history.py` | Context trimming: last 40 messages (cut at turn starts), last 2 screenshots. |
 | `instructions.md` | Orchestrator prompt. |
 | `logs.py` | `logs/<time>/agent.log` at DEBUG (`logs/latest` → newest, last 20 kept). `logs.run(agent, …)` logs each tool call, result and invalid call. |
@@ -70,11 +74,13 @@ One owner, one conversation, any channel. Everything that wakes the orchestrator
 | `evals_tab.py` | The panel's Evals tab, on a local agent only (never public): lists the twin's eval runs (`evals/twin/results/`), returns one, and starts one (`evals.twin.run` in its own process, writing its file as runs finish). The tab: runs with pass rates, a case-by-run grid with the change since the run before, and one run opened: what went in, every check (and the judge's reason), the reader's answer, the writer's edits as before/after, and the graph it ended with (added, changed and read nodes marked; click one for its page against how it started). |
 | `helper.py` | Sub-agent for connector tasks: the goal and the connected services' tools in, a short answer out. Pauses for approvals and `ask_owner`, resumably, like the pilot. |
 | `runs.py` | What the pilot and helper share: `Outcome`, the owner's `Answer`, `Record`, and turning a paused run's requests and the owner's answer into results. |
-| `phone/pilot.py` | Sub-agent for one task: act → screenshot → decide. `Pilot(model, Kit(phone, vision, guard, investigator))`. Tools: `open_app`, `close_app` (launch, recents, swipe its card up, home: no model guesswork), `tap(target)`, `type_text`, `scroll`, `press` (keys, and `unlock`: a swipe up past a lock screen without a PIN), `look`, `set_location` (fakes the phone's GPS, only for apps that just use it, "near me"; put back when the run ends or pauses), `second_opinion` (the investigator), `ask_owner`, `ask_twin` (what the owner would want, from the context twin). Ends with `done` (then home, unless `leave_open`) or `give_up`; No rules for stuck: it judges its own progress, asks for a second opinion or gives up; 120 steps is only a runaway backstop. It notes findings as it goes (old screens are forgotten). Pauses (resumably) as `needs_approval` or `needs_answer`. |
-| `phone/guard.py` | Checks every tap (and Enter) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval (a search's filters aren't settings). It sees everything the owner has said to the task (kept by `tasks.py`, in memory), so what they've agreed to isn't asked again. Fails closed. |
-| `phone/investigator.py` | The fallback model reads the last 3 screens and recent steps when the pilot asks for a second opinion: what's in the way, how past it. Also explains stuck reports. |
-| `phone/vision.py` | Finds things on the screen: `Vision.find(screen, target) → Box \| None`. `JevVision` (TypeSafe Jev via OpenRouter decisions API), `ModelVision` (any vision model), `FallbackVision` (the fallback vision model on a miss or failure). |
-| `phone/relay.py` | `Phone`: relay client. Positions are screen fractions, turned into pixels with the latest screenshot's size (so rotation is fine); screenshots are half-scale JPEG at quality 30 (Jev rejects WebP; 30 locates as well as 80). Phone offline (503): waits up to 60 s, then resends. Lost mid-command (502): resends only read-only commands. |
+| `devices/pilot.py` | The device sub-agent, shared by every device: act → screenshot → decide. `Pilot(model, Kit(device, vision, guard, investigator), Platform)`; a `Platform` (`phone.py`, `pc.py`) brings the tools, prompt and tidying up. Shared tools: `open_app`, `look`, `second_opinion` (the investigator), `ask_owner`; and the twin's `ask_twin`. Ends with `done` or `give_up`. No rules for stuck: it judges its own progress, asks for a second opinion or gives up; 120 steps is only a runaway backstop. It notes findings as it goes (old screens are forgotten). Pauses (resumably) as `needs_approval` or `needs_answer`. What a run changed (a faked location, an unlocked PC) is put back when it ends or pauses. |
+| `devices/phone.py` | The phone's tools: `close_app` (launch, recents, swipe its card up, home: no model guesswork), `tap(target, hold?)`, `type_text`, `scroll`, `press` (keys, and `unlock`: a swipe up past a lock screen without a PIN), `set_location` (fakes the phone's GPS, only for apps that just use it, "near me"). `done` goes home, unless `leave_open`. Prompt `phone.md`. |
+| `devices/pc.py` | The PC's tools: `click(target, button?, double?)`, `type_text` (at the cursor; line breaks never submit), `scroll(direction, within?)` (the wheel, over a described area), `press(keys)` (a key or chord; all but moving around and selecting are checked like a click), `unlock` (the bridge types the PIN it keeps; locked again when the run ends or pauses). Prompt `pc.md`. |
+| `devices/guard.py` | Checks every tap or click (and consequential keys) with a separate model call; anything that sends, pays, logs in, deletes or changes settings pauses for approval (a search's filters aren't settings). It sees everything the owner has said to the task (kept by `tasks.py`, in memory), so what they've agreed to isn't asked again. Fails closed. |
+| `devices/investigator.py` | The fallback model reads the last 3 screens and recent steps when the pilot asks for a second opinion: what's in the way, how past it. Also explains stuck reports. |
+| `devices/vision.py` | Finds things on the screen: `Vision.find(screen, target) → Box \| None`. `JevVision` (TypeSafe Jev via OpenRouter decisions API), `ModelVision` (any vision model), `FallbackVision` (the fallback vision model on a miss or failure). |
+| `devices/relay.py` | `Device(client, platform)`: a device through the relay, whichever of its platform is connected (`android`, `windows`). Positions are screen fractions, turned into pixels with the latest screenshot's size (so rotation is fine); screenshots JPEG, the phone's half-scale at quality 30 (Jev rejects WebP; 30 locates as well as 80), the PC's about 1600 wide at 60 (desktop text is small). Offline (503): waits up to 60 s, then resends; a PC it knows the network card of is woken by the phone (Wake-on-LAN) and waited for 150 s. Lost mid-command (502): resends only read-only commands. Each hello is kept in the store. |
 
 The pilot never handles coordinates: it describes what to tap, vision finds the box, the centre gets tapped.
 
@@ -84,7 +90,7 @@ The pilot never handles coordinates: it describes what to tap, vision finds the 
 | `ARCHANGEL_VISION_MODEL` | `typesafe/jev-1.14`; any other OpenRouter vision model uses `ModelVision` |
 | `ARCHANGEL_FALLBACK_VISION_MODEL` | `openai/gpt-6-luna` (when vision misses, and the investigator). Must see images. |
 | `ARCHANGEL_RELAY_URL` | `http://localhost:8080` |
-| `ARCHANGEL_DEVICE` | unset: the one phone connected to the relay. Set it only to choose between several. |
+| `ARCHANGEL_DEVICE` | unset: the one phone and the one PC connected to the relay. Set it (names, comma-separated) only to choose between several. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER`, `ARCHANGEL_PHONE` | unset: no sms or calls. Set: texts and calls with the owner's mobile (`ARCHANGEL_PHONE`, `+44…`) via Archangel's number. Deployed only: Twilio needs the public URL (`RAILWAY_PUBLIC_DOMAIN`, or `ARCHANGEL_PUBLIC_URL`). |
 | Connectors | Not env: entered on the panel's Connectors page and kept in the store. Google needs a Google Cloud OAuth client (web application; Gmail and Calendar APIs on; redirect URI `<site>/connectors/callback`; published, or testing sign-ins expire in 7 days). Slack needs an internal Slack app with the same redirect URL. |
 | `TAVILY_API_KEY` | unset: no quick web search (deep research still works). Free tier: 1,000 searches a month. |
@@ -100,7 +106,7 @@ Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. The context t
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.
 New channel = one `Channel` subclass registered in `__main__.py`; the orchestrator only sees its name ("via telegram") and can route to it. Images in replies (approval screenshots) must be shown by the channel; the CLI saves them to a temp file and prints the path.
 
-## Bridge
+## Android bridge
 
 Flat package `tech.arrakis.archangel.bridge`.
 
@@ -110,6 +116,7 @@ Flat package `tech.arrakis.archangel.bridge`.
 | `Connection` | OkHttp WebSocket. 15 s pings, 1–30 s jittered backoff, early retry on network return. `Connection.status`. |
 | `CommandExecutor` | Decode, run serially, never throw. Replays replies for repeated ids (last 64). |
 | `Device` / `AndroidDevice` | Phone capabilities behind an interface; executor tests run on the JVM. |
+| `WakeOnLan` | `wake`: a magic packet broadcast on the phone's network, waking the PC. |
 | `MockLocation` | `location`: test providers for GPS, network and fused, resent every second; removed on `location` without coordinates or when the service stops. Needs the bridge chosen as the mock location app (a button on its screen opens Developer options). |
 | `Protocol` | Wire types. |
 | `Config` / `ConfigStore` | Dev and Prod relays (URL and token each), which is on, and the device name. One SharedPreferences value; a tap switches. |
@@ -118,6 +125,14 @@ Flat package `tech.arrakis.archangel.bridge`.
 The service declares itself an accessibility tool (`isAccessibilityTool`): otherwise Android hides "data sensitive" windows like permission prompts from it and silently drops its taps there.
 
 minSdk 30, targetSdk 36, compileSdk 37, JDK 17. Versions in `gradle/libs.versions.toml`. Release builds: `wss://` only, no baked-in URL or token.
+
+## Windows bridge
+
+`apps/bridge-windows/`, package `bridge`, the Android bridge's shape in Python: `protocol.py`, `executor.py` (serial, never raises, replays the last 64 ids), `device.py`/`windows.py` (the PC behind an interface; tests use a fake), `connection.py` (15 s pings, 1–30 s jittered backoff), `config.py` (Dev and Prod relays, name, PIN; one JSON file in `C:\ProgramData\Archangel`, readable only by administrators and SYSTEM, the PIN DPAPI-encrypted for the machine). Windows-only: `win32.py` (GDI capture, `SendInput`, the input desktop, processes as the signed-in user), `uia.py` (UI Automation tree), `service.py`, `settings.py` (tkinter window; Save installs and starts the service).
+
+The lock screen and administrator prompts are the `Winlogon` desktop, which only SYSTEM can open, and a service (session 0) has no screen. So the service starts the bridge as SYSTEM in the console session and keeps it there (restarted when the session changes or it exits); before each command its input thread moves onto whichever desktop has input. Apps it opens and the Start menu it lists are the signed-in user's (`WTSQueryUserToken`). `unlock` types the PIN as keys, Enter only if still locked (never into an unlocked desktop).
+
+PyInstaller folder build (`--onedir`): a one-file exe runs the app as a child process, which a service can't be. CI (`.github/workflows/bridge-windows.yml`, on a Windows runner) runs every test on its real desktop, builds, runs the exe against the relay in the foreground and as the service, and publishes `archangel-bridge.zip` to the `bridge-windows` release from `main`.
 
 ## Relay
 
@@ -147,6 +162,7 @@ Railway project `archangel`, two services, both deployed from `main` on push. Se
 - **GitHub OAuth App** (github.com/settings/developers): homepage `https://<agent-domain>`, callback `https://<agent-domain>/auth/callback`.
 - No terminal there: the panel, sms and voice are the channels. `logs/` doesn't survive a deploy; Railway's log view has the console lines.
 - **Bridge:** `just bridge-install`. Later: signed APK from CI via GitHub Releases.
+- **Windows bridge:** the zip from the `bridge-windows` release; its window takes the prod relay URL and token.
 
 ## Limits
 
@@ -161,4 +177,5 @@ Railway project `archangel`, two services, both deployed from `main` on push. Se
 - The control panel's buttons are messages to the orchestrator, so approving from it costs one model call.
 - A waiting task doesn't hold the phone; if another task runs meanwhile, the approved tap re-locates its target on whatever screen is there.
 - Android rate-limits screenshots; the bridge retries briefly.
+- The PC: its primary display only. Someone using it while a task runs shares the mouse and keyboard with the pilot. Typing goes as characters, so an app that only reads keys (some games, remote desktops) misses it. A window running as administrator can't be clicked without the service. A UAC prompt for a standard account (a password) isn't handled. Ctrl+Alt+Del can't be sent, so a PC that demands it to sign in can't be unlocked. Waking needs Wake-on-LAN set up and, usually, a wired connection; the phone must be on the same network.
 - A faked location can be seen through (apps reading Wi-Fi or cell location, or checking for mock locations), and Uber or banking apps may flag it: the pilot types an address wherever an app takes one.

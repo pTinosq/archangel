@@ -12,6 +12,8 @@ interface Device {
     fun apps(): Apps
     /** Fake GPS at [lat], [lon]; both null: where the phone really is. */
     fun location(lat: Double?, lon: Double?)
+    /** Broadcast a Wake-on-LAN packet for the network card [mac] (6 bytes). */
+    suspend fun wake(mac: ByteArray)
 }
 
 /** An expected failure, reported to the caller with [code] (see [ErrorCode]). */

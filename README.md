@@ -1,6 +1,6 @@
 # Archangel
 
-An AI agent that operates a real Android phone over the network. Roadmap: [docs/roadmap.md](docs/roadmap.md).
+An AI agent that operates a real Android phone, and a Windows PC, over the network. Roadmap: [docs/roadmap.md](docs/roadmap.md).
 
 ## Setup
 
@@ -19,7 +19,7 @@ just agent
 › what's my battery level?      # uses the phone; needs the relay and bridge running
 ```
 
-It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask. Phone work runs as background tasks, so you can keep talking, ask for status, or say stop. Questions the web can answer don't touch the phone: quick ones are a web search (Tavily, with `TAVILY_API_KEY`), and "look into…" is research (Perplexity Pro Search, a minute or two and a few pence; deep research, ~70p, only after you agree to the cost) that runs beside phone tasks; a reporter agent (Claude) writes it up as a short web page, and you get its link and a tldr. Reports are private (you, signed in) until you make one public to share it: ask Archangel, or flip it on the task's page. Your email, calendar, Notion and Slack (several accounts each, in profiles like work and personal), once connected, are reached directly (a helper agent, beside phone tasks) rather than through the phone. Before anything that sends, pays, logs in, deletes or changes a setting, it asks you, and prints a screenshot path; reply yes or no. History and tasks live in `apps/agent/data/` and survive restarts; screenshots are kept for 3 days. If Jev can't find something on screen, or a task feels stuck, a second model (GPT-6 Luna) takes a look. Archangel learns what lasts about you ("I hate morning flights", "Mum is Helen"), not one-offs: its context twin reads each conversation once it's gone quiet and tells you what it noted, and briefs each task with what bears on it ("Uber home": cheapest, 5 stars, no tip); "remember…" and "forget…" work too ([docs/twin.md](docs/twin.md)).
+It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask. Phone and PC work runs as background tasks (one at a time on each), so you can keep talking, ask for status, or say stop. Questions the web can answer don't touch the phone: quick ones are a web search (Tavily, with `TAVILY_API_KEY`), and "look into…" is research (Perplexity Pro Search, a minute or two and a few pence; deep research, ~70p, only after you agree to the cost) that runs beside phone tasks; a reporter agent (Claude) writes it up as a short web page, and you get its link and a tldr. Reports are private (you, signed in) until you make one public to share it: ask Archangel, or flip it on the task's page. Your email, calendar, Notion and Slack (several accounts each, in profiles like work and personal), once connected, are reached directly (a helper agent, beside phone tasks) rather than through the phone. Before anything that sends, pays, logs in, deletes or changes a setting, it asks you, and prints a screenshot path; reply yes or no. History and tasks live in `apps/agent/data/` and survive restarts; screenshots are kept for 3 days. If Jev can't find something on screen, or a task feels stuck, a second model (GPT-6 Luna) takes a look. Archangel learns what lasts about you ("I hate morning flights", "Mum is Helen"), not one-offs: its context twin reads each conversation once it's gone quiet and tells you what it noted, and briefs each task with what bears on it ("Uber home": cheapest, 5 stars, no tip); "remember…" and "forget…" work too ([docs/twin.md](docs/twin.md)).
 
 Other model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Settings: [CLAUDE.md](CLAUDE.md#agent).
 
@@ -53,6 +53,12 @@ Or `just send '{"type":"key","key":"home"}'`. Commands: [docs/protocol.md](docs/
 Without the cable: `just tunnel`, then set the app's URL to `wss://<ngrok-host>/ws/device`.
 
 The app keeps two relays, **Dev** (this laptop) and **Prod** (deployed); one tap switches between them.
+
+## Drive a Windows PC
+
+Download `archangel-bridge.zip` from the [Windows bridge release](https://github.com/pTinosq/archangel/releases/tag/bridge-windows), unzip it, run `archangel-bridge.exe`, and enter the relay's URL and token, a name, and the PC's PIN (so it can unlock the lock screen). **Save and start** installs it as a service, running from boot. Details, and waking a sleeping PC from the phone: [apps/bridge-windows/README.md](apps/bridge-windows/README.md).
+
+Then ask Archangel to do something "on my PC", or `just pc-send '{"type":"key","key":"win"}'` and `just pc-screenshot`. Same protocol as the phone, with a few commands of its own (mouse wheel, unlock).
 
 ## Deploy
 

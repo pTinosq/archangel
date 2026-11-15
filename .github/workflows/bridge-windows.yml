@@ -1,0 +1,60 @@
+name: Windows bridge
+
+on:
+  push:
+    paths: ["apps/bridge-windows/**", "apps/relay/**", ".github/workflows/bridge-windows.yml"]
+  pull_request:
+    paths: ["apps/bridge-windows/**", "apps/relay/**", ".github/workflows/bridge-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to publish the exe as a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/bridge-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - name: Tests, on this runner's real desktop
+        run: uv run pytest -q
+        env:
+          ARTIFACTS: artifacts
+      - name: Build the exe
+        id: build
+        run: >
+          uv run pyinstaller --onedir --windowed --disable-windowed-traceback --noconfirm --name archangel-bridge
+          --paths src --collect-all uiautomation --hidden-import win32timezone scripts/entry.py
+      - name: The exe against the relay, in the foreground and as the service
+        run: uv run python -u scripts/e2e.py dist/archangel-bridge/archangel-bridge.exe
+        timeout-minutes: 10
+        env:
+          E2E_LOCK: "1"  # a throwaway runner: it may change the account's password and lock the screen
+      - name: Zip it
+        if: always() && steps.build.outcome == 'success'
+        run: Compress-Archive -Path dist/archangel-bridge -DestinationPath dist/archangel-bridge.zip -Force
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots  # what the runner's screen looked like to the bridge
+          path: apps/bridge-windows/artifacts/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-bridge
+          path: apps/bridge-windows/dist/archangel-bridge.zip
+      - name: Publish (the latest build from main)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="The latest Windows bridge, built from ${GITHUB_SHA::7}. Download archangel-bridge.zip, unzip it and run archangel-bridge.exe; see apps/bridge-windows/README.md."
+          gh release view bridge-windows >/dev/null 2>&1 || gh release create bridge-windows --title "Windows bridge" --notes "$notes" --prerelease
+          gh release edit bridge-windows --notes "$notes"
+          gh release upload bridge-windows dist/archangel-bridge.zip --clobber

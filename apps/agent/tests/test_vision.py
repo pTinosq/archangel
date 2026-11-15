@@ -3,7 +3,7 @@ import asyncio
 import httpx
 
 from agent.messages import Image
-from agent.phone.vision import Box, FallbackVision
+from agent.devices.vision import Box, FallbackVision
 
 SCREEN = Image(b"jpg", "image/jpeg")
 BOX = Box(0.1, 0.1, 0.2, 0.2)

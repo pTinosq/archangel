@@ -26,9 +26,9 @@ def relay_url() -> str:
     return os.environ.get("ARCHANGEL_RELAY_URL", DEFAULT_RELAY_URL)
 
 
-def device() -> str | None:
-    """None: whichever phone is connected, if only one is."""
-    return os.environ.get("ARCHANGEL_DEVICE") or None
+def devices() -> list[str]:
+    """Device names to choose between when several of a kind (phones, PCs) are connected; comma-separated."""
+    return [name.strip() for name in os.environ.get("ARCHANGEL_DEVICE", "").split(",") if name.strip()]
 
 
 def github() -> GitHub | None:

@@ -72,8 +72,27 @@ class FakeReporter:
         return Report(tldr=f"{topic}: the gist.", title=topic, pages=[f"<p>{material}</p>"])
 
 
-async def apps() -> dict[str, str]:
-    return {"WhatsApp": "com.whatsapp", "Michelin Guide": "com.michelin"}
+class FakeDevice:
+    """A device as the orchestrator sees it: its apps, and whether it's there."""
+
+    def __init__(self, label: str, apps: dict[str, str], state: str | None = "online"):
+        self.label = label
+        self._apps = apps
+        self._state = state
+
+    async def apps(self) -> dict[str, str]:
+        return self._apps
+
+    async def state(self) -> str | None:
+        return self._state
+
+
+def devices(pc: str | None = None) -> dict[str, FakeDevice]:
+    """The phone, online, and a PC in state `pc` (None: there's never been one)."""
+    return {
+        "phone": FakeDevice("phone", {"WhatsApp": "com.whatsapp", "Michelin Guide": "com.michelin"}),
+        "pc": FakeDevice("PC", {"Excel": "Microsoft.Office.EXCEL.EXE.15"}, pc),
+    }
 
 
 class FakeHelper(FakePilot):

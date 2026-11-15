@@ -1,9 +1,10 @@
-"""Tasks running in the background, so the conversation carries on while they work: on the phone, researching, or in
-the owner's online services (connectors).
+"""Tasks running in the background, so the conversation carries on while they work: on a device (the phone, the PC),
+researching, or in the owner's online services (connectors).
 
-One phone, so one phone task drives it at a time; the rest queue. Research and connectors don't touch the phone, so
-run beside; the reporter writes research up as a page. Every change is saved, each step a task reports is recorded
-for watching live, and the orchestrator hears about each task that finishes, fails or needs the owner.
+One task drives each device at a time; the rest queue for it. Devices work side by side, and research and connectors
+touch none, so run beside them; the reporter writes research up as a page. Every change is saved, each step a task
+reports is recorded for watching live, and the orchestrator hears about each task that finishes, fails or needs the
+owner.
 """
 
 import asyncio
@@ -16,7 +17,7 @@ from agent import activity
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
 from agent.helper import Helper
-from agent.phone.pilot import Pilot
+from agent.devices.pilot import Pilot
 from agent.reports import Reporter
 from agent.research import Researcher
 from agent.runs import Answer, Outcome, Record
@@ -38,26 +39,27 @@ class Tasks:
     def __init__(
         self,
         store: Store,
-        pilot: Pilot,
+        pilots: dict[Kind, Pilot],
         researcher: Researcher,
         reporter: Reporter,
         helper: Helper,
         site: str = "",
         brief: Callable[[str], Awaitable[str]] | None = None,
     ):
-        """`site`: where Archangel's web server (and the panel) is, for links to reports. `brief`: what the agent
-        doing a goal should know about the owner (the context twin), told it as it starts."""
+        """`pilots`: one per device, by the kind of task it does ("phone", "pc"). `site`: where Archangel's web server
+        (and the panel) is, for links to reports. `brief`: what the agent doing a goal should know about the owner
+        (the context twin), told it as it starts."""
         self._brief = brief
         self._site = site
         self._reporter = reporter
         self._store = store
-        self._pilot = pilot
+        self._pilots = pilots
         self._researcher = researcher
         self._helper = helper
-        self._phone = asyncio.Lock()
+        self._devices = {kind: asyncio.Lock() for kind in pilots}  # one task on each at a time
         self._running: dict[int, asyncio.Task] = {}  # by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
-        self._said: dict[int, list[str]] = {}  # all the owner has said to an open phone task (not kept over restarts)
+        self._said: dict[int, list[str]] = {}  # all the owner has said to an open device task (not kept over restarts)
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
@@ -114,7 +116,7 @@ class Tasks:
 
     def _launch(self, task: Task, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None):
         activity.hop("tasks", "task", f"#{task.id} {'continue' if paused else 'start'}: {task.goal}")
-        if task.kind == "phone":
+        if task.kind in self._pilots:
             self._inboxes[task.id] = []
         self._running[task.id] = asyncio.create_task(
             self._run(task, paused, answer), context=activity.in_task(task.id, "tasks")
@@ -128,14 +130,14 @@ class Tasks:
                 with activity.call("helper", "agent", task.goal) as reply:
                     outcome = await self._helper.run(goal, self._recorder(task), paused, answer)
                     reply(f"{outcome.status}: {outcome.report}")
-            elif task.kind != "phone":
+            elif task.kind not in self._pilots:
                 outcome = await self._research(task)
             else:
-                goal = await self._briefed(task, paused)  # while it waits for the phone
-                async with self._phone:
+                goal = await self._briefed(task, paused)  # while it waits for the device
+                async with self._devices[task.kind]:
                     self._started(task)
-                    with activity.call("pilot", "agent", task.goal) as reply:
-                        outcome = await self._pilot.run(
+                    with activity.call(f"{task.kind} pilot", "agent", task.goal) as reply:
+                        outcome = await self._pilots[task.kind].run(
                             goal,
                             self._recorder(task),
                             paused,

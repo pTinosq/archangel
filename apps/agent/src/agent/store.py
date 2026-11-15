@@ -1,6 +1,6 @@
 """Everything that must survive a restart: the one conversation with the owner, the transcript across channels,
-every task and its steps, edited prompts, connectors with their sign-ins, and where the owner last was. SQLite, one
-file in data/.
+every task and its steps, edited prompts, connectors with their sign-ins, where the owner last was, and each device's
+latest hello. SQLite, one file in data/.
 
 The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
 Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT:
@@ -29,7 +29,7 @@ DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
 
-Kind = Literal["phone", "research", "deep research", "connectors"]
+Kind = Literal["phone", "pc", "research", "deep research", "connectors"]
 
 
 class Status(StrEnum):
@@ -63,8 +63,8 @@ class Task:
     run: pydantic_ai.Conversation | None = None
     """The sub-agent's history, kept so a paused task resumes where it stopped."""
     kind: Kind = "phone"
-    """Phone tasks take turns on the phone; the rest run beside them: research (deep or not) on the web, and
-    connectors in the owner's online services."""
+    """Phone and PC tasks take turns on their device; the rest run beside them: research (deep or not) on the web,
+    and connectors in the owner's online services."""
     public: bool = False
     """Its report opens for anyone with the link; otherwise only for the owner, signed in."""
 
@@ -132,6 +132,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS location (
                 id INTEGER PRIMARY KEY CHECK (id = 1), lat REAL, lon REAL, accuracy REAL, address TEXT, time REAL
             );
+            CREATE TABLE IF NOT EXISTS devices (name TEXT PRIMARY KEY, platform TEXT, hello TEXT, time REAL);
             """
         )
         columns = {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}
@@ -311,6 +312,23 @@ class Store:
                 "INSERT OR REPLACE INTO location VALUES (1, ?, ?, ?, ?, ?)",
                 (location.lat, location.lon, location.accuracy, location.address, location.time),
             )
+
+    # Devices
+
+    def save_device(self, hello: dict) -> None:
+        """A device's latest hello, for while it's offline: a sleeping PC is woken by the card it named."""
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO devices VALUES (?, ?, ?, ?)",
+                (hello["device"], hello.get("platform", "android"), json.dumps(hello), time.time()),
+            )
+
+    def last_device(self, platform: str) -> dict | None:
+        """The hello of the device of `platform` seen most recently."""
+        row = self._db.execute(
+            "SELECT hello FROM devices WHERE platform = ? ORDER BY time DESC LIMIT 1", (platform,)
+        ).fetchone()
+        return json.loads(row[0]) if row else None
 
 
 _TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public"

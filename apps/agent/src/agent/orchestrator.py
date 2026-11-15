@@ -1,6 +1,6 @@
-"""The agent the owner talks to. It manages work rather than doing it: starts phone tasks, research and tasks in the
-owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to do when they
-fail, and keeps the owner informed on whichever channel suits.
+"""The agent the owner talks to. It manages work rather than doing it: starts tasks on the phone or PC, research and
+tasks in the owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to
+do when they fail, and keeps the owner informed on whichever channel suits.
 
 One conversation whatever the channel. Events (owner messages, task updates, notices) are handled one at a time, in
 order.
@@ -9,8 +9,9 @@ order.
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import ProcessHistory
@@ -23,7 +24,7 @@ from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
-from agent.phone.relay import PhoneError
+from agent.devices.relay import Device, DeviceError
 from agent.research import Researcher
 from agent.runs import Answer
 from agent.store import Kind, Status, Store
@@ -46,7 +47,7 @@ class Orchestrator:
         gateway: Gateway,
         researcher: Researcher,
         connectors: Connectors,
-        apps: Callable[[], Awaitable[dict[str, str]]],
+        devices: Mapping[str, Device],
         whereabouts: Whereabouts,
         instructions: Instructions = INSTRUCTIONS,
         twin: Twin | None = None,
@@ -55,6 +56,7 @@ class Orchestrator:
         self._tasks = tasks
         self._gateway = gateway
         self._connectors = connectors
+        self._devices = devices  # by the kind of task done on each: "phone", "pc"
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
         self._ends = False  # the reply being written is the last word on a call
@@ -71,21 +73,26 @@ class Orchestrator:
         self._twin = twin
 
         @self._agent.tool
-        async def start_task(ctx: RunContext[Event], goal: str, report_via: str | None = None) -> str:
-            """Start a phone task in the background; you'll get an update when it finishes or needs the owner.
+        async def start_task(
+            ctx: RunContext[Event], goal: str, report_via: str | None = None, on: Literal["phone", "pc"] = "phone"
+        ) -> str:
+            """Start a task on a device in the background, `on` the phone or the PC; you'll get an update when it
+            finishes or needs the owner.
 
             Describe the whole goal and what to find out, e.g. "Open WhatsApp and read the latest message from Alex".
             Updates come back where you're talking now. Set `report_via` only if the owner asked for the results
             elsewhere: "voice" rings them, even if they're on a call now.
             """
-            return start(ctx, goal, report_via, "phone")
+            if await devices[on].state() is None:
+                return f"There's no {devices[on].label}: none has ever connected."
+            return start(ctx, goal, report_via, on)
 
         @self._agent.tool
         async def research(
             ctx: RunContext[Event], question: str, deep: bool = False, report_via: str | None = None
         ) -> str:
-            """Start research on the web in the background; a report (a link and a tldr) comes back. Not on the phone,
-            so it runs beside phone tasks. `report_via` as for start_task.
+            """Start research on the web in the background; a report (a link and a tldr) comes back. Not on a device,
+            so it runs beside device tasks. `report_via` as for start_task.
 
             Normally a minute or two and a few pence: many sources, good rather than exhaustive. `deep`: exhaustive,
             ~5 minutes and ~70p. Offer it with its cost when they want it thorough; set it only once they've agreed.
@@ -97,7 +104,7 @@ class Orchestrator:
         @self._agent.tool
         async def use_connectors(ctx: RunContext[Event], goal: str, report_via: str | None = None) -> str:
             """Start a task in the owner's connected services (listed above) in the background, e.g. "Summarise
-            today's unread emails". Quicker and surer than the phone, and runs beside it. `report_via` as for
+            today's unread emails". Quicker and surer than a device, and runs beside them. `report_via` as for
             start_task."""
             return start(ctx, goal, report_via, "connectors")
 
@@ -129,12 +136,12 @@ class Orchestrator:
                 return f"Couldn't read it: {error}"
 
         @self._agent.tool_plain
-        async def phone_apps() -> str:
-            """The apps installed on the phone."""
+        async def installed_apps(on: Literal["phone", "pc"] = "phone") -> str:
+            """The apps installed on the phone, or the PC."""
             try:
-                return ", ".join(await apps())
-            except PhoneError as error:
-                return f"Couldn't ask the phone: {error}"
+                return ", ".join(await devices[on].apps())
+            except DeviceError as error:
+                return f"Couldn't ask the {devices[on].label}: {error}"
 
         @self._agent.tool
         async def owner_location(ctx: RunContext[Event]) -> str:
@@ -225,7 +232,7 @@ class Orchestrator:
             with activity.acting("orchestrator"):
                 # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
                 # it had been there all along, and the model apologises for starting a duplicate.
-                self._arrived_to = self._situation()
+                self._arrived_to = await self._situation()
                 if event.from_owner and self._twin:  # what they say is answered knowing them, not just their top page
                     said = " ".join(part.text for part in event.prompt() if isinstance(part, Text))
                     if found := await self._twin.hear(said):
@@ -243,7 +250,7 @@ class Orchestrator:
                     parts = (Text(event.fallback(error)),)
                 await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends))
 
-    def _situation(self) -> str:
+    async def _situation(self) -> str:
         tasks = self._tasks.list()[::-1]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [
@@ -261,6 +268,7 @@ class Orchestrator:
         return "\n".join(
             [
                 *about,
+                f"Devices: {await self._describe_devices()}.",
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
                 "Connected services, by profile: "
                 + (self._connectors.describe() or "none (added on the panel, under Connectors)")
@@ -271,6 +279,13 @@ class Orchestrator:
                 *lines,
             ]
         )
+
+    async def _describe_devices(self) -> str:
+        """Each device that has ever connected, and whether it's online now."""
+        states = await asyncio.gather(*(device.state() for device in self._devices.values()))
+        devices = zip(self._devices.values(), states, strict=True)
+        found = [f"{device.label} ({state})" for device, state in devices if state]
+        return "; ".join(found) or "none connected yet"
 
 
 def _ago(then: float) -> str:

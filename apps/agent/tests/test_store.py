@@ -80,3 +80,12 @@ def test_images_expire(store):
 
 def test_image_names_cant_escape_the_folder(store):
     assert store.image("../archangel.db") is None
+
+
+def test_each_platform_s_latest_device_is_remembered(store):
+    assert store.last_device("windows") is None
+    store.save_device({"device": "pixel-6", "screen": {}})  # no platform: a phone
+    store.save_device({"device": "desk", "platform": "windows", "wake": {"mac": "a8:a1:59:12:34:56"}})
+    store.save_device({"device": "desk", "platform": "windows", "wake": {"mac": "a8:a1:59:00:00:01"}})
+    assert store.last_device("windows")["wake"]["mac"] == "a8:a1:59:00:00:01"
+    assert store.last_device("android")["device"] == "pixel-6"

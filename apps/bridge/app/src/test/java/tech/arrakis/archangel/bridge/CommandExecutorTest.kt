@@ -97,6 +97,35 @@ class CommandExecutorTest {
     }
 }
 
+class WakeTest {
+    private val device = FakeDevice()
+    private val executor = CommandExecutor(device)
+
+    @Test
+    fun `wake parses the address`() = runTest {
+        assertEquals(Reply("1", ok = true), executor.execute("""{"id":"1","type":"wake","mac":"A8-a1-59-12-34-56"}"""))
+        assertEquals(listOf("wake a8:a1:59:12:34:56"), device.calls)
+    }
+
+    @Test
+    fun `wake rejects a bad address`() = runTest {
+        for ((i, mac) in listOf("a8:a1:59:12:34", "a8:a1:59:12:34:zz", "").withIndex()) {
+            val reply = executor.execute("""{"id":"$i","type":"wake","mac":"$mac"}""")
+            assertEquals("invalid_command", reply.error?.code)
+        }
+        assertTrue(device.calls.isEmpty())
+    }
+
+    @Test
+    fun `the magic packet is six 0xFF then the address sixteen times`() {
+        val mac = parseMac("01:02:03:04:05:06")
+        val packet = magicPacket(mac)
+        assertEquals(102, packet.size)
+        assertTrue(packet.take(6).all { it == 0xFF.toByte() })
+        for (i in 0 until 16) assertEquals(mac.toList(), packet.drop(6 + i * 6).take(6))
+    }
+}
+
 private class FakeDevice : Device {
     val calls = mutableListOf<String>()
 
@@ -123,5 +152,9 @@ private class FakeDevice : Device {
 
     override fun location(lat: Double?, lon: Double?) {
         calls += "location $lat,$lon"
+    }
+
+    override suspend fun wake(mac: ByteArray) {
+        calls += "wake " + mac.joinToString(":") { "%02x".format(it) }
     }
 }
