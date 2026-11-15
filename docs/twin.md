@@ -45,4 +45,5 @@ A Context twin tab (`/twin`): the graph in React Flow, laid out by d3-force (hub
 2. ✅ Writer: quiet conversations, remember / forget, a "Noted: …" line to the owner.
 3. ✅ The Context twin tab, editable by hand.
 4. ✅ Reader: briefings before phone and connectors tasks, `ask_twin` for the orchestrator, pilot and helper, the root in the orchestrator's prompt, nodes lit as they're read.
-5. Next: try it live; nightly tidying (merges, tendencies, fading), skills, search as an entry point.
+5. ✅ Tried live; M12 done (2026-11-15).
+6. Later ("Twin upkeep" in the roadmap): nightly tidying (merges, tendencies, fading), skills, search as an entry point.

@@ -16,7 +16,7 @@ Each milestone ships something usable and proves one idea.
 | M9 ✅ | Research | "do deep research into the best funds in 2026": a cited report a minute or two later | research beside phone tasks, not on the phone; the orchestrator picks web or app |
 | M10 ✅ | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
-| M12 | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
+| M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
@@ -25,6 +25,7 @@ Each milestone ships something usable and proves one idea.
 | M17a | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (tray app) speaks the phone's protocol; Jev finds things on desktop screens |
 | M17b | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
 | M17c | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
+| Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
 ## M9 requirements (research) (from the owner)
@@ -170,6 +171,7 @@ The owner also tests across channels and reports changes.
 - **Also skills.** The same store can hold how-tos for tasks, e.g. how to book in a specific app.
 - **Design (2026-10-24):** `docs/twin.md`. Not a table of memories but a graph of pages with previewed links, walked by a reader and grown by a writer that usually keeps nothing; one-offs stay out. Visible as a Twin tab in the panel.
 - **Progress (2026-10-24):** graph, writer, reader and the Context twin tab built and deployed; the owner's graph seeded from a questionnaire (kept out of the repo). Still to see live: a briefing changing what a task does; the writer's "Noted".
+- **Done (2026-11-15).** The owner judged it good in use. Tidying, skills and search moved to "Twin upkeep" (Later).
 
 Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
 ## M14 requirements (self-improvement) (from the owner)
