@@ -154,6 +154,7 @@ PyInstaller folder build (`--onedir`): a one-file exe runs the app as a child pr
 - Comments say *why*, not *what*.
 - Caller-facing errors use codes from `docs/protocol.md`. The bridge must never crash: Android disables crashing accessibility services.
 - Update README.md, this file and `docs/` in the same commit as the change. Short, direct.
+- **This repo is public. Nothing about the owner's real life goes in it, anywhere:** code, tests, evals, fixtures, docs, roadmap, commit messages, PRs. No real names (friends, family, the owner's), places, devices, accounts, groups, purchases, numbers or anything else from conversations, the twin or prod. Make it up (Sam, Priya, Tom; Ofcom's `+447700900xxx` numbers), even when quoting something the owner said. Check the diff for it before every commit.
 
 ## Deploy
 
