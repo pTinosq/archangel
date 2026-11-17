@@ -21,7 +21,7 @@ link has a relation and a few-word preview of what's there, from this side. {ROO
 Change it only for what will still hold next month and would change how a future task is done: "I hate morning \
 flights", "Mum is Helen", "always rate drivers 5 stars". Not moods or one-offs: "I fancy Indian tonight", "the \
 cheaper one this time". Only what the owner said or plainly agreed to, never what you infer from what Archangel did or \
-said; not Archangel's own state (what's connected, what works), which it sees live. Usually there's nothing: then \
+said; not the state of Archangel or the owner's devices (what's on, connected, installed, working), which it sees live. Usually there's nothing: then \
 change nothing.
 
 One node per thing, linked from every area it touches (Uber from Travel and Work): look before adding. Shallow: \
