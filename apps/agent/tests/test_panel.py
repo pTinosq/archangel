@@ -15,6 +15,7 @@ from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
 from agent.store import Store
 from agent.tasks import Tasks
+from agent.threads.store import ThreadStore
 from agent.twin.graph import ROOT, Graph
 from agent.web import Web
 
@@ -25,7 +26,8 @@ class Panel:
         self.prompts = Prompts(store)
         self.web = Web(github, address=address)
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
-        self.channel = PanelChannel(store, self.prompts, self.connectors, Graph(store.db), self.web)
+        self.threads = ThreadStore(store.db)
+        self.channel = PanelChannel(store, self.prompts, self.connectors, Graph(store.db), self.threads, self.web)
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -132,7 +134,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None, None, None, Web()))
+        events = panel._events(PanelChannel(None, None, None, None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line
@@ -268,3 +270,21 @@ def test_the_twins_evals_are_shown_locally_only(store, tmp_path, monkeypatch):
 
     public = Panel(store, GitHub("id", "secret", "owner"))
     assert public.call("GET", "/api/evals").status_code != 200
+
+
+def test_threads_with_what_was_said_in_them_and_their_tasks(store):
+    panel = Panel(store)
+    flights, other = panel.threads.new("Flights to India"), panel.threads.new("Other")
+    store.add_line(Message(Address("sms", "+44"), (Text("flights to Delhi?"),), thread=flights.id), "owner")
+    store.add_line(Message(Address("sms", "+44"), (Text("elsewhere"),), thread=other.id), "owner")
+    store.add_task("Find flights to Delhi", Address("sms", "+44"), "research", thread=flights.id)
+
+    listed = panel.call("GET", "/api/threads").json()
+    assert [(t["id"], t["title"], t["open"]) for t in listed] == [
+        (other.id, "Other", True),
+        (flights.id, "Flights to India", True),
+    ]
+    one = panel.call("GET", f"/api/threads/{flights.id}").json()
+    assert [line["text"] for line in one["lines"]] == ["flights to Delhi?"]
+    assert [(task["goal"], task["thread"]) for task in one["tasks"]] == [("Find flights to Delhi", flights.id)]
+    assert panel.call("GET", "/api/threads/99").status_code == 404
