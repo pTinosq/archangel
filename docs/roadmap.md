@@ -18,14 +18,14 @@ Each milestone ships something usable and proves one idea.
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 ✅ | Autonomy | "in 15 minutes get me an Uber home", "every weekday at 7 call me with the weather"; see and cancel them on the panel | time as a trigger: scheduled and repeating work wakes the orchestrator in the thread it was asked in; rows and a sleeping loop, no Temporal |
-| M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
+| M14 ✅ | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | M17 ✅ | Windows PC | "do X on my PC" from anywhere, the PC unattended at home, even locked | a second device behind the same relay and pilot; Windows' lock screen and UAC passed without the model seeing a password |
 | M17a ✅ | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (a service with a settings window) speaks the same protocol; Jev finds things on desktop screens |
 | M17b ✅ | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
 | M17c ✅ | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
-| M18 | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
+| M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -202,6 +202,7 @@ The owner also tests across channels and reports changes.
 - **Only the owner.** `improve` and `merge` refuse anything not from the owner's own message (a web page, an email, a task's update), in code. Merging to `main` deploys, so the owner always says when.
 - **Public.** The request, the run and the PR are public: the orchestrator words the request with nothing personal, and the coding agent follows `CLAUDE.md`. So no prod logs or twin go to it yet: investigating is from the code only.
 - **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
+- **Healing is still open.** Described, not built: a recurring failure becoming an issue with a proposed diagnosis. What's built is the owner asking for a change or an investigation; nothing yet watches for failures on its own.
 
 ## M15 requirements (intelligent tools) (from the owner)
 
