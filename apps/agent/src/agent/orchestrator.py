@@ -236,7 +236,10 @@ class Orchestrator:
                 if event.from_owner and self._twin:  # what they say is answered knowing them, not just their top page
                     said = " ".join(part.text for part in event.prompt() if isinstance(part, Text))
                     if found := await self._twin.hear(said):
-                        self._arrived_to += f"\n\nFrom the context twin, on what the owner just said:\n{found}"
+                        self._arrived_to += (
+                            "\n\nFrom the context twin (what's known about the owner, not what you can do), on what "
+                            f"the owner just said:\n{found}"
+                        )
                 self._ends = False
                 try:
                     messages = self._store.history()

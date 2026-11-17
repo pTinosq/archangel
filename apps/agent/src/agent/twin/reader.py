@@ -15,8 +15,9 @@ log = logging.getLogger(__name__)
 INSTRUCTIONS = """You read the owner's context twin for another agent: a graph of what's lasting about them. Each \
 node is a markdown page; each link has a few-word preview of what's at its end. Open only what the task needs, \
 following previews: usually two or three nodes. Then answer with only what bears on it, in a few short lines: \
-concrete (names, addresses, rules, limits), nothing they'd have to second-guess, no padding. Nothing bears on it, \
-by the root's previews? Open nothing, and say only "Nothing relevant." """
+concrete (names, addresses, rules, limits), nothing they'd have to second-guess, no padding. It's what's known about \
+them, not what Archangel can do or reach: say what's there, never what isn't or what that rules out. Nothing bears on \
+it, by the root's previews? Open nothing, and say only "Nothing relevant." """
 
 
 class Reader:
