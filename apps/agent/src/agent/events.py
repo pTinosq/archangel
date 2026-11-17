@@ -1,11 +1,13 @@
 """Everything that wakes the orchestrator. Each kind says what the model sees, where the answer goes by default,
-and whether it carries the owner's authority. New triggers (a schedule, an incoming call) are new kinds here.
+and whether it carries the owner's authority. New triggers (an incoming call) are new kinds here.
 """
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from agent.messages import Address, Image, Message, Part
+from agent.schedule import Job, local
 from agent.store import Task
 
 
@@ -18,6 +20,11 @@ class Event(ABC):
     @abstractmethod
     def prompt(self) -> list[Part | str]:
         """What the orchestrator model is shown."""
+
+    @property
+    def thread(self) -> int | None:
+        """The conversation thread it belongs in, if that's known already: where its task or schedule was asked for."""
+        return None
 
     def attachments(self) -> tuple[Part, ...]:
         """Sent to the owner along with the answer."""
@@ -56,6 +63,10 @@ class TaskUpdate(Event):
     def reply_to(self) -> Address:
         return self.task.report_to
 
+    @property
+    def thread(self) -> int | None:
+        return self.task.thread
+
     def prompt(self) -> list[Part | str]:
         task = self.task
         update = f"[Update on task #{task.id}, not from the owner; your reply goes via {task.report_to.channel}]"
@@ -84,3 +95,41 @@ class Notice(Event):
 
     def fallback(self, error: Exception) -> str:
         return ""  # nothing the owner needs from a notice the orchestrator couldn't think about
+
+
+LATE = 120
+"""Seconds past due after which it's said to be late (Archangel was down): it may no longer make sense."""
+
+
+@dataclass(frozen=True)
+class Scheduled(Event):
+    """Something the orchestrator scheduled, now due. Not the owner speaking now, though they asked for it."""
+
+    job: Job
+    from_owner = False
+
+    @property
+    def reply_to(self) -> Address:
+        return self.job.report_to
+
+    @property
+    def thread(self) -> int | None:
+        return self.job.thread
+
+    def prompt(self) -> list[Part | str]:
+        job, now = self.job, time.time()
+        asked = f'they said "{job.said}"' if job.said else "you scheduled it"
+        due = f"It's due now ({local(job.due)})"
+        if now - job.due > LATE:
+            due = (
+                f"It was due at {local(job.due)}, but Archangel was down: it's {local(now)}. Do it only if it still "
+                "makes sense; else tell them"
+            )
+        said = f"[Scheduled #{job.id}, not from the owner now: at {local(job.created)} {asked}. {due}."
+        return [f"{said} Your reply goes via {job.report_to.channel}.] Do it now: {job.what}"]
+
+    def fallback(self, error: Exception) -> str:
+        job = self.job
+        return (
+            f'Something went wrong on my side with what you asked for at {local(job.created)}: "{job.said or job.what}"'
+        )

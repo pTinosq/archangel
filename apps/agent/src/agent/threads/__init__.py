@@ -2,7 +2,7 @@
 orchestrator answers each message with its thread's history rather than the last of everything.
 
 `Threads.route(event)` says which thread an event belongs in: the router (a quick model) chooses for what the owner
-says; a task's update goes to the thread that started it; anything else to the latest. `history` and `save` keep each
+says; a task's update, or something scheduled, goes to the thread that asked for it; anything else to the latest. `history` and `save` keep each
 thread's history. A thread the owner wraps up ("thanks") closes and is summarised; so is one left quiet. A full one
 (its context past `FULL` tokens) is summarised and carried on in a new one, which starts from that summary.
 """
@@ -18,7 +18,7 @@ from pydantic_ai import ModelMessage, ModelResponse
 from pydantic_ai.toolsets import FunctionToolset
 
 from agent import activity
-from agent.events import Event, Notice, OwnerMessage, TaskUpdate
+from agent.events import Event, Notice, OwnerMessage, Scheduled, TaskUpdate
 from agent.threads.router import Router, search
 from agent.threads.store import Thread, ThreadStore
 from agent.threads.summariser import Summariser
@@ -143,7 +143,7 @@ class Threads:
             await asyncio.gather(*self._pending, return_exceptions=True)
 
     async def _route(self, event: Event) -> Route:
-        if isinstance(event, TaskUpdate) and event.task.thread and (thread := self._store.get(event.task.thread)):
+        if event.thread and (thread := self._store.get(event.thread)):
             return Route(self._current(thread))  # back where it was asked for, however the conversation has moved on
         if isinstance(event, OwnerMessage):
             return await self._choose(event)
@@ -229,6 +229,8 @@ def _title(event: Event) -> str:
             text = event.task.goal
         case Notice():
             text = event.text
+        case Scheduled():
+            text = event.job.said or event.job.what
         case _:
             text = ""
     return " ".join(text.split()[:6]) or "Untitled"

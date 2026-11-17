@@ -11,6 +11,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -20,14 +21,15 @@ from pydantic_ai.models import Model
 
 from agent import activity, history, logs
 from agent.connectors import Connectors
+from agent.devices.relay import Device, DeviceError
 from agent.events import Event, OwnerMessage
 from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
-from agent.devices.relay import Device, DeviceError
 from agent.research import Researcher
 from agent.runs import Answer
+from agent.schedule import TIMEZONE, Schedule, parse, when
 from agent.store import Kind, Status, Store
 from agent.tasks import Tasks
 from agent.threads import Threads
@@ -56,6 +58,7 @@ class Orchestrator:
         threads: Threads,
         instructions: Instructions = INSTRUCTIONS,
         twin: Twin | None = None,
+        schedule: Schedule | None = None,
     ):
         self._store = store
         self._tasks = tasks
@@ -78,6 +81,7 @@ class Orchestrator:
             toolsets=[threads.tools, *([twin.tools] if twin else [])],
         )
         self._twin = twin
+        self._schedule = schedule
 
         @self._agent.tool
         async def start_task(
@@ -196,6 +200,38 @@ class Orchestrator:
             """Stop a task."""
             return tasks.cancel(id)
 
+        if schedule:
+
+            @self._agent.tool
+            async def do_later(
+                ctx: RunContext[Event],
+                what: str,
+                at: str | None = None,
+                in_minutes: float | None = None,
+                report_via: str | None = None,
+            ) -> str:
+                """Do something later, when the owner asks: "in 15 minutes get me an Uber home", "at 20:30 text me to
+                call Sam", "tomorrow morning ring me with the weather". When: `at`, their local time ("2026-11-18
+                08:00"), or `in_minutes`. `what`: all you'll need then, as it'll read then ("today's weather", not
+                "tomorrow's"), e.g. "Start a phone task: book an Uber home"; you're woken with it, in this thread. Replies go where you're talking now; `report_via` as for
+                start_task ("voice" rings them)."""
+                report_to = ctx.deps.reply_to
+                if report_via and not (report_to := gateway.owner(report_via)):
+                    return no_channel(report_via)
+                now = time.time()
+                try:
+                    due = parse(at, in_minutes, now)
+                except ValueError as error:
+                    return str(error)
+                said = ctx.deps.message.text if isinstance(ctx.deps, OwnerMessage) else ""
+                job = schedule.add(due, what, said, report_to, self._thread.id)
+                return f"Scheduled #{job.id} for {when(due, now)}, via {report_to.channel}."
+
+            @self._agent.tool_plain
+            async def cancel_later(id: int) -> str:
+                """Cancel something scheduled."""
+                return f"Cancelled #{id}." if schedule.cancel(id) else f"Nothing scheduled as #{id}."
+
         @self._agent.tool_plain
         async def hang_up() -> str:
             """On a call, hang up once your reply is said: they've said bye, or asked you to."""
@@ -288,8 +324,10 @@ class Orchestrator:
                 "The top page of the owner's context twin; far more is behind its links. Ask the twin (ask_twin) "
                 f"before saying you don't know something about them:\n{self._twin.root()}"
             )
+        scheduled = self._schedule and self._schedule.describe()
         return "\n".join(
             [
+                f"Now: {datetime.now(TIMEZONE):%A %-d %B %Y, %H:%M}, the owner's time.",
                 *about,
                 self._threads.describe(thread),
                 f"Devices: {await self._describe_devices()}.",
@@ -301,6 +339,7 @@ class Orchestrator:
                 if lines
                 else "Tasks when this arrived: none.",
                 *lines,
+                *(["Scheduled (do_later):", scheduled] if scheduled else []),
             ]
         )
 

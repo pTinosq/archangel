@@ -174,7 +174,18 @@ The owner also tests across channels and reports changes.
 - **Progress (2026-10-24):** graph, writer, reader and the Context twin tab built and deployed; the owner's graph seeded from a questionnaire (kept out of the repo). Still to see live: a briefing changing what a task does; the writer's "Noted".
 - **Done (2026-11-15).** The owner judged it good in use. Tidying, skills and search moved to "Twin upkeep" (Later).
 
-Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent rather than replacing it.
+## M13 requirements (autonomy) (from the owner)
+
+- **Later, said naturally (2026-11-17).** "In 15 minutes get me an Uber home" (waits, then orders: Uber's own scheduled rides cost far more), "at 20:30 text me to do this", "tomorrow morning call me and tell me the weather" (it works out what tomorrow morning means).
+- **Then event-triggered:** "when my Uber arrives, text me" (phone notifications, allow-listed apps only).
+
+**Plan**
+- **No Temporal.** One owner's timers are rows in the store and one sleeping loop; Temporal is a server to run and pay for. Pydantic AI's Temporal support stays an option for durable runs if they ever need it.
+- **Stored absolute, shown both ways.** The orchestrator's `do_later` takes `at` (the owner's local time) or `in_minutes`; code does the arithmetic and shows "Wed 18 Nov 08:00, in 11 h". The orchestrator sees the time every turn, and what's scheduled.
+- **Woken, not replayed.** When due, a `Scheduled` event wakes the orchestrator with the owner's words and what it said it'd do, in the thread it was asked in; it then starts the task, texts or rings (`report_via voice`), as if asked now.
+- **Never twice.** Marked fired before it runs: a crash loses it rather than ordering two Ubers. Anything due while Archangel was down fires on start, saying how late; the orchestrator judges whether it still makes sense.
+- **Built (2026-11-17):** the scheduled half. Still to come: repeating ("every weekday at 7"), the panel showing what's scheduled, notification triggers.
+
 ## M14 requirements (self-improvement) (from the owner)
 
 - **Builds its own features.** Ask from any channel ("add a Telegram channel", "make the panel show costs"); a coding agent works on this repo the way Claude Code does locally, following `CLAUDE.md`.

@@ -27,16 +27,17 @@ from pydantic_ai import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from agent.events import Notice, OwnerMessage
+from agent.events import Notice, OwnerMessage, Scheduled
 from agent.gateway import Gateway
 from agent.links import Links
 from agent.location import Whereabouts
 from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
 from agent.runs import Outcome
-from agent.threads.router import Choice
+from agent.schedule import Schedule
 from agent.store import Location
 from agent.tasks import Tasks
+from agent.threads.router import Choice
 from agent.web import Web
 
 
@@ -67,6 +68,7 @@ class Owner:
             return respond(messages, info)
 
         gateway = Gateway([self.cli, self.email], store)
+        self.schedule = Schedule(store.db)
         self.orchestrator = Orchestrator(
             FunctionModel(recording),
             store,
@@ -77,6 +79,7 @@ class Owner:
             devices(pc),
             whereabouts or Whereabouts(store, Web(), None),
             self.threads,
+            schedule=self.schedule,
         )
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
@@ -546,3 +549,56 @@ def test_it_can_look_into_other_threads(store):
     owner.says(Text("flights to India?"))
     replies = owner.says(Text("how much were the flights?"))
     assert replies[-1].text.startswith('#1 "Flights to India" · just now: ')
+
+
+def test_later_is_scheduled_and_done_when_due_in_the_thread_it_was_asked_in(store):
+    def model(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Scheduled"):
+            return say("Booking your Uber now.")
+        if "uber" in prompt:
+            return call("do_later", what="Start a phone task: an Uber home", in_minutes=15, report_via="email")
+        return say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("Uber"), new("Chat")))
+    [reply] = owner.says(Text("in 15 minutes get me an uber home"))
+    assert reply.text.startswith("Scheduled #1 for ") and reply.text.endswith(", in 15 min, via email.")
+    [job] = owner.schedule.upcoming()
+    assert (job.said, job.report_to, job.thread) == ("in 15 minutes get me an uber home", owner.email.owner, 1)
+
+    owner.says(Text("hello"))
+    seen = owner.requests[-1][-1].instructions
+    assert "\nNow: " in seen and ", the owner's time." in seen
+    assert "Scheduled (do_later):\n#1 " in seen and "in 15 min (via email): Start a phone task: an Uber home" in seen
+
+    asyncio.run(owner.orchestrator.handle(Scheduled(job)))
+    due = owner.requests[-1]
+    assert prompt_of(due).startswith('[Scheduled #1, not from the owner now: at ')
+    assert 'they said "in 15 minutes get me an uber home". It\'s due now' in prompt_of(due)
+    assert prompt_of(due).endswith("Do it now: Start a phone task: an Uber home")
+    assert prompt_of(due[:1]) == "(via cli) in 15 minutes get me an uber home"  # its own thread's history
+    assert owner.email.sent[-1].text == "Booking your Uber now." and owner.email.sent[-1].thread == 1
+
+
+@pytest.mark.parametrize(
+    ("args", "said"),
+    [
+        ({"at": "2020-01-01 08:00"}, "That's past"),
+        ({"at": "tomorrow"}, "Couldn't read 'tomorrow'"),
+        ({"at": "2099-01-01 08:00", "in_minutes": 5}, "Give either"),
+        ({"in_minutes": 5, "report_via": "fax"}, "No channel 'fax'"),
+    ],
+)
+def test_later_needs_one_readable_future_time(store, args, said):
+    def model(prompt: str) -> ModelResponse:
+        return call("do_later", what="Text them: call Sam", **args)
+
+    owner = Owner(store, tool_result_or(model))
+    [reply] = owner.says(Text("remind me to call Sam"))
+    assert reply.text.startswith(said) and not owner.schedule.upcoming()
+
+
+def test_something_scheduled_can_be_cancelled(store):
+    owner = Owner(store, tool_result_or(lambda prompt: call("cancel_later", id=1)))
+    owner.schedule.add(time.time() + 600, "Text them: call Sam", "", owner.cli.owner, None)
+    assert owner.says(Text("never mind"))[-1].text == "Cancelled #1."
+    assert not owner.schedule.upcoming()

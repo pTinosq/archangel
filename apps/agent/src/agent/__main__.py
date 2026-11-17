@@ -10,7 +10,7 @@ from agent.channels.cli import CliChannel
 from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.connectors import Connectors
-from agent.events import TaskUpdate
+from agent.events import Scheduled, TaskUpdate
 from agent.gateway import Gateway
 from agent.helper import Helper
 from agent.links import Links
@@ -27,6 +27,7 @@ from agent.devices.vision import FallbackVision, ModelVision, create_vision
 from agent.prompts import Prompts
 from agent.reports import Reporter
 from agent.research import DEEP, DEEP_TIMEOUT, RESEARCH, Researcher, tavily
+from agent.schedule import Schedule
 from agent.store import DATA, Store, Task
 from agent.tasks import Tasks
 from agent.threads import Threads
@@ -114,6 +115,7 @@ def main() -> None:
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
+    schedule = Schedule(store.db)
     orchestrator = Orchestrator(
         quick,
         store,
@@ -126,21 +128,29 @@ def main() -> None:
         threads,
         prompts.live("orchestrator"),
         twin,
+        schedule,
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(web, gateway, orchestrator, twin, threads, interrupted))
+        asyncio.run(_run(web, gateway, orchestrator, twin, threads, schedule, interrupted))
     print()
 
 
 async def _run(
-    web: Web, gateway: Gateway, orchestrator: Orchestrator, twin: Twin, threads: Threads, interrupted: list[Task]
+    web: Web,
+    gateway: Gateway,
+    orchestrator: Orchestrator,
+    twin: Twin,
+    threads: Threads,
+    schedule: Schedule,
+    interrupted: list[Task],
 ) -> None:
     async with asyncio.TaskGroup() as group:
         group.create_task(web.serve())
         group.create_task(gateway.run(orchestrator.handle))
         group.create_task(twin.watch())
         group.create_task(threads.watch())
+        group.create_task(schedule.watch(lambda job: orchestrator.handle(Scheduled(job))))
         for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
             group.create_task(orchestrator.handle(TaskUpdate(task)))
 
