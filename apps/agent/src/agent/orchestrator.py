@@ -20,6 +20,7 @@ from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
 from agent import activity, history, logs
+from agent.coder import Coder
 from agent.connectors import Connectors
 from agent.devices.relay import Device, DeviceError
 from agent.events import Event, OwnerMessage
@@ -59,6 +60,7 @@ class Orchestrator:
         instructions: Instructions = INSTRUCTIONS,
         twin: Twin | None = None,
         schedule: Schedule | None = None,
+        coder: Coder | None = None,
     ):
         self._store = store
         self._tasks = tasks
@@ -119,11 +121,11 @@ class Orchestrator:
             start_task."""
             return start(ctx, goal, report_via, "connectors")
 
-        def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind) -> str:
+        def start(ctx: RunContext[Event], goal: str, report_via: str | None, kind: Kind, pr: int | None = None) -> str:
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
                 return no_channel(report_via)
-            return f"Started task #{tasks.start(goal, report_to, kind, self._thread.id).id}."
+            return f"Started task #{tasks.start(goal, report_to, kind, self._thread.id, pr).id}."
 
         def no_channel(name: str) -> str:
             return f"No channel {name!r}. Channels: {', '.join(gateway.channels)}."
@@ -234,6 +236,32 @@ class Orchestrator:
             async def cancel_later(id: int) -> str:
                 """Cancel something scheduled (all its repeats)."""
                 return f"Cancelled #{id}." if schedule.cancel(id) else f"Nothing scheduled as #{id}."
+
+        if coder:
+
+            @self._agent.tool
+            async def improve(
+                ctx: RunContext[Event], request: str, pr: int | None = None, report_via: str | None = None
+            ) -> str:
+                """Change Archangel itself, when the owner asks for a new ability or a fix ("add a Telegram channel"),
+                or ask why it does something: Claude Code works on its code in the background (often 10-20 minutes)
+                and opens a PR for the owner to merge, or answers. `pr`: carry on that PR instead ("no, make it
+                shorter"). The repo is public: write `request` with nothing about the owner's life (no names, places,
+                numbers, accounts); say what to build or find out. `report_via` as for start_task."""
+                if not ctx.deps.from_owner:
+                    return "Only the owner can ask for changes to Archangel. Ask them."
+                return start(ctx, request, report_via, "code", pr)
+
+            @self._agent.tool
+            async def merge(ctx: RunContext[Event], pr: int) -> str:
+                """Merge an improvement's PR, which deploys it (Archangel restarts): only when the owner says so."""
+                if not ctx.deps.from_owner:
+                    return "Only the owner can merge a change. Ask them."
+                try:
+                    return await coder.merge(pr)
+                except Exception as error:  # GitHub; the conversation goes on
+                    log.exception("Merge failed")
+                    return f"Couldn't merge it: {error}"
 
         @self._agent.tool_plain
         async def hang_up() -> str:

@@ -3,7 +3,7 @@
 export type Task = {
   id: number;
   goal: string;
-  kind: "phone" | "pc" | "research" | "deep research" | "connectors";
+  kind: "phone" | "pc" | "research" | "deep research" | "connectors" | "code";
   /** A research report's web page, at /reports/{id}. */
   page: boolean;
   /** Its report opens for anyone with the link; otherwise only signed in. */

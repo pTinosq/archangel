@@ -29,7 +29,7 @@ DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
 
-Kind = Literal["phone", "pc", "research", "deep research", "connectors"]
+Kind = Literal["phone", "pc", "research", "deep research", "connectors", "code"]
 
 
 class Status(StrEnum):
@@ -64,7 +64,7 @@ class Task:
     """The sub-agent's history, kept so a paused task resumes where it stopped."""
     kind: Kind = "phone"
     """Phone and PC tasks take turns on their device; the rest run beside them: research (deep or not) on the web,
-    and connectors in the owner's online services."""
+    connectors in the owner's online services, and code on Archangel itself (a PR, via GitHub)."""
     public: bool = False
     """Its report opens for anyone with the link; otherwise only for the owner, signed in."""
     thread: int | None = None

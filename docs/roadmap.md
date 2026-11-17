@@ -196,9 +196,11 @@ The owner also tests across channels and reports changes.
 - **Investigate a bug from anywhere (added 2026-10-23).** The owner sees something wrong ("Notion sign-in says invalid state") and says so from any channel; a coding agent investigates Archangel's code and logs, reports the cause, and proposes the fix as a PR. Investigating is free to start; changing code is a PR the owner reviews.
 - **Heals itself.** Failures (a stuck task, an orchestrator error, a bad deploy) are diagnosed from logs and steps, and a fix is proposed.
 
-**Plan (sketch, undecided)**
-- **In the cloud, not on the agent's box.** A coding agent (Claude Code via its GitHub Action, or Claude Code on the web) works on a branch; an orchestrator tool hands it the request, and its PR link comes back like any task's report.
-- **The owner merges.** Merging to `main` deploys, so a merge is an approval, never automatic. Tests run on the PR first; a revert undoes a bad change.
+**Built (2026-11-17)**
+- **On the owner's Claude subscription, in GitHub Actions** (`.github/workflows/improve.yml`): no API tokens, and Actions are free on a public repo. The orchestrator's `improve(request, pr?)` starts the workflow; a `code` task follows its run and reports the PR (or the answer to a question) like any task. `pr` carries on a PR ("no, make it shorter").
+- **The token stays put.** The Claude token is a repo secret, only in the job that makes the change, which can't write to the repo (its subprocesses don't see the token). A second job refuses a change or summary containing it, then tests, pushes and opens the PR. Archangel holds only a GitHub token for this repo.
+- **Only the owner.** `improve` and `merge` refuse anything not from the owner's own message (a web page, an email, a task's update), in code. Merging to `main` deploys, so the owner always says when.
+- **Public.** The request, the run and the PR are public: the orchestrator words the request with nothing personal, and the coding agent follows `CLAUDE.md`. So no prod logs or twin go to it yet: investigating is from the code only.
 - **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
 
 ## M15 requirements (intelligent tools) (from the owner)

@@ -1,5 +1,5 @@
 """Tasks running in the background, so the conversation carries on while they work: on a device (the phone, the PC),
-researching, or in the owner's online services (connectors).
+researching, in the owner's online services (connectors), or on Archangel's own code (code).
 
 One task drives each device at a time; the rest queue for it. Devices work side by side, and research and connectors
 touch none, so run beside them; the reporter writes research up as a page. Every change is saved, each step a task
@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 import pydantic_ai
 
 from agent import activity
+from agent.coder import Coder
 from agent.events import Event, TaskUpdate
 from agent.messages import Address
 from agent.helper import Helper
@@ -45,6 +46,7 @@ class Tasks:
         helper: Helper,
         site: str = "",
         brief: Callable[[str], Awaitable[str]] | None = None,
+        coder: Coder | None = None,
     ):
         """`pilots`: one per device, by the kind of task it does ("phone", "pc"). `site`: where Archangel's web server
         (and the panel) is, for links to reports. `brief`: what the agent doing a goal should know about the owner
@@ -56,6 +58,8 @@ class Tasks:
         self._pilots = pilots
         self._researcher = researcher
         self._helper = helper
+        self._coder = coder
+        self._carry_on: dict[int, int] = {}  # a code task's PR to carry on, by task id
         self._devices = {kind: asyncio.Lock() for kind in pilots}  # one task on each at a time
         self._running: dict[int, asyncio.Task] = {}  # by task id
         self._inboxes: dict[int, list[str]] = {}  # the owner's word to a running pilot, read on its next step
@@ -63,9 +67,13 @@ class Tasks:
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
-    def start(self, goal: str, report_to: Address, kind: Kind = "phone", thread: int | None = None) -> Task:
-        """`thread`: the conversation thread asking, where its updates go."""
+    def start(
+        self, goal: str, report_to: Address, kind: Kind = "phone", thread: int | None = None, pr: int | None = None
+    ) -> Task:
+        """`thread`: the conversation thread asking, where its updates go. `pr`: for code, the PR to carry on."""
         task = self._store.add_task(goal, report_to, kind, thread)
+        if pr:
+            self._carry_on[task.id] = pr
         log.info("Task #%d (%s): %s", task.id, kind, goal)
         self._launch(task)
         return task
@@ -131,6 +139,8 @@ class Tasks:
                 with activity.call("helper", "agent", task.goal) as reply:
                     outcome = await self._helper.run(goal, self._recorder(task), paused, answer)
                     reply(f"{outcome.status}: {outcome.report}")
+            elif task.kind == "code":
+                outcome = await self._code(task)
             elif task.kind not in self._pilots:
                 outcome = await self._research(task)
             else:
@@ -185,6 +195,22 @@ class Tasks:
             return Outcome("done", found)
         self._store.save_page(task.id, report.html)
         return Outcome("done", f"Report: {self._site}/reports/{task.id}\ntldr: {report.tldr}")
+
+    async def _code(self, task: Task) -> Outcome:
+        """Not briefed from the twin: the request goes to a public repo, and the owner's life mustn't."""
+        self._started(task)
+        pr = self._carry_on.pop(task.id, None)
+        with activity.call("claude code", "service", task.goal) as reply:
+            try:
+                branch = await self._coder.branch(pr) if pr else f"archangel/task-{task.id}"
+                worked, report = await self._coder.change(
+                    task.goal, branch, lambda text: self._store.add_step(task.id, text)
+                )
+            except Exception as error:  # GitHub: the orchestrator decides whether to retry
+                log.exception("Code task failed")
+                return Outcome("failed", f"Couldn't run it on GitHub: {error}")
+            reply(report)
+        return Outcome("done" if worked else "failed", report)
 
     async def _briefed(self, task: Task, paused: pydantic_ai.Conversation | None) -> str:
         """The goal, with what the context twin says bears on it. Not for a resumed run: it was told at the start.

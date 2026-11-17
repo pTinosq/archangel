@@ -62,6 +62,12 @@ def tavily_api_key() -> str | None:
     return os.environ.get("TAVILY_API_KEY") or None
 
 
+def github_token() -> str | None:
+    """A GitHub token for this repo only (Actions, contents and pull requests: read and write), for Archangel to
+    improve itself through Claude Code. None: it can't."""
+    return os.environ.get("GITHUB_TOKEN") or None
+
+
 def openrouter_api_key() -> str:
     return _required("OPENROUTER_API_KEY")
 

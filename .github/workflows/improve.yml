@@ -1,0 +1,133 @@
+# Archangel improving itself (M14): the owner asks by text, Archangel starts this with their request, Claude Code makes
+# the change on the owner's Claude subscription, and a PR comes back for them to merge (or the answer, if it was a
+# question). Started only by workflow_dispatch, which needs write access to the repo.
+#
+# The subscription's token (secret CLAUDE_CODE_OAUTH_TOKEN) is only in the first job, which can't write to the repo;
+# subprocesses Claude runs don't see it. The second job, which can, refuses anything containing it.
+name: improve
+run-name: ${{ inputs.branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: "What to change or find out, as the owner asked (nothing personal: the repo and its runs are public)"
+        required: true
+      branch:
+        description: "archangel/<task>; an existing one carries on its PR"
+        required: true
+
+concurrency: ${{ inputs.branch }}
+
+jobs:
+  change:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.claude.outputs.structured_output }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Carry on an existing branch
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          git fetch origin "$BRANCH" && git checkout "$BRANCH" || true
+          echo "START=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: extractions/setup-just@v3
+      - id: claude
+        uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: 1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You're improving Archangel, this repo, at its owner's request; Archangel passed it on. Read CLAUDE.md first
+            and follow it, above all: the repo is public, so nothing about the owner's real life goes in it.
+
+            The request: ${{ inputs.request }}
+
+            If it asks for a change, make it, with tests and docs as CLAUDE.md says, and run the tests that cover it
+            until they pass. Don't commit or push: that's done after you. If it's only a question (why something
+            happens, how something works), change nothing and answer it.
+
+            End with a PR title (empty if you changed nothing), and a summary for the owner, read by text: what you
+            changed or found, and anything they must do (a new variable on Railway, a setting). Short, plain.
+          claude_args: |
+            --json-schema '{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"}},"required":["title","summary"]}'
+      - name: Save the change
+        run: git add -A && git diff --cached --binary "$START" > change.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: change
+          path: change.patch
+
+  publish:
+    needs: change
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: change
+          path: ${{ runner.temp }}
+      - name: Refuse anything with the token in it
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          RESULT: ${{ needs.change.outputs.result }}
+        run: |
+          if grep -qF "$TOKEN" "$RUNNER_TEMP/change.patch" || grep -qF "$TOKEN" <<< "$RESULT"; then
+            echo "::error::The change contains the Claude token; nothing published."
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply, test, push, open the PR
+        env:
+          BRANCH: ${{ inputs.branch }}
+          RESULT: ${{ needs.change.outputs.result }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title=$(jq -r .title <<< "$RESULT")
+          summary=$(jq -r .summary <<< "$RESULT")
+          pr=""
+          tests=""
+          if [ -s "$RUNNER_TEMP/change.patch" ]; then
+            git fetch origin "$BRANCH" && git checkout "$BRANCH" || git checkout -b "$BRANCH"
+            git apply --index "$RUNNER_TEMP/change.patch"
+            git -c user.name="archangel[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "$title" -m "$summary" -m "Requested through Archangel; made by Claude Code."
+            tests=passed
+            (cd apps/agent && uv run pytest -q) && (cd apps/relay && uv run pytest -q) \
+              && (cd apps/panel && npm ci --silent && npx tsc --noEmit) || tests=failed
+            git push -q origin "$BRANCH"
+            pr=$(gh pr view "$BRANCH" --json url --jq .url 2>/dev/null || true)
+            if [ -z "$pr" ]; then
+              body=$(printf '%s\n\nTests: %s. Requested through Archangel; made by Claude Code.' "$summary" "$tests")
+              pr=$(gh pr create --head "$BRANCH" --title "$title" --body "$body")
+            fi
+          fi
+          mkdir result
+          jq -n --arg title "$title" --arg summary "$summary" --arg pr "$pr" --arg tests "$tests" \
+            '{title: $title, summary: $summary, pr: $pr, tests: $tests}' > result/result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: result
+          path: result/result.json

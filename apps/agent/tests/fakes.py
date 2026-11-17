@@ -138,3 +138,23 @@ class FakeSummariser:
 def threads(store: Store, router: FakeRouter | None = None, summariser: FakeSummariser | None = None) -> Threads:
     """Real threads, in the store's file, with a router and summariser that need no model."""
     return Threads(ThreadStore(store.db), router or FakeRouter(), summariser or FakeSummariser())
+
+
+class FakeCoder:
+    """Claude Code on GitHub: every request comes back as PR #12."""
+
+    def __init__(self):
+        self.changes: list[tuple[str, str]] = []
+        self.merged: list[int] = []
+
+    async def change(self, request, branch, record) -> tuple[bool, str]:
+        self.changes.append((request, branch))
+        record("Claude Code is on it: https://github.com/runs/7")
+        return True, f"https://github.com/pull/12 (tests pass)\n{request}"
+
+    async def branch(self, pr: int) -> str:
+        return f"archangel/pr-{pr}"
+
+    async def merge(self, pr: int) -> str:
+        self.merged.append(pr)
+        return f"Merged PR #{pr}."

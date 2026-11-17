@@ -9,6 +9,7 @@ from agent import config, logs
 from agent.channels.cli import CliChannel
 from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
+from agent.coder import Coder, github
 from agent.connectors import Connectors
 from agent.events import Scheduled, TaskUpdate
 from agent.gateway import Gateway
@@ -83,6 +84,7 @@ def main() -> None:
         Writer(model, graph, prompts.live("twin writer")),
         lambda channel: gateway.owner(channel),  # the gateway comes later, with the channels
     )
+    coder = Coder(github(token)) if (token := config.github_token()) else None
     pilots = {
         kind: Pilot(
             model,
@@ -101,6 +103,7 @@ def main() -> None:
         Helper(model, connectors, prompts.live("helper"), [twin.tools]),
         site,
         twin.brief,
+        coder,
     )
 
     web = Web(config.github(), config.port(), config.public_url())
@@ -129,6 +132,7 @@ def main() -> None:
         prompts.live("orchestrator"),
         twin,
         schedule,
+        coder,
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
