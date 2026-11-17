@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -9,7 +10,7 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.toolsets import FunctionToolset
 
 from agent import activity
-from agent.connectors import GOOGLE_TOKEN, GOOGLE_USER, Connector, Connectors, _Guarded
+from agent.connectors import GOOGLE_TOKEN, GOOGLE_USER, SIGN_IN_SECONDS, Connector, Connectors, _Guarded
 from agent.helper import Helper
 from agent.runs import Answer
 
@@ -230,3 +231,45 @@ def test_a_hosted_sign_in_hands_the_sdk_the_code_and_its_issuer(store, tmp_path)
 
     assert asyncio.run(scenario()).signed_in
     assert (came_back[0].code, came_back[0].state, came_back[0].iss) == ("the-code", "s1", "https://mcp.notion.com")
+
+
+def test_signing_in_waits_as_long_as_the_owner_may_take(store, tmp_path, monkeypatch):
+    # MCPToolset's own wait is 5 seconds, and the owner signs in on Notion's page within it.
+    opened = []
+
+    class Toolset:
+        def __init__(self, url, **options):
+            opened.append(options)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+    monkeypatch.setattr("agent.connectors.MCPToolset", Toolset)
+    found = connectors(store, tmp_path)
+    asyncio.run(found._connect(found.add("notion", {}), None))
+    assert opened[0]["init_timeout"] == SIGN_IN_SECONDS
+
+
+def test_a_sign_in_that_gave_up_says_why_when_the_owner_comes_back(store, tmp_path):
+    found = connectors(store, tmp_path)
+    found.add("notion", {})
+
+    async def connect(connector, auth):
+        # As MCPToolset's own timeout does: the wait for the owner's code is cancelled, then it fails.
+        await auth.context.redirect_handler("https://mcp.notion.com/authorize?state=s1")
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(auth.context.callback_handler(), 0.001)
+        raise RuntimeError("Failed to initialize server session")
+
+    found._connect = connect
+
+    async def scenario():
+        await found.sign_in("notion")
+        await asyncio.sleep(0.01)
+        return await found.finish("s1", "the-code", "https://mcp.notion.com")
+
+    with pytest.raises(RuntimeError, match="Failed to initialize server session"):
+        asyncio.run(scenario())
