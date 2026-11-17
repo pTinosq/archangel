@@ -2,8 +2,9 @@
 tasks in the owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to
 do when they fail, and keeps the owner informed on whichever channel suits.
 
-One conversation whatever the channel. Events (owner messages, task updates, notices) are handled one at a time, in
-order.
+One conversation whatever the channel, kept as threads, one per topic: each event is answered in its thread, seeing
+that thread's history rather than the last of everything (`agent.threads`). Events (owner messages, task updates,
+notices) are handled one at a time, in order.
 """
 
 import asyncio
@@ -19,7 +20,7 @@ from pydantic_ai.models import Model
 
 from agent import activity, history, logs
 from agent.connectors import Connectors
-from agent.events import Event
+from agent.events import Event, OwnerMessage
 from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
@@ -29,6 +30,9 @@ from agent.research import Researcher
 from agent.runs import Answer
 from agent.store import Kind, Status, Store
 from agent.tasks import Tasks
+from agent.threads import Threads
+from agent.threads.store import Thread
+from agent.threads.text import ago
 from agent.twin import Twin
 
 log = logging.getLogger(__name__)
@@ -49,17 +53,20 @@ class Orchestrator:
         connectors: Connectors,
         devices: Mapping[str, Device],
         whereabouts: Whereabouts,
+        threads: Threads,
         instructions: Instructions = INSTRUCTIONS,
         twin: Twin | None = None,
     ):
         self._store = store
         self._tasks = tasks
+        self._threads = threads
         self._gateway = gateway
         self._connectors = connectors
         self._devices = devices  # by the kind of task done on each: "phone", "pc"
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
         self._ends = False  # the reply being written is the last word on a call
+        self._thread: Thread | None = None  # the thread of the event being handled
         tasks.notify = whereabouts.notify = self.handle
         self._agent = Agent(
             model,
@@ -68,7 +75,7 @@ class Orchestrator:
             instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
-            toolsets=[twin.tools] if twin else [],
+            toolsets=[threads.tools, *([twin.tools] if twin else [])],
         )
         self._twin = twin
 
@@ -112,7 +119,7 @@ class Orchestrator:
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
                 return no_channel(report_via)
-            return f"Started task #{tasks.start(goal, report_to, kind).id}."
+            return f"Started task #{tasks.start(goal, report_to, kind, self._thread.id).id}."
 
         def no_channel(name: str) -> str:
             return f"No channel {name!r}. Channels: {', '.join(gateway.channels)}."
@@ -149,7 +156,7 @@ class Orchestrator:
             ago, and a link that shares it now in one tap. Text them the link when you need it fresh; it comes back
             as a notice."""
             last = whereabouts.latest()
-            known = f"Last shared {_ago(last.time)}: {last}." if last else "Never shared."
+            known = f"Last shared {ago(last.time, time.time())}: {last}." if last else "Never shared."
             link = whereabouts.link(ctx.deps.reply_to)
             return f"{known} Link: {link}" if link else f"{known} No link here (no public address): ask them."
 
@@ -209,7 +216,7 @@ class Orchestrator:
             images = ctx.deps.attachments() if screenshot else ()
             if screenshot and not images:
                 return "There's no screenshot to send."
-            await gateway.send(Message(to, (Text(text), *images)))
+            await gateway.send(Message(to, (Text(text), *images), thread=self._thread.id))
             return f"Sent via {channel}."
 
         if twin:
@@ -230,36 +237,49 @@ class Orchestrator:
     async def handle(self, event: Event) -> None:
         async with self._lock:
             with activity.acting("orchestrator"):
+                # Both model calls, so side by side: which thread it's in, and what the twin knows that bears on it.
+                route, found = await asyncio.gather(self._threads.route(event), self._hear(event))
+                self._thread = thread = route.thread
+                if isinstance(event, OwnerMessage) and event.line:
+                    self._store.file_line(event.line, thread.id)
                 # Taken once, not before each model call: rebuilt after start_task, the list shows the new task as if
                 # it had been there all along, and the model apologises for starting a duplicate.
-                self._arrived_to = await self._situation()
-                if event.from_owner and self._twin:  # what they say is answered knowing them, not just their top page
-                    said = " ".join(part.text for part in event.prompt() if isinstance(part, Text))
-                    if found := await self._twin.hear(said):
-                        self._arrived_to += (
-                            "\n\nFrom the context twin (what's known about the owner, not what you can do), on what "
-                            f"the owner just said:\n{found}"
-                        )
+                self._arrived_to = await self._situation(thread)
+                if found:
+                    self._arrived_to += (
+                        "\n\nFrom the context twin (what's known about the owner, not what you can do), on what "
+                        f"the owner just said:\n{found}"
+                    )
                 self._ends = False
                 try:
-                    messages = self._store.history()
-                    log.debug("in (%d prior messages): %s", len(messages), describe(event.prompt()))
+                    messages = self._threads.history(thread)
+                    log.debug(
+                        "in thread #%d (%d prior messages): %s", thread.id, len(messages), describe(event.prompt())
+                    )
                     result = await logs.run(self._agent, prompt(event.prompt()), deps=event, message_history=messages)
-                    self._store.save_history(result.all_messages())
+                    self._threads.save(route, result.all_messages())
                     log.debug("out to %s: %s", event.reply_to, result.output)
                     parts = (Text(result.output), *event.attachments())
                 except Exception as error:
                     log.exception("Failed to handle: %s", describe(event.prompt()))
                     parts = (Text(event.fallback(error)),)
-                await self._gateway.send(Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends))
+                reply = Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends, thread=thread.id)
+                await self._gateway.send(reply)
 
-    async def _situation(self) -> str:
+    async def _hear(self, event: Event) -> str:
+        """What the twin knows that bears on what the owner said: answered knowing them, not just their top page."""
+        if not (event.from_owner and self._twin):
+            return ""
+        return await self._twin.hear(" ".join(part.text for part in event.prompt() if isinstance(part, Text)))
+
+    async def _situation(self, thread: Thread) -> str:
         tasks = self._tasks.list()[::-1]
         shown = [t for t in tasks if t.status.open] + [t for t in tasks if not t.status.open][-FINISHED_TASKS_SHOWN:]
         lines = [
             f"#{t.id} [{t.status}] {'' if t.kind == 'phone' else t.kind + ': '}{t.goal}"
             + (f" → {t.report[:300]}" if t.report else "")
             + (" (report public)" if t.public else "")
+            + (f" (thread #{t.thread})" if t.thread and t.thread != thread.id else "")
             for t in shown
         ]
         about = []
@@ -271,6 +291,7 @@ class Orchestrator:
         return "\n".join(
             [
                 *about,
+                self._threads.describe(thread),
                 f"Devices: {await self._describe_devices()}.",
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
                 "Connected services, by profile: "
@@ -289,10 +310,3 @@ class Orchestrator:
         devices = zip(self._devices.values(), states, strict=True)
         found = [f"{device.label} ({state})" for device, state in devices if state]
         return "; ".join(found) or "none connected yet"
-
-
-def _ago(then: float) -> str:
-    minutes = round((time.time() - then) / 60)
-    if minutes < 60:
-        return f"{minutes} min ago"
-    return f"{minutes // 60} h {minutes % 60} min ago" if minutes < 24 * 60 else f"{minutes // (24 * 60)} days ago"

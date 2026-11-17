@@ -29,6 +29,10 @@ from agent.reports import Reporter
 from agent.research import DEEP, DEEP_TIMEOUT, RESEARCH, Researcher, tavily
 from agent.store import DATA, Store, Task
 from agent.tasks import Tasks
+from agent.threads import Threads
+from agent.threads.router import Router
+from agent.threads.store import ThreadStore
+from agent.threads.summariser import Summariser
 from agent.twin import Twin
 from agent.twin.graph import Graph
 from agent.twin.reader import Reader
@@ -65,6 +69,12 @@ def main() -> None:
     # they find their way through screens and judge risk.
     quick = openrouter(config.model(), think=False)
     graph = Graph(store.db)
+    thread_store = ThreadStore(store.db)
+    threads = Threads(
+        thread_store,
+        Router(quick, thread_store, prompts.live("thread router")),  # every message waits for it, as for the reader
+        Summariser(model, prompts.live("thread summariser")),
+    )
     twin = Twin(
         store,
         graph,
@@ -93,7 +103,7 @@ def main() -> None:
     )
 
     web = Web(config.github(), config.port(), config.public_url())
-    channels = [PanelChannel(store, prompts, connectors, graph, web)]
+    channels = [PanelChannel(store, prompts, connectors, graph, thread_store, web)]
     public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
     links = Links(store, web, config.relay_token(), public_url) if public_url else None
     if account := config.twilio():
@@ -113,20 +123,24 @@ def main() -> None:
         connectors,
         devices,
         Whereabouts(store, web, links),
+        threads,
         prompts.live("orchestrator"),
         twin,
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(web, gateway, orchestrator, twin, interrupted))
+        asyncio.run(_run(web, gateway, orchestrator, twin, threads, interrupted))
     print()
 
 
-async def _run(web: Web, gateway: Gateway, orchestrator: Orchestrator, twin: Twin, interrupted: list[Task]) -> None:
+async def _run(
+    web: Web, gateway: Gateway, orchestrator: Orchestrator, twin: Twin, threads: Threads, interrupted: list[Task]
+) -> None:
     async with asyncio.TaskGroup() as group:
         group.create_task(web.serve())
         group.create_task(gateway.run(orchestrator.handle))
         group.create_task(twin.watch())
+        group.create_task(threads.watch())
         for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
             group.create_task(orchestrator.handle(TaskUpdate(task)))
 

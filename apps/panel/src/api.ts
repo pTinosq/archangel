@@ -12,6 +12,8 @@ export type Task = {
   open: boolean;
   report: string;
   reportTo: string;
+  /** The conversation thread that started it. */
+  thread: number | null;
 };
 export type Step = { id: number; time: number; text: string; screen: string | null };
 export type Line = {
@@ -21,7 +23,25 @@ export type Line = {
   sender: "owner" | "archangel";
   text: string;
   images: string[];
+  /** Its conversation thread, once known: the owner's lines are filed when Archangel reads them. */
+  thread: number | null;
 };
+/** One topic of the conversation (apps/agent/src/agent/threads). */
+export type Thread = {
+  id: number;
+  title: string;
+  /** Written once it's finished; "" until then. */
+  summary: string;
+  open: boolean;
+  created: number;
+  updated: number;
+  /** Tokens of context its last answer took; at `full` it carries on in a new thread. */
+  size: number;
+  full: number;
+  /** The thread it carries on from, once that one was full. */
+  continues: number | null;
+};
+export type ThreadDetail = Thread & { lines: Line[]; tasks: Task[] };
 export type Prompt = { name: string; text: string; default: string; edited: boolean };
 /** One the Connectors page offers: what the owner enters to set it up, and where to get it. */
 export type Service = { kind: string; title: string; needs: string[]; help: string };
@@ -130,6 +150,8 @@ export const api = {
   /** Not a message: who can open a report is the owner's own setting. */
   makePublic: (task: number, isPublic: boolean) => call<{ public: boolean }>("PUT", `/tasks/${task}/public`, { public: isPublic }),
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
+  threads: () => call<Thread[]>("GET", "/threads"),
+  thread: (id: number) => call<ThreadDetail>("GET", `/threads/${id}`),
   prompts: () => call<Prompt[]>("GET", "/prompts"),
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),
   resetPrompt: (name: string) => call<Prompt>("DELETE", `/prompts/${name}`),

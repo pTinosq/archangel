@@ -19,6 +19,8 @@ def test_every_channel_feeds_the_one_handler_and_the_transcript(store):
     assert {(e.reply_to.channel, e.message.text) for e in events} == {("cli", "hi"), ("panel", "hello")}
     assert all(isinstance(e, OwnerMessage) and e.from_owner for e in events)
     assert sorted(line.text for line in store.lines()) == ["hello", "hi"]
+    lines = {line.id: line.text for line in store.lines()}
+    assert all(lines[e.line] == e.message.text for e in events)  # to be filed under its thread once routed
 
 
 def test_messages_go_to_their_channel(store):
@@ -28,7 +30,7 @@ def test_messages_go_to_their_channel(store):
     asyncio.run(gateway.send(Message(panel.owner, (Text("done"),))))
 
     assert (cli.sent, [m.text for m in panel.sent]) == ([], ["done"])
-    assert [(line.channel, line.sender) for line in store.lines()] == [("panel", "archangel")]
+    assert [(line.channel, line.sender, line.thread) for line in store.lines()] == [("panel", "archangel", None)]
     assert gateway.owner("panel") == panel.owner
     assert gateway.owner("fax") is None
 
@@ -63,3 +65,9 @@ def test_a_channels_notice_goes_straight_to_the_handler(store):
 
     asyncio.run(Gateway([Noticing("voice")], store).run(handle))
     assert events == [notice] and store.lines() == []
+
+
+def test_a_reply_is_recorded_in_its_thread(store):
+    panel = FakeChannel("panel")
+    asyncio.run(Gateway([panel], store).send(Message(panel.owner, (Text("done"),), thread=3)))
+    assert store.lines()[0].thread == 3

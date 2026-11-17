@@ -1,0 +1,189 @@
+# The thread router's evals: a made-up owner's past threads (`[[thread]]`; never the real owner's), then cases, each
+# something the owner says. Every case starts from all the threads, aged as given.
+#   thread   the key of the thread it should go in, "new" for a new one, or several ("new | dinner"): any passes
+#   closes   whether it should be seen to wrap its thread up (default false; "either" when both are fair)
+#   add_to, add   turns said in that thread just now ([said, answer] each), so the conversation is there
+
+[[thread]]
+key = "india-2025"
+title = "India trip ideas"
+days_ago = 410
+summary = "Brainstormed a trip to India for winter 2025: Kerala backwaters, Goa beaches. Nothing booked."
+
+[[thread]]
+key = "plumber"
+title = "Plumber for the kitchen leak"
+days_ago = 60
+summary = "Found a plumber for the kitchen tap leak: Marco at FlowRight, 07700 900456, came on 18 Sep, £95."
+
+[[thread]]
+key = "india"
+title = "Flights to India"
+days_ago = 8
+summary = "Return flights London–Delhi for 14–28 March: cheapest £540 on Air India (task #812), BA £610. Not booked yet."
+
+[[thread]]
+key = "gym"
+title = "Gym class booking"
+days_ago = 6
+summary = "Booked spin at 7am Tuesday at the Old Street gym."
+
+[[thread]]
+key = "parcel"
+title = "Amazon parcel"
+days_ago = 5
+summary = "Checked the Amazon order: headphones arriving Thursday."
+
+[[thread]]
+key = "dentist"
+title = "Dentist appointment"
+days_ago = 4
+summary = "Booked a check-up with Dr Patel, 3 Dec 10:30."
+
+[[thread]]
+key = "weather"
+title = "Weather in London"
+days_ago = 3
+summary = "Rain all day Saturday, dry Sunday."
+
+[[thread]]
+key = "pc-game"
+title = "Install a game on the PC"
+days_ago = 2
+summary = "Installed a chess game on the PC."
+
+[[thread]]
+key = "news"
+title = "Morning news"
+days_ago = 1
+summary = "Top stories: rail strike Thursday, interest rates held."
+
+[[thread]]
+key = "pub"
+title = "Pub lunch with the crew"
+hours_ago = 20
+summary = "Asked the group chat about a pub lunch Saturday: Priya and Tom in, at The Crown, 1pm."
+
+[[thread]]
+key = "sam"
+title = "Text Sam happy birthday"
+minutes_ago = 40
+open = true
+turns = [
+  ["text Sam happy birthday", "Sent on WhatsApp: \"Happy birthday Sam! Hope it's a great one.\""],
+]
+
+[[thread]]
+key = "uber"
+title = "Uber to the office"
+minutes_ago = 2
+open = true
+turns = [
+  ["get me an uber to the office", "There's UberX at £18 in 4 min, or Comfort at £24 in 6 min. Which one?"],
+]
+
+# Carrying on
+
+[[case]]
+name = "an answer to the question just asked"
+says = "comfort"
+thread = "uber"
+
+[[case]]
+name = "yes to the question just asked"
+says = "yes the cheaper one"
+thread = "uber"
+
+[[case]]
+name = "refers back to last week, not last year"
+says = "for the flights to india, how much were they again?"
+thread = "india"
+
+[[case]]
+name = "refers back with no thread named"
+says = "did Sam reply?"
+thread = "sam"
+
+[[case]]
+name = "an old thread only search finds"
+says = "what was the number of that plumber you found?"
+thread = "plumber"
+
+[[case]]
+name = "refers back to yesterday's plans"
+says = "who's coming to the pub on saturday?"
+thread = "pub"
+
+# Something new
+
+[[case]]
+name = "a new topic"
+says = "what's on at the cinema tonight?"
+thread = "new"
+
+[[case]]
+name = "the same kind of thing, a different one"
+says = "can you look for flights to Lisbon in April?"
+thread = "new"
+
+[[case]]
+name = "a new task while another waits"
+says = "also remind me what time my dentist appointment is"
+thread = "dentist"
+
+# Wrapping up
+
+[[case]]
+name = "thanks wraps up"
+add_to = "uber"
+add = [["comfort", "Booked: Comfort, Ahmed in a grey Prius, 6 min away."]]
+says = "perfect, thanks!"
+thread = "uber"
+closes = true
+
+[[case]]
+name = "thanks with something more isn't the end"
+add_to = "uber"
+add = [["comfort", "Booked: Comfort, Ahmed in a grey Prius, 6 min away."]]
+says = "thanks, and can you also book a table at Dishoom for Friday?"
+thread = "new | uber"
+closes = false
+
+[[case]]
+name = "a question isn't a wrap up"
+says = "how long will the comfort one take?"
+thread = "uber"
+closes = false
+
+# Harder
+
+[[case]]
+name = "a change of subject mid-thread"
+says = "anyway, is it still going to rain on saturday?"
+thread = "weather | new"
+
+[[case]]
+name = "cancel what was just asked"
+says = "actually cancel that, I'll walk"
+thread = "uber"
+closes = "either"  # one last thing to do, and then it is over
+
+[[case]]
+name = "a bare follow-up to a result"
+add_to = "uber"
+add = [["comfort", "Booked: Comfort, Ahmed in a grey Prius, 6 min away."]]
+says = "what car is it?"
+thread = "uber"
+
+[[case]]
+name = "back to an older open thread"
+says = "can you send Sam another message saying drinks are on me tonight"
+thread = "sam"
+
+[[case]]
+name = "thanks goes to where the conversation just was"
+add_to = "sam"
+add = [["did it go through?", "Yes, delivered and read: Sam replied with a heart."]]
+says = "great thanks"
+thread = "sam"
+closes = true

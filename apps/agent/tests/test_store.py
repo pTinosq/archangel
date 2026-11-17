@@ -5,15 +5,9 @@ import pydantic_ai
 from pydantic_ai import BinaryContent, ModelRequest, UserPromptPart
 
 from agent.messages import Address, Image, Message, Text
-from agent.store import IMAGES_KEPT, Status, Store
+from agent.store import IMAGES_KEPT, Status
 
 CLI = Address("cli", "local")
-
-
-def test_one_history_survives_a_restart(tmp_path):
-    assert Store(tmp_path).history() == []
-    Store(tmp_path).save_history([ModelRequest.user_text_prompt("hi")])
-    assert Store(tmp_path).history()[0].parts[0].content == "hi"
 
 
 def test_tasks_round_trip(store):

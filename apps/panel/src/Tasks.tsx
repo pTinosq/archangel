@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl, type Step, type Task } from "./api";
 import { useNarrow } from "./narrow";
 import { useFeed, usePoll } from "./poll";
+import { Link } from "./route";
 
 /** `selected`: the task in the address, /tasks/12. */
 export function Tasks({ selected, select }: { selected?: number; select: (id?: number) => void }) {
@@ -67,6 +68,7 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
         </h2>
         <p>
           <Status task={task} /> <span className="quiet">reports via {task.reportTo}</span>
+          {task.thread && <Link to={`/threads/${task.thread}`}>thread #{task.thread}</Link>}
         </p>
         {task.page && <Report task={task} />}
         {task.report && <p className="report">{task.report}</p>}

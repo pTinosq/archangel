@@ -1,8 +1,8 @@
-"""Everything that must survive a restart: the one conversation with the owner, the transcript across channels,
-every task and its steps, edited prompts, connectors with their sign-ins, where the owner last was, and each device's
-latest hello. SQLite, one file in data/.
+"""Everything that must survive a restart: the transcript across channels, every task and its steps, edited prompts,
+connectors with their sign-ins, where the owner last was, and each device's latest hello. SQLite, one file in data/,
+which the conversation's threads (`agent.threads`) and the context twin keep their own tables in.
 
-The history is stored whole as Pydantic AI JSON, and a paused task with its run, so both resume exactly.
+A paused task is stored with its run as Pydantic AI JSON, so it resumes exactly.
 Research reports' web pages are files beside it. Images (screenshots, pictures in chat) too, deleted after IMAGES_KEPT:
 they're most of the bytes and only matter while a task is fresh.
 """
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 import pydantic_ai
-from pydantic_ai import ConversationTypeAdapter, ModelMessage, ModelMessagesTypeAdapter
+from pydantic_ai import ConversationTypeAdapter
 
 from agent.history import forget_old_screenshots
 from agent.messages import Address, Image, Message
@@ -67,6 +67,8 @@ class Task:
     and connectors in the owner's online services."""
     public: bool = False
     """Its report opens for anyone with the link; otherwise only for the owner, signed in."""
+    thread: int | None = None
+    """The conversation thread that started it, where its updates go; None for tasks from before threads."""
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,8 @@ class Line:
     sender: str  # "owner" or "archangel"
     text: str
     images: list[str]
+    thread: int | None
+    """The conversation thread it's in, once known: an owner's message is filed when the orchestrator reads it."""
 
 
 class Store:
@@ -118,7 +122,6 @@ class Store:
         self._db = sqlite3.connect(directory / "archangel.db")
         self._db.executescript(
             """
-            CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY CHECK (id = 1), messages BLOB);
             CREATE TABLE IF NOT EXISTS transcript (
                 id INTEGER PRIMARY KEY, time REAL, channel TEXT, address TEXT, sender TEXT, text TEXT, images TEXT
             );
@@ -136,11 +139,16 @@ class Store:
             """
         )
         columns = {column for _, column, *_ in self._db.execute("PRAGMA table_info(tasks)")}
+        lines = {column for _, column, *_ in self._db.execute("PRAGMA table_info(transcript)")}
         with self._db:
             if "kind" not in columns:  # added in M9
                 self._db.execute("ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'phone'")
             if "public" not in columns:  # added with shared reports
                 self._db.execute("ALTER TABLE tasks ADD COLUMN public INTEGER NOT NULL DEFAULT 0")
+            if "thread" not in columns:  # added with threads (M18)
+                self._db.execute("ALTER TABLE tasks ADD COLUMN thread INTEGER")
+            if "thread" not in lines:
+                self._db.execute("ALTER TABLE transcript ADD COLUMN thread INTEGER")
         self.forget_old_images()
 
     @property
@@ -148,42 +156,54 @@ class Store:
         """For a module that keeps its own tables in the one file (the twin's graph)."""
         return self._db
 
-    # The conversation
+    # The transcript: what was said, both ways, on every channel
 
-    def history(self) -> list[ModelMessage]:
-        row = self._db.execute("SELECT messages FROM history").fetchone()
-        return ModelMessagesTypeAdapter.validate_json(row[0]) if row else []
-
-    def save_history(self, messages: list[ModelMessage]) -> None:
-        with self._db:
-            self._db.execute(
-                "INSERT OR REPLACE INTO history VALUES (1, ?)", (ModelMessagesTypeAdapter.dump_json(messages),)
-            )
-
-    def add_line(self, message: Message, sender: str) -> None:
+    def add_line(self, message: Message, sender: str) -> int:
         images = json.dumps([self.save_image(image) for image in message.images])
         with self._db:
-            self._db.execute(
-                "INSERT INTO transcript (time, channel, address, sender, text, images) VALUES (?, ?, ?, ?, ?, ?)",
-                (time.time(), message.address.channel, message.address.id, sender, message.text, images),
+            cursor = self._db.execute(
+                "INSERT INTO transcript (time, channel, address, sender, text, images, thread) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    time.time(),
+                    message.address.channel,
+                    message.address.id,
+                    sender,
+                    message.text,
+                    images,
+                    message.thread,
+                ),
             )
+        return cursor.lastrowid
 
-    def lines(self, after: int = 0) -> list[Line]:
+    def file_line(self, id: int, thread: int) -> None:
+        """Puts a line in its thread, once the orchestrator knows which (an owner's message, after it's routed)."""
+        with self._db:
+            self._db.execute("UPDATE transcript SET thread = ? WHERE id = ?", (thread, id))
+
+    def lines(self, after: int = 0, thread: int | None = None) -> list[Line]:
+        """Every line after `after`, or only those in `thread`."""
+        where, args = "id > ?", [after]
+        if thread is not None:
+            where, args = where + " AND thread = ?", [*args, thread]
         rows = self._db.execute(
-            "SELECT id, time, channel, sender, text, images FROM transcript WHERE id > ? ORDER BY id", (after,)
+            f"SELECT id, time, channel, sender, text, images, thread FROM transcript WHERE {where} ORDER BY id", args
         )
-        return [Line(*row[:-1], json.loads(row[-1])) for row in rows]
+        return [
+            Line(id, at, channel, sender, text, json.loads(images), in_thread)
+            for id, at, channel, sender, text, images, in_thread in rows
+        ]
 
     # Tasks
 
-    def add_task(self, goal: str, report_to: Address, kind: Kind = "phone") -> Task:
+    def add_task(self, goal: str, report_to: Address, kind: Kind = "phone", thread: int | None = None) -> Task:
         self.forget_old_images()  # tasks are where images pile up; check as each starts
         with self._db:
             cursor = self._db.execute(
-                "INSERT INTO tasks (goal, channel, address, status, report, kind) VALUES (?, ?, ?, ?, '', ?)",
-                (goal, report_to.channel, report_to.id, Status.QUEUED, kind),
+                "INSERT INTO tasks (goal, channel, address, status, report, kind, thread) VALUES (?, ?, ?, ?, '', ?, ?)",
+                (goal, report_to.channel, report_to.id, Status.QUEUED, kind, thread),
             )
-        return Task(cursor.lastrowid, goal, report_to, kind=kind)
+        return Task(cursor.lastrowid, goal, report_to, kind=kind, thread=thread)
 
     def save_task(self, task: Task) -> None:
         # A paused run only needs the screen it stopped on; the rest would be dead weight in every save.
@@ -202,9 +222,10 @@ class Store:
         row = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks WHERE id = ?", (id,)).fetchone()
         return _task(row) if row else None
 
-    def tasks(self, limit: int = 100) -> list[Task]:
-        """Newest first."""
-        rows = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks ORDER BY id DESC LIMIT ?", (limit,))
+    def tasks(self, limit: int = 100, thread: int | None = None) -> list[Task]:
+        """Newest first; only `thread`'s, if given."""
+        where, args = ("WHERE thread = ?", [thread]) if thread is not None else ("", [])
+        rows = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks {where} ORDER BY id DESC LIMIT ?", [*args, limit])
         return [_task(row) for row in rows]
 
     def interrupt_running(self) -> list[Task]:
@@ -331,11 +352,11 @@ class Store:
         return json.loads(row[0]) if row else None
 
 
-_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public"
+_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public, thread"
 
 
 def _task(row: tuple) -> Task:
-    id, goal, channel, address, status, report, run, kind, public = row
+    id, goal, channel, address, status, report, run, kind, public, thread = row
     return Task(
         id,
         goal,
@@ -345,4 +366,5 @@ def _task(row: tuple) -> Task:
         ConversationTypeAdapter.validate_json(run) if run else None,
         kind,
         bool(public),
+        thread,
     )

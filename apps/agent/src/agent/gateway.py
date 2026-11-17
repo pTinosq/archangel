@@ -45,8 +45,8 @@ class Gateway:
 
         async def deliver(message: Message | Event) -> None:
             if isinstance(message, Message):
-                self._store.add_line(message, "owner")
-                handling = self._handle(handle, message)
+                line = self._store.add_line(message, "owner")
+                handling = self._handle(handle, message, line)
             else:  # a notice: no one said it, so it isn't in the transcript
                 handling = handle(message)
             task = asyncio.create_task(handling, context=activity.new_request("gateway"))
@@ -73,7 +73,7 @@ class Gateway:
             # One medium failing (network, rate limits) mustn't take down the conversation; it's in the transcript.
             log.exception("Couldn't send via %s", channel.name)
 
-    async def _handle(self, handle: Handle, message: Message) -> None:
+    async def _handle(self, handle: Handle, message: Message, line: int) -> None:
         activity.hop("gateway", "message", message.text, source=message.address.channel)
         activity.hop("orchestrator", "message", message.text)
-        await handle(OwnerMessage(message))
+        await handle(OwnerMessage(message, line))

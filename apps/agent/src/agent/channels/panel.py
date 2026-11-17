@@ -4,6 +4,8 @@ stream (server-sent events: one way, so nothing can be commanded through it).
 
 The Twin page shows the context twin's graph, and lets the owner edit or delete a node (`Graph`).
 
+The Threads page shows the conversation's threads: each one's summary, size, what was said in it and its tasks.
+
 The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
 back to /connectors/callback.
 
@@ -28,6 +30,8 @@ from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.store import Line, Step, Store, Task
+from agent.threads import FULL
+from agent.threads.store import Thread, ThreadStore
 from agent.twin.graph import Graph, Link
 from agent.web import Web
 
@@ -42,12 +46,15 @@ class PanelChannel(Channel):
     shows = "text and pictures"
     owner = Address(name, "owner")
 
-    def __init__(self, store: Store, prompts: Prompts, connectors: Connectors, graph: Graph, web: Web):
+    def __init__(
+        self, store: Store, prompts: Prompts, connectors: Connectors, graph: Graph, threads: ThreadStore, web: Web
+    ):
         self._deliver: Deliver | None = None
         self._web = web
         _routes(web.app, self, store, prompts)
         _connector_routes(web.app, connectors)
         _twin_routes(web.app, graph)
+        _thread_routes(web.app, threads, store)
         if not web.public:  # the twin's evals: for working on it locally, never on the internet
             evals_tab.routes(web.app)
         web.share(lambda path: _public_report(store, path))
@@ -269,6 +276,39 @@ def _twin_routes(app: FastAPI, graph: Graph) -> None:
         _refused(lambda: graph.unlink(source, target, origin="panel"))
 
 
+THREADS_LISTED = 200
+
+
+def _thread_routes(app: FastAPI, threads: ThreadStore, store: Store) -> None:
+    @app.get("/api/threads")
+    async def listed() -> list[dict]:
+        return [_thread(thread) for thread in threads.recent(THREADS_LISTED)]
+
+    @app.get("/api/threads/{id}")
+    async def one(id: int) -> dict:
+        if not (thread := threads.get(id)):
+            raise HTTPException(404, f"No thread #{id}")
+        return {
+            **_thread(thread),
+            "lines": store.lines(thread=id),
+            "tasks": [_task(task, store.has_page(task.id)) for task in store.tasks(thread=id)],
+        }
+
+
+def _thread(thread: Thread) -> dict:
+    return {
+        "id": thread.id,
+        "title": thread.title,
+        "summary": thread.summary,
+        "open": thread.open,
+        "created": thread.created,
+        "updated": thread.updated,
+        "size": thread.size,
+        "full": FULL,
+        "continues": thread.continues,
+    }
+
+
 def _found(graph: Graph, name: str):
     if not (node := graph.find(name)):
         raise HTTPException(404, f"No node called {name!r}")
@@ -303,6 +343,7 @@ def _task(task: Task, page: bool) -> dict:
         "open": task.status.open,
         "report": task.report,
         "reportTo": task.report_to.channel,
+        "thread": task.thread,
     }
 
 

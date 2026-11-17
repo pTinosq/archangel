@@ -63,8 +63,9 @@ class Tasks:
         self._updates: set[asyncio.Task] = set()  # updates being handled
         self.notify: Callable[[Event], Awaitable[None]] | None = None
 
-    def start(self, goal: str, report_to: Address, kind: Kind = "phone") -> Task:
-        task = self._store.add_task(goal, report_to, kind)
+    def start(self, goal: str, report_to: Address, kind: Kind = "phone", thread: int | None = None) -> Task:
+        """`thread`: the conversation thread asking, where its updates go."""
+        task = self._store.add_task(goal, report_to, kind, thread)
         log.info("Task #%d (%s): %s", task.id, kind, goal)
         self._launch(task)
         return task

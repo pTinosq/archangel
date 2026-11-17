@@ -108,7 +108,7 @@ button.sound-switch:active:not(:disabled) { transform: none; }
 .sound-switch + .sign-out { margin-left: 0; }
 
 main { flex: 1; display: grid; gap: var(--s2); padding: var(--s2); min-height: 0; }
-main.tasks { grid-template-columns: 280px 1fr 360px; }
+main.tasks, main.threads { grid-template-columns: 280px 1fr 360px; }
 main.prompts { grid-template-columns: 240px 1fr 360px; }
 main.cockpit { grid-template-columns: 1fr 340px 320px; }
 main.connectors { grid-template-columns: 1fr 1fr 360px; }
@@ -124,6 +124,7 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .status.running, .status.queued, .status.done { --tone: var(--accent); }
 .status.needs-approval, .status.needs-answer { --tone: var(--warn); animation: pulse 1.6s steps(2) infinite; }
 .status.failed, .status.interrupted { --tone: var(--bad); }
+.status.open { --tone: var(--accent); }
 @keyframes pulse { 50% { color: var(--bg); background: var(--tone); } }
 
 /* Lists: rows that light, never resize. */
@@ -167,6 +168,18 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .steps li.has-screen:hover, .steps li.viewing { background: var(--raised); }
 .steps time { flex-shrink: 0; }
 
+/* A thread: what it is, then what was said in it, like the conversation. No screen. */
+.detail.thread { display: flex; flex-direction: column; align-items: stretch; gap: var(--s4); }
+.detail.thread .lines { flex: none; overflow: visible; padding-top: var(--s4); border-top: 1px solid var(--line); }
+.task-link { display: block; margin-top: var(--s1); }
+/* How full a thread's context is: a 2px bar under it, acid; amber once it's nearly full (it carries on soon). */
+.size { position: relative; height: 2px; margin-top: var(--s2); background: var(--line); }
+.size span { position: absolute; inset: 0 auto 0 0; background: var(--accent-deep); }
+.size.nearly-full span { background: var(--warn); }
+.size em { position: absolute; top: var(--s2); right: 0; font: 11px/1 var(--mono); font-style: normal; color: var(--quiet); }
+.detail.thread .size { margin-bottom: var(--s4); }
+.thread-list li > div:first-child time { margin-left: auto; font-size: 11px; }
+
 /* Conversation: the owner's lines in acid outline, Archangel's in grey. */
 .chat { display: flex; flex-direction: column; }
 .lines { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s2); }
@@ -177,6 +190,13 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .line.owner .via { color: var(--accent); }
 .line img { max-width: 100%; max-height: 360px; margin-top: var(--s2); display: block; border: 1px solid var(--line-strong); }
 .chat form { display: flex; gap: var(--s2); margin-top: var(--s3); }
+/* Where the conversation moves to another thread: a quiet rule with its name, a link to it. */
+.thread-mark {
+  display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0 0; color: var(--quiet);
+  font: 8px/16px var(--pixel); text-transform: uppercase; letter-spacing: 0.04em; text-decoration: none;
+}
+.thread-mark::before, .thread-mark::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
+.thread-mark:hover { color: var(--accent); }
 .chat input { flex: 1; min-width: 0; }
 
 /* Connectors */
@@ -355,13 +375,17 @@ button.to:hover:not(:disabled) { color: var(--accent); }
   }
   .brand, .sign-out { line-height: 44px; }
   button.sound-switch { min-height: 44px; padding: 0; }
-  nav { order: 1; width: calc(100% + 2 * var(--s3)); margin: 0 calc(-1 * var(--s3)); height: 44px; border-top: 1px solid var(--line); }
-  nav a { flex: 1; justify-content: center; padding: 0 var(--s1); font-size: 8px; }
+  /* More tabs than fit a phone's width: each keeps its one line, and the bar scrolls sideways. */
+  nav {
+    order: 1; width: calc(100% + 2 * var(--s3)); margin: 0 calc(-1 * var(--s3)); height: 44px; border-top: 1px solid var(--line);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  nav a { flex: 1 0 auto; justify-content: center; padding: 0 var(--s3); font-size: 8px; white-space: nowrap; }
 
   button { min-height: 44px; padding: var(--s2) var(--s4); }
   input, textarea { font-size: 16px; min-height: 44px; }
 
-  main, main.tasks, main.prompts, main.cockpit, main.connectors, main.twin, main.evals { display: flex; flex-direction: column; padding: 0; gap: 0; }
+  main, main.tasks, main.threads, main.prompts, main.cockpit, main.connectors, main.twin, main.evals { display: flex; flex-direction: column; padding: 0; gap: 0; }
   .connector-list, .add-connector { flex: none !important; }
   main > section {
     flex: 1; border: none; border-bottom: 1px solid var(--line); background: var(--bg);
