@@ -25,6 +25,7 @@ Each milestone ships something usable and proves one idea.
 | M17a | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (a service with a settings window) speaks the same protocol; Jev finds things on desktop screens |
 | M17b | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
 | M17c | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
+| M18 | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 
@@ -214,3 +215,17 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 - **M17c, wake.** A sleeping PC can't dial the relay. The Android bridge, on the same Wi-Fi, sends a Wake-on-LAN packet; or the PC never sleeps.
 - **Later, maybe:** running commands (PowerShell, files) directly, far faster than clicking, far more dangerous; its own guard.
 - **Built (2026-11-15), all three, not yet tried on the owner's PC.** One protocol for every bridge (`platform` in the hello; shared commands keep their names). The Windows bridge in Python rather than C#: the same stack as the relay and agent, most of it tested anywhere, and CI on a Windows runner tests the rest on a real desktop (capture, input, UI Automation, the Start menu) and the built exe as a real service. CI proves the service on a real Windows desktop: it starts the bridge as SYSTEM in the desktop's session, captures the lock screen, and unlocks it with the bridge's secret. Jev on desktop screens: not yet measured. To tick each: a task on the owner's unlocked PC (a); one started while it's locked (b); one while it's asleep (c).
+
+## M18 requirements (threads) (from the owner)
+
+- **Context bloat.** Today the orchestrator sees the last 40 messages, whatever they're about (`history.py`), so an old topic falls out and unrelated ones crowd in.
+- **Threads, like folders of discussion.** A small, fast, cheap model in front of the orchestrator puts each message in a thread: a new one when it's unrelated ("text Sam happy birthday" after "flights to India"), or back to an old one ("for the India flights, how much were they?").
+- **Finding the thread.** It reads the summaries of the last few threads; nothing likely, or the owner says "we discussed X before": a search of all threads (by word, "India"). The most likely wins: last week's India thread over 2025's.
+- **Each thread knows its size** (context length), so a full one is summarised or continued in a new one rather than overfilled.
+- **A summary once it's done.** Written when the thread is finished, not after every message. The owner closing it ("thanks", "thx") is the signal.
+
+**Plan (sketch, undecided)**
+- **The router judges, no rules:** whether "thanks" closes a thread, or a quiet thread is finished, is the router's call from context, not a keyword list.
+- **One owner, any channel:** a thread spans channels (asked by text, answered on the panel); a call is usually its own thread.
+- **Tasks belong to the thread that started them**, so their updates come back into it.
+- **Beside the twin, not instead of it:** the twin keeps what's lasting about the owner; threads keep what was said and done.
