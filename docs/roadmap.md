@@ -19,7 +19,7 @@ Each milestone ships something usable and proves one idea.
 | M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
 | M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
-| M15 | TfL status | "is the Victoria line running?" answered in seconds, from anywhere | live public data as a tool, beside the web: no phone, no browsing |
+| M15 | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | M17 | Windows PC | "do X on my PC" from anywhere, the PC unattended at home, even locked | a second device behind the same relay and pilot; Windows' lock screen and UAC passed without the model seeing a password |
 | M17a | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (a service with a settings window) speaks the same protocol; Jev finds things on desktop screens |
@@ -186,13 +186,17 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 - **The owner merges.** Merging to `main` deploys, so a merge is an approval, never automatic. Tests run on the PR first; a revert undoes a bad change.
 - **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
 
-## M15 requirements (TfL status) (from the owner)
+## M15 requirements (intelligent tools) (from the owner)
 
-- **Live tube status** (and likely buses, Overground, Elizabeth line): whether a line is running, and why not.
-- **Already built** in `../pebble-assistant` (pebble-tino): `apps/server/src/tools/tfl.ts`, a local tool on TfL's open API (`/Line/Mode/tube/Status`, `/Line/{id}/Status`; `TFL_APP_KEY` optional, raises rate limits). Port it rather than start over.
+- **Quick, reliable answers from live data**, without the phone or a web search: a set of tools the orchestrator calls inline, in seconds.
+- **TfL first:** live tube status (and likely buses, Overground, Elizabeth line): whether a line is running, and why not. Already built in `../pebble-assistant` (pebble-tino): `apps/server/src/tools/tfl.ts`, on TfL's open API (`/Line/Mode/tube/Status`, `/Line/{id}/Status`; `TFL_APP_KEY` optional, raises rate limits). Port it rather than start over.
+- **Weather:** now and the next few days, wherever the owner is (or names).
+- **More as they earn a place:** anything asked often that the phone or the web answers slowly or unreliably.
 
 **Plan (sketch, undecided)**
-- **A connector or a built-in tool.** The orchestrator answers inline, as with `search_web`: seconds, no task. As an MCP server it would show on the Connectors page and suit the helper too; as a tool it's a few lines. Decide when building.
+- **Built-in tools or connectors.** Inline like `search_web`: seconds, no task. As MCP servers they'd show on the Connectors page and suit the helper too; as tools they're a few lines each. Decide when building.
+- **Free, keyless APIs where possible** (TfL's, Open-Meteo for weather), so no new env vars.
+- **Where they are:** weather "here" uses `owner_location`.
 
 ## M16 requirements (Pebble Time 2) (from the owner)
 
