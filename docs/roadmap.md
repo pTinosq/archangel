@@ -17,7 +17,7 @@ Each milestone ships something usable and proves one idea.
 | M10 ✅ | Location | "restaurants near me" and "get me an Uber" from anywhere: the phone at home acts as if it's where you are | your location on request, typed where an app takes an address, faked only where it doesn't |
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
-| M13 | Autonomy | scheduled and event-triggered tasks: "when my Uber arrives, text me" | triggers as channels, phone notifications among them (allow-listed apps only; nothing else wakes the model); Temporal if needed |
+| M13 ✅ | Autonomy | "in 15 minutes get me an Uber home", "every weekday at 7 call me with the weather"; see and cancel them on the panel | time as a trigger: scheduled and repeating work wakes the orchestrator in the thread it was asked in; rows and a sleeping loop, no Temporal |
 | M14 | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
@@ -28,6 +28,7 @@ Each milestone ships something usable and proves one idea.
 | M18 | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
+| Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
 
 ## M9 requirements (research) (from the owner)
 
@@ -186,8 +187,8 @@ The owner also tests across channels and reports changes.
 - **Never twice.** Marked fired before it runs: a crash loses it rather than ordering two Ubers. Anything due while Archangel was down fires on start, saying how late; the orchestrator judges whether it still makes sense.
 - **Repeating** ("every weekday at 7"): a cron expression in the owner's time (models write cron well; cronsim gets daylight saving right). Missed while down: fires once, not once per miss.
 - **Seen on the panel:** what's scheduled, soonest first, above the tasks; Cancel sends a message like the task buttons.
-- **Built (2026-11-17):** scheduled, repeating, on the panel.
-- **Notification triggers, parked (2026-11-17):** the owner judged them not worth it for now: watching for "when my Uber arrives" means a loop and model calls on every notification.
+- **Done (2026-11-17):** scheduled, repeating, on the panel.
+- **Notification triggers, parked (2026-11-17)** as their own "Later" milestone: the owner judged them not worth it for now: watching for "when my Uber arrives" means a loop and model calls on every notification.
 
 ## M14 requirements (self-improvement) (from the owner)
 
