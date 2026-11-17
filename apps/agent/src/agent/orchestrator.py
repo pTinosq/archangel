@@ -45,6 +45,13 @@ FINISHED_TASKS_SHOWN = 5
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text()
 
 
+def _own_code(goal: str) -> bool:
+    """A device task about Archangel's own repo: a model that once sent one to the PC, signed in to GitHub, kept doing
+    so in that thread whatever its prompt said."""
+    goal = goal.lower()
+    return "archangel" in goal and any(word in goal for word in ("repo", "readme", "github", "pull request"))
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -93,11 +100,14 @@ class Orchestrator:
             finishes or needs the owner.
 
             Describe the whole goal and what to find out, e.g. "Open WhatsApp and read the latest message from Alex".
+            Never for Archangel's own code (its GitHub repo, README, panel, abilities): that's improve.
             Updates come back where you're talking now. Set `report_via` only if the owner asked for the results
             elsewhere: "voice" rings them, even if they're on a call now.
             """
             if await devices[on].state() is None:
                 return f"There's no {devices[on].label}: none has ever connected."
+            if coder and _own_code(goal):
+                return "That's Archangel's own code: use improve, not a device."
             return start(ctx, goal, report_via, on)
 
         @self._agent.tool
