@@ -191,7 +191,16 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 - **Quick, reliable answers from live data**, without the phone or a web search: a set of tools the orchestrator calls inline, in seconds.
 - **TfL first:** live tube status (and likely buses, Overground, Elizabeth line): whether a line is running, and why not. Already built in `../pebble-assistant` (pebble-tino): `apps/server/src/tools/tfl.ts`, on TfL's open API (`/Line/Mode/tube/Status`, `/Line/{id}/Status`; `TFL_APP_KEY` optional, raises rate limits). Port it rather than start over.
 - **Weather:** now and the next few days, wherever the owner is (or names).
-- **More as they earn a place:** anything asked often that the phone or the web answers slowly or unreliably.
+- **Chosen by the owner (2026-11-17):**
+  - **TfL journeys and buses:** routes ("how do I get to Shoreditch?") and bus arrivals at a stop (TfL's journey planner and arrivals).
+  - **Flight status:** on time or not, gate, landing time (free sources are thin; may need a paid one).
+  - **Currency:** live exchange rates (Frankfurter, free).
+  - **Time, sun and holidays:** the time anywhere, sunrise and sunset, UK bank holidays (gov.uk), and exact calculations rather than the model's arithmetic.
+  - **Markets:** stock, fund and crypto prices and how they've moved.
+  - **News:** headlines, or the latest on a topic (BBC, Guardian feeds), quicker than a web search.
+  - **Wikipedia and dictionary:** quick facts, definitions and translations, cited.
+  - **Places:** open now?, rating, the walk there (Google Places: a key, a free monthly allowance, then paid).
+- **More as they earn a place:** anything asked often that the phone or the web answers slowly or unreliably. Passed on for now: National Rail, Santander bikes, air quality and pollen, parcel tracking, sports, food hygiene ratings, bin days, postcodes.
 
 **Plan (sketch, undecided)**
 - **Built-in tools or connectors.** Inline like `search_web`: seconds, no task. As MCP servers they'd show on the Connectors page and suit the helper too; as tools they're a few lines each. Decide when building.
