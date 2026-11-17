@@ -9,7 +9,7 @@ The Threads page shows the conversation's threads: each one's summary, size, wha
 The Tasks page shows what's scheduled too (`Schedule`), above the tasks.
 
 The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
-back to /connectors/callback.
+back to /connectors/callback. It also switches the quick tools on and off and sets what they need (`Tools`).
 
 Its buttons (approve, decline, cancel a task or something scheduled) send ordinary owner messages, so every decision
 goes through the one conversation and the orchestrator knows about it.
@@ -36,6 +36,7 @@ from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.schedule import Job, Schedule
 from agent.store import Line, Step, Store, Task
 from agent.threads import FULL
+from agent.tools import Tools
 from agent.threads.store import Thread, ThreadStore
 from agent.twin.graph import Graph, Link
 from agent.web import Web
@@ -56,6 +57,7 @@ class PanelChannel(Channel):
         store: Store,
         prompts: Prompts,
         connectors: Connectors,
+        tools: Tools,
         graph: Graph,
         threads: ThreadStore,
         schedule: Schedule,
@@ -65,6 +67,7 @@ class PanelChannel(Channel):
         self._web = web
         _routes(web.app, self, store, prompts)
         _connector_routes(web.app, connectors)
+        _tool_routes(web.app, tools)
         _twin_routes(web.app, graph)
         _thread_routes(web.app, threads, store)
 
@@ -102,6 +105,11 @@ class Visibility(BaseModel):
 
 STARTED = time.time()
 """When this deploy went live, near enough: Archangel starts as it does."""
+
+
+class ToolChange(BaseModel):
+    enabled: bool | None = None
+    settings: dict[str, str] | None = None
 
 
 class NewConnector(BaseModel):
@@ -214,6 +222,22 @@ def _connector_routes(app: FastAPI, connectors: Connectors) -> None:
             log.exception("Couldn't finish signing in")
             return _done(f"Not connected: {failure}", 400)
         return _done(f"{connector.title} is connected.")
+
+
+def _tool_routes(app: FastAPI, tools: Tools) -> None:
+    @app.get("/api/tools")
+    async def listed() -> list[dict]:
+        return tools.all()
+
+    @app.put("/api/tools/{name}")
+    async def change(name: str, change: ToolChange) -> list[dict]:
+        try:
+            tools.configure(name, change.enabled, change.settings)
+        except KeyError as error:
+            raise HTTPException(404, f"No quick tool called {name!r}") from error
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return tools.all()
 
 
 async def _events(channel: PanelChannel) -> AsyncIterator[str]:

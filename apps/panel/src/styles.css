@@ -233,6 +233,15 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .add-connector label { display: flex; flex-direction: column; gap: var(--s1); color: var(--quiet); font-size: 12px; }
 .add-connector .help { overflow-wrap: anywhere; font-size: 12px; }
 .add-connector > .error { margin-top: var(--s3); }
+.quick-tools > .quiet { font-size: 12px; margin-bottom: var(--s4); }
+.quick-tools li {
+  display: grid; grid-template-columns: 1fr auto; gap: var(--s2) var(--s3); align-items: center;
+  padding: var(--s3); margin-bottom: var(--s2); background: var(--bg); border: 1px solid var(--line);
+}
+.quick-tools li .quiet { font-size: 12px; }
+.quick-tools li label, .quick-tools li .actions { grid-column: 1 / -1; }
+.quick-tools label { display: flex; flex-direction: column; gap: var(--s1); color: var(--quiet); font-size: 12px; }
+.quick-tools > .error { margin-top: var(--s3); }
 
 /* Prompts */
 .editor { display: flex; flex-direction: column; gap: var(--s3); }

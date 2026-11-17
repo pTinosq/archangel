@@ -1,6 +1,7 @@
 import asyncio
 import time
 
+import httpx
 import pydantic_ai
 import pytest
 from fakes import (
@@ -39,6 +40,8 @@ from agent.schedule import Schedule
 from agent.store import Location
 from agent.tasks import Tasks
 from agent.threads.router import Choice
+from agent.tools import Tools
+from agent.tools.dates import Dates
 from agent.web import Web
 
 
@@ -53,6 +56,7 @@ class Owner:
         whereabouts: Whereabouts | None = None,
         pc: str | None = None,
         router: FakeRouter | None = None,
+        tools: Tools | None = None,
     ):
         """`pc`: the PC's state (None: there isn't one). `router`: by default, one conversation, as before threads."""
         self.requests: list[list[ModelMessage]] = []
@@ -83,6 +87,7 @@ class Owner:
             self.threads,
             schedule=self.schedule,
             coder=self.coder,
+            tools=tools,
         )
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
@@ -506,6 +511,39 @@ def test_without_a_pc_it_isnt_offered_or_used(store):
     assert owner.says(Text("open excel on my pc"))[-1].text == "There's no PC: none has ever connected."
     assert "Devices: phone (online)." in owner.requests[0][-1].instructions
     assert owner.pc_pilot.calls == []
+
+
+# Quick tools: live answers, no device
+
+
+def a_sum(prompt: str) -> ModelResponse:
+    return call("calculate", expression="48.60 / 3")
+
+
+def test_a_quick_tool_answers_inline_and_the_orchestrator_is_told_what_there_is(store):
+    owner = Owner(store, tool_result_or(a_sum), tools=Tools(store, httpx.AsyncClient(), [Dates]))
+    reply = owner.says(Text("what's 48.60 split three ways?"))[-1]
+
+    assert reply.text == "48.60 / 3 = 16.2"
+    assert store.tasks() == [] and owner.pilot.calls == []  # no task, no device
+    assert "Quick tools, live data answered in seconds (try these first): Time and dates (" in (
+        owner.requests[0][-1].instructions
+    )
+
+
+def test_a_quick_tool_the_owner_switched_off_is_neither_told_nor_offered(store):
+    tools = Tools(store, httpx.AsyncClient(), [Dates])
+    tools.configure("dates", enabled=False)
+    offered: list[str] = []
+
+    def model(messages, info: AgentInfo) -> ModelResponse:
+        offered.extend(t.name for t in info.function_tools)
+        return say("ok")
+
+    owner = Owner(store, model, tools=tools)
+    owner.says(Text("what's 2 + 2?"))
+    assert "calculate" not in offered and "start_task" in offered
+    assert "Quick tools, live data" not in owner.requests[0][-1].instructions
 
 
 # Threads: each topic its own history

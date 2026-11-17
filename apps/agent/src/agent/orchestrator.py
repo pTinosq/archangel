@@ -1,5 +1,6 @@
 """The agent the owner talks to. It manages work rather than doing it: starts tasks on the phone or PC, research and
-tasks in the owner's connected services, searches the web for quick answers, relays tasks' questions, decides what to
+tasks in the owner's connected services, answers quick questions from live data (`agent.tools`) or the web, relays
+tasks' questions, decides what to
 do when they fail, and keeps the owner informed on whichever channel suits.
 
 One conversation whatever the channel, kept as threads, one per topic: each event is answered in its thread, seeing
@@ -36,6 +37,7 @@ from agent.tasks import Tasks
 from agent.threads import Threads
 from agent.threads.store import Thread
 from agent.threads.text import ago
+from agent.tools import Tools
 from agent.twin import Twin
 
 log = logging.getLogger(__name__)
@@ -68,6 +70,7 @@ class Orchestrator:
         twin: Twin | None = None,
         schedule: Schedule | None = None,
         coder: Coder | None = None,
+        tools: Tools | None = None,
     ):
         self._store = store
         self._tasks = tasks
@@ -87,9 +90,10 @@ class Orchestrator:
             instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
-            toolsets=[threads.tools, *([twin.tools] if twin else [])],
+            toolsets=[threads.tools, *([twin.tools] if twin else []), *([tools.toolset] if tools else [])],
         )
         self._twin = twin
+        self._quick = tools
         self._schedule = schedule
 
         @self._agent.tool
@@ -367,11 +371,13 @@ class Orchestrator:
                 f"before saying you don't know something about them:\n{self._twin.root()}"
             )
         scheduled = self._schedule and self._schedule.describe()
+        quick = self._quick and self._quick.describe()
         return "\n".join(
             [
                 f"Now: {datetime.now(TIMEZONE):%A %-d %B %Y, %H:%M}, the owner's time.",
                 *about,
                 self._threads.describe(thread),
+                *([f"Quick tools, live data answered in seconds (try these first): {quick}."] if quick else []),
                 f"Devices: {await self._describe_devices()}.",
                 f"Channels the owner can be reached on: {self._gateway.describe()}.",
                 "Connected services, by profile: "

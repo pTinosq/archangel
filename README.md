@@ -33,6 +33,10 @@ Phone and PC work runs as background tasks (one at a time on each), so you can k
 
 It does things later too: "in 15 minutes get me an Uber home", "at 20:30 text me to call Sam", "tomorrow morning call me with the weather", "every weekday at 7…". These are kept through restarts. It wakes at the time, in the thread you asked in. They are listed on the Tasks page, where you can cancel them.
 
+### Quick tools
+
+Live questions are answered in seconds, with no phone and no web search: "is the Victoria line running?", "how do I get to Shoreditch?", "when's the next 73?", "will it rain at 5?", "how much is 50 euros?", "what's the time in Tokyo?", "when's the next bank holiday?", or a sum done exactly. They use free sources that need no key (TfL, Open-Meteo, Frankfurter, gov.uk). Archangel tries them first: a tool, then the web, then research, and the phone or PC only for what lives in your accounts and apps, or needs doing. Switch each on or off on the Connectors page, where TfL also takes an optional app key (it only raises the rate limit).
+
 ### Web, research and reports
 
 Questions the web can answer don't touch the phone:
@@ -75,7 +79,7 @@ The panel is local until you deploy it. In it you can:
 - Look back through its threads (Threads: each topic's summary, tasks and what was said; the chat marks where it moves thread).
 - Edit the prompts.
 - See and shape what Archangel has learned about you (Context twin: a graph of linked pages; add nodes, drag to link them, edit any of it).
-- Connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires).
+- Connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires), and switch the quick tools on and off.
 
 Each page has its own address (`/tasks/12`, `/connectors`). Small sounds play for presses, messages, approvals and the cockpit's traffic; "Sound off" in the header silences them.
 

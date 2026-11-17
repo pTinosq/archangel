@@ -35,6 +35,7 @@ from agent.threads import Threads
 from agent.threads.router import Router
 from agent.threads.store import ThreadStore
 from agent.threads.summariser import Summariser
+from agent.tools import Tools
 from agent.twin import Twin
 from agent.twin.graph import Graph
 from agent.twin.reader import Reader
@@ -66,6 +67,7 @@ def main() -> None:
     researcher = Researcher(openrouter(RESEARCH), openrouter(DEEP, DEEP_TIMEOUT), search)
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
     connectors = Connectors(store, site, DATA)
+    tools = Tools(store)
     # Everything the owner says waits behind the orchestrator, so it answers without reasoning first; the twin's
     # reader too, as every task waits for its briefing. The background agents (pilot, guard, ...) keep reasoning:
     # they find their way through screens and judge risk.
@@ -108,7 +110,7 @@ def main() -> None:
 
     web = Web(config.github(), config.port(), config.public_url())
     schedule = Schedule(store.db)
-    channels = [PanelChannel(store, prompts, connectors, graph, thread_store, schedule, web)]
+    channels = [PanelChannel(store, prompts, connectors, tools, graph, thread_store, schedule, web)]
     public_url = config.public_url()  # Twilio needs it to reach the calls; texts link screenshots and location with it
     links = Links(store, web, config.relay_token(), public_url) if public_url else None
     if account := config.twilio():
@@ -133,6 +135,7 @@ def main() -> None:
         twin,
         schedule,
         coder,
+        tools,
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
