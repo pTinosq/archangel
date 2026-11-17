@@ -184,7 +184,10 @@ The owner also tests across channels and reports changes.
 - **Stored absolute, shown both ways.** The orchestrator's `do_later` takes `at` (the owner's local time) or `in_minutes`; code does the arithmetic and shows "Wed 18 Nov 08:00, in 11 h". The orchestrator sees the time every turn, and what's scheduled.
 - **Woken, not replayed.** When due, a `Scheduled` event wakes the orchestrator with the owner's words and what it said it'd do, in the thread it was asked in; it then starts the task, texts or rings (`report_via voice`), as if asked now.
 - **Never twice.** Marked fired before it runs: a crash loses it rather than ordering two Ubers. Anything due while Archangel was down fires on start, saying how late; the orchestrator judges whether it still makes sense.
-- **Built (2026-11-17):** the scheduled half. Still to come: repeating ("every weekday at 7"), the panel showing what's scheduled, notification triggers.
+- **Repeating** ("every weekday at 7"): a cron expression in the owner's time (models write cron well; cronsim gets daylight saving right). Missed while down: fires once, not once per miss.
+- **Seen on the panel:** what's scheduled, soonest first, above the tasks; Cancel sends a message like the task buttons.
+- **Built (2026-11-17):** scheduled, repeating, on the panel.
+- **Notification triggers, parked (2026-11-17):** the owner judged them not worth it for now: watching for "when my Uber arrives" means a loop and model calls on every notification.
 
 ## M14 requirements (self-improvement) (from the owner)
 

@@ -5,17 +5,17 @@ import pytest
 
 from agent.events import Scheduled
 from agent.messages import Address
-from agent.schedule import TIMEZONE, Schedule, parse, when
+from agent.schedule import TIMEZONE, Schedule, following, local, parse, when
 
 SMS = Address("sms", "owner")
 NOW = datetime(2026, 11, 17, 20, 10, tzinfo=TIMEZONE).timestamp()
 
 
 def test_times_are_the_owner_s_local_time_or_minutes_from_now():
-    assert parse(None, 15, NOW) == NOW + 15 * 60
-    assert parse("2026-11-18 08:00", None, NOW) == datetime(2026, 11, 18, 8, tzinfo=TIMEZONE).timestamp()
+    assert parse(None, 15, None, NOW) == NOW + 15 * 60
+    assert parse("2026-11-18 08:00", None, None, NOW) == datetime(2026, 11, 18, 8, tzinfo=TIMEZONE).timestamp()
     summer = datetime.fromisoformat("2027-07-01 08:00+01:00").timestamp()
-    assert parse("2027-07-01 08:00", None, NOW) == summer  # British Summer Time, not GMT
+    assert parse("2027-07-01 08:00", None, None, NOW) == summer  # British Summer Time, not GMT
 
 
 @pytest.mark.parametrize(
@@ -29,12 +29,12 @@ def test_times_are_the_owner_s_local_time_or_minutes_from_now():
 )
 def test_a_time_must_be_one_readable_future_moment(at, in_minutes, said):
     with pytest.raises(ValueError, match=said):
-        parse(at, in_minutes, NOW)
+        parse(at, in_minutes, None, NOW)
 
 
 def test_times_are_shown_both_ways():
     assert when(NOW + 15 * 60, NOW) == "Tue 17 Nov 20:25, in 15 min"
-    assert when(parse("2026-11-18 08:00", None, NOW), NOW) == "Wed 18 Nov 08:00, in 11 h 50 min"
+    assert when(parse("2026-11-18 08:00", None, None, NOW), NOW) == "Wed 18 Nov 08:00, in 11 h 50 min"
     assert when(NOW + 5 * 24 * 3600, NOW) == "Sun 22 Nov 20:10, in 5 days"
 
 
@@ -81,3 +81,44 @@ def test_a_job_due_long_ago_says_so(store):
     prompt = Scheduled(job).prompt()[0]
     assert "but Archangel was down" in prompt and "Do it only if it still makes sense" in prompt
     assert Scheduled(job).thread == 2 and Scheduled(job).reply_to == SMS and not Scheduled(job).from_owner
+
+
+def test_repeating_starts_at_its_next_time_or_when_asked():
+    weekdays_at_7 = "0 7 * * 1-5"
+    assert local(parse(None, None, weekdays_at_7, NOW)) == "Wed 18 Nov 07:00"
+    assert local(parse("2026-11-23 09:00", None, weekdays_at_7, NOW)) == "Mon 23 Nov 09:00"  # starts Monday
+    with pytest.raises(ValueError, match="Couldn't read 'weekdays' as cron"):
+        parse(None, None, "weekdays", NOW)
+    friday = datetime(2026, 11, 20, 7, tzinfo=TIMEZONE).timestamp()
+    assert local(following(weekdays_at_7, friday)) == "Mon 23 Nov 07:00"
+    summer = datetime(2027, 3, 27, 7, tzinfo=TIMEZONE).timestamp()  # the clocks go forward that night
+    assert local(following("0 7 * * *", summer)) == "Sun 28 Mar 07:00"
+
+
+def test_a_repeating_job_fires_once_however_long_it_was_missed_then_moves_on(store):
+    schedule = Schedule(store.db, lambda: NOW)
+    fired = []
+
+    async def fire(job):
+        fired.append(job.id)
+
+    async def scenario():
+        schedule.add(NOW - 3 * 24 * 3600, "Ring them with the weather", "", SMS, None, "0 7 * * *")
+        watching = asyncio.create_task(schedule.watch(fire))
+        await asyncio.sleep(0.05)
+        watching.cancel()
+
+    asyncio.run(scenario())
+    assert fired == [1]
+    [job] = schedule.upcoming()
+    assert local(job.due) == "Wed 18 Nov 07:00" and job.every == "0 7 * * *"
+    assert (
+        schedule.describe()
+        == "#1 Wed 18 Nov 07:00, in 10 h 50 min, repeats 0 7 * * * (via sms): Ring them with the weather"
+    )
+    assert schedule.cancel(1) and not schedule.upcoming()
+
+
+def test_a_repeating_job_says_when_it_comes_round_next(store):
+    job = Schedule(store.db, lambda: NOW).add(NOW, "Ring them with the weather", "", SMS, None, "0 7 * * 1-5")
+    assert "it repeats (0 7 * * 1-5): next " in Scheduled(job).prompt()[0]

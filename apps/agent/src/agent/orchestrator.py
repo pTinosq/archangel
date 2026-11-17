@@ -208,28 +208,31 @@ class Orchestrator:
                 what: str,
                 at: str | None = None,
                 in_minutes: float | None = None,
+                every: str | None = None,
                 report_via: str | None = None,
             ) -> str:
                 """Do something later, when the owner asks: "in 15 minutes get me an Uber home", "at 20:30 text me to
                 call Sam", "tomorrow morning ring me with the weather". When: `at`, their local time ("2026-11-18
-                08:00"), or `in_minutes`. `what`: all you'll need then, as it'll read then ("today's weather", not
-                "tomorrow's"), e.g. "Start a phone task: book an Uber home"; you're woken with it, in this thread. Replies go where you're talking now; `report_via` as for
-                start_task ("voice" rings them)."""
+                08:00"), or `in_minutes`. Repeating ("every weekday at 7"): `every`, cron in their time ("0 7 * * 1-5"),
+                with `at` only if it starts later. `what`: all you'll need then, as it'll read then ("today's weather",
+                not "tomorrow's"), e.g. "Start a phone task: book an Uber home"; you're woken with it, in this thread.
+                Replies go where you're talking now; `report_via` as for start_task ("voice" rings them)."""
                 report_to = ctx.deps.reply_to
                 if report_via and not (report_to := gateway.owner(report_via)):
                     return no_channel(report_via)
                 now = time.time()
                 try:
-                    due = parse(at, in_minutes, now)
+                    due = parse(at, in_minutes, every, now)
                 except ValueError as error:
                     return str(error)
                 said = ctx.deps.message.text if isinstance(ctx.deps, OwnerMessage) else ""
-                job = schedule.add(due, what, said, report_to, self._thread.id)
-                return f"Scheduled #{job.id} for {when(due, now)}, via {report_to.channel}."
+                job = schedule.add(due, what, said, report_to, self._thread.id, every or "")
+                repeats = f", then {every} (cron)" if every else ""
+                return f"Scheduled #{job.id} for {when(due, now)}{repeats}, via {report_to.channel}."
 
             @self._agent.tool_plain
             async def cancel_later(id: int) -> str:
-                """Cancel something scheduled."""
+                """Cancel something scheduled (all its repeats)."""
                 return f"Cancelled #{id}." if schedule.cancel(id) else f"Nothing scheduled as #{id}."
 
         @self._agent.tool_plain

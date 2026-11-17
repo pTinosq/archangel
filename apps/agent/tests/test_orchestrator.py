@@ -572,7 +572,7 @@ def test_later_is_scheduled_and_done_when_due_in_the_thread_it_was_asked_in(stor
 
     asyncio.run(owner.orchestrator.handle(Scheduled(job)))
     due = owner.requests[-1]
-    assert prompt_of(due).startswith('[Scheduled #1, not from the owner now: at ')
+    assert prompt_of(due).startswith("[Scheduled #1, not from the owner now: at ")
     assert 'they said "in 15 minutes get me an uber home". It\'s due now' in prompt_of(due)
     assert prompt_of(due).endswith("Do it now: Start a phone task: an Uber home")
     assert prompt_of(due[:1]) == "(via cli) in 15 minutes get me an uber home"  # its own thread's history
@@ -602,3 +602,14 @@ def test_something_scheduled_can_be_cancelled(store):
     owner.schedule.add(time.time() + 600, "Text them: call Sam", "", owner.cli.owner, None)
     assert owner.says(Text("never mind"))[-1].text == "Cancelled #1."
     assert not owner.schedule.upcoming()
+
+
+def test_repeating_is_scheduled_with_its_cron(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("do_later", what="Ring them with today's weather", every="0 7 * * 1-5", report_via="email")
+
+    owner = Owner(store, tool_result_or(model))
+    [reply] = owner.says(Text("every weekday at 7 call me with the weather"))
+    assert reply.text.startswith("Scheduled #1 for ") and reply.text.endswith(", then 0 7 * * 1-5 (cron), via email.")
+    [job] = owner.schedule.upcoming()
+    assert job.every == "0 7 * * 1-5" and job.said == "every weekday at 7 call me with the weather"

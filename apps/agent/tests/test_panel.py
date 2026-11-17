@@ -13,6 +13,7 @@ from agent.channels.panel import PanelChannel
 from agent.connectors import Connectors
 from agent.messages import Address, Message, Text
 from agent.prompts import Prompts
+from agent.schedule import Schedule
 from agent.store import Store
 from agent.tasks import Tasks
 from agent.threads.store import ThreadStore
@@ -27,7 +28,10 @@ class Panel:
         self.web = Web(github, address=address)
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
         self.threads = ThreadStore(store.db)
-        self.channel = PanelChannel(store, self.prompts, self.connectors, Graph(store.db), self.threads, self.web)
+        self.schedule = Schedule(store.db)
+        self.channel = PanelChannel(
+            store, self.prompts, self.connectors, Graph(store.db), self.threads, self.schedule, self.web
+        )
         self.delivered: list[Message] = []
 
     def call(self, method: str, url: str, host: str = "localhost", **kwargs) -> httpx.Response:
@@ -134,7 +138,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None, None, None, None, Web()))
+        events = panel._events(PanelChannel(None, None, None, None, None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line
@@ -288,3 +292,16 @@ def test_threads_with_what_was_said_in_them_and_their_tasks(store):
     assert [line["text"] for line in one["lines"]] == ["flights to Delhi?"]
     assert [(task["goal"], task["thread"]) for task in one["tasks"]] == [("Find flights to Delhi", flights.id)]
     assert panel.call("GET", "/api/threads/99").status_code == 404
+
+
+def test_what_s_scheduled_soonest_first(store):
+    panel = Panel(store)
+    sms = Address("sms", "owner")
+    panel.schedule.add(2_000_000_000, "Ring them with the weather", "every weekday at 7 call me", sms, 3, "0 7 * * 1-5")
+    panel.schedule.add(1_900_000_000, "Text them: call Sam", "", sms, None)
+    assert panel.call("GET", "/api/schedule").json() == [
+        {"id": 2, "due": 1_900_000_000, "what": "Text them: call Sam", "said": "", "every": "", "reportTo": "sms",
+         "thread": None},
+        {"id": 1, "due": 2_000_000_000, "what": "Ring them with the weather", "said": "every weekday at 7 call me",
+         "every": "0 7 * * 1-5", "reportTo": "sms", "thread": 3},
+    ]  # fmt: skip

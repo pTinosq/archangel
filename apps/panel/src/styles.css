@@ -137,6 +137,13 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .task-list li > div:first-child { display: flex; align-items: center; gap: var(--s2); margin-bottom: 2px; }
 .task-list .goal { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prompt-list p { margin-top: var(--s4); }
+/* What's scheduled: above the tasks, not selectable, each with its own Cancel. */
+.scheduled { margin-bottom: var(--s5); }
+.scheduled li { cursor: default; display: flex; flex-direction: column; gap: 2px; }
+.scheduled li:hover { background: none; }
+.scheduled .meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+.scheduled .meta button { margin-left: auto; padding: 3px 8px; }
+.status.repeats { --tone: var(--accent); }
 
 /* A task: the phone screen on the left, the whole height; what it is and its steps on the right. */
 .detail {

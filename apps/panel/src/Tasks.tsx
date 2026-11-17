@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, hideExpired, imageUrl, type Step, type Task } from "./api";
+import { api, hideExpired, imageUrl, type Job, type Step, type Task } from "./api";
 import { useNarrow } from "./narrow";
 import { useFeed, usePoll } from "./poll";
 import { Link } from "./route";
@@ -16,6 +16,7 @@ export function Tasks({ selected, select }: { selected?: number; select: (id?: n
     <>
       {!(narrow && shown) && (
         <section className="task-list">
+          <Scheduled />
           <h2>Tasks</h2>
           {tasks?.length === 0 && <p className="quiet">None yet. Ask Archangel to do something on the phone or PC, or to research something.</p>}
           <ul>
@@ -33,6 +34,51 @@ export function Tasks({ selected, select }: { selected?: number; select: (id?: n
       {shown ? <TaskDetail key={shown.id} task={shown} back={back} /> : !narrow && <section className="detail" />}
     </>
   );
+}
+
+/** What Archangel will do later, soonest first; nothing at all when there's none. */
+function Scheduled() {
+  const jobs = usePoll(api.schedule);
+  const [cancelling, setCancelling] = useState<number[]>([]);
+  if (!jobs?.length) return null;
+  const cancel = (job: Job) => {
+    setCancelling((ids) => [...ids, job.id]);
+    api.say(`Cancel scheduled #${job.id}${job.every ? " and its repeats" : ""}.`);
+  };
+
+  return (
+    <div className="scheduled">
+      <h2>Scheduled</h2>
+      <ul>
+        {jobs.map((job) => (
+          <li key={job.id}>
+            <time>{when(job.due)}</time>
+            <div className="goal">{job.said ? `“${job.said}”` : job.what}</div>
+            <div className="meta">
+              {job.every && <span className="status repeats" title={`cron: ${job.every}`}>repeats</span>}
+              <span className="quiet">via {job.reportTo}</span>
+              {job.thread && <Link to={`/threads/${job.thread}`}>#{job.thread}</Link>}
+              <button data-sound="decline" disabled={cancelling.includes(job.id)} onClick={() => cancel(job)}>
+                {cancelling.includes(job.id) ? "Cancelling" : "Cancel"}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** "Wed 18 Nov, 08:00 · in 11 h 50 min". */
+function when(due: number) {
+  const at = new Date(due * 1000).toLocaleString(undefined, {
+    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const minutes = Math.round((due * 1000 - Date.now()) / 60000);
+  if (minutes < 1) return `${at} · now`;
+  if (minutes < 60) return `${at} · in ${minutes} min`;
+  if (minutes < 48 * 60) return `${at} · in ${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
+  return `${at} · in ${Math.round(minutes / 1440)} days`;
 }
 
 function Status({ task }: { task: Task }) {

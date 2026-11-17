@@ -15,6 +15,20 @@ export type Task = {
   /** The conversation thread that started it. */
   thread: number | null;
 };
+/** Something Archangel will do later (apps/agent/src/agent/schedule.py). */
+export type Job = {
+  id: number;
+  /** Next due, in seconds. */
+  due: number;
+  /** What Archangel said it would do then. */
+  what: string;
+  /** The owner's words that asked for it; "" if it wasn't them. */
+  said: string;
+  /** Cron, in the owner's time, if it repeats; else "". */
+  every: string;
+  reportTo: string;
+  thread: number | null;
+};
 export type Step = { id: number; time: number; text: string; screen: string | null };
 export type Line = {
   id: number;
@@ -149,6 +163,7 @@ export const api = {
   tasks: () => call<Task[]>("GET", "/tasks"),
   /** Not a message: who can open a report is the owner's own setting. */
   makePublic: (task: number, isPublic: boolean) => call<{ public: boolean }>("PUT", `/tasks/${task}/public`, { public: isPublic }),
+  schedule: () => call<Job[]>("GET", "/schedule"),
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
   threads: () => call<Thread[]>("GET", "/threads"),
   thread: (id: number) => call<ThreadDetail>("GET", `/threads/${id}`),

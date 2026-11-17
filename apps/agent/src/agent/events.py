@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from agent.messages import Address, Image, Message, Part
-from agent.schedule import Job, local
+from agent.schedule import Job, following, local
 from agent.store import Task
 
 
@@ -125,6 +125,8 @@ class Scheduled(Event):
                 f"It was due at {local(job.due)}, but Archangel was down: it's {local(now)}. Do it only if it still "
                 "makes sense; else tell them"
             )
+        if job.every:  # the store has already moved it on
+            due += f"; it repeats ({job.every}): next {local(following(job.every, now))}"
         said = f"[Scheduled #{job.id}, not from the owner now: at {local(job.created)} {asked}. {due}."
         return [f"{said} Your reply goes via {job.report_to.channel}.] Do it now: {job.what}"]
 

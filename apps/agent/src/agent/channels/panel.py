@@ -6,11 +6,13 @@ The Twin page shows the context twin's graph, and lets the owner edit or delete 
 
 The Threads page shows the conversation's threads: each one's summary, size, what was said in it and its tasks.
 
+The Tasks page shows what's scheduled too (`Schedule`), above the tasks.
+
 The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
 back to /connectors/callback.
 
-Its buttons (approve, decline, cancel) send ordinary owner messages, so every decision goes through the one
-conversation and the orchestrator knows about it.
+Its buttons (approve, decline, cancel a task or something scheduled) send ordinary owner messages, so every decision
+goes through the one conversation and the orchestrator knows about it.
 """
 
 import json
@@ -29,6 +31,7 @@ from agent.channels import Channel, Deliver
 from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
+from agent.schedule import Job, Schedule
 from agent.store import Line, Step, Store, Task
 from agent.threads import FULL
 from agent.threads.store import Thread, ThreadStore
@@ -47,7 +50,14 @@ class PanelChannel(Channel):
     owner = Address(name, "owner")
 
     def __init__(
-        self, store: Store, prompts: Prompts, connectors: Connectors, graph: Graph, threads: ThreadStore, web: Web
+        self,
+        store: Store,
+        prompts: Prompts,
+        connectors: Connectors,
+        graph: Graph,
+        threads: ThreadStore,
+        schedule: Schedule,
+        web: Web,
     ):
         self._deliver: Deliver | None = None
         self._web = web
@@ -55,6 +65,11 @@ class PanelChannel(Channel):
         _connector_routes(web.app, connectors)
         _twin_routes(web.app, graph)
         _thread_routes(web.app, threads, store)
+
+        @web.app.get("/api/schedule")
+        async def scheduled() -> list[dict]:
+            return [_job(job) for job in schedule.upcoming()]
+
         if not web.public:  # the twin's evals: for working on it locally, never on the internet
             evals_tab.routes(web.app)
         web.share(lambda path: _public_report(store, path))
@@ -344,6 +359,18 @@ def _task(task: Task, page: bool) -> dict:
         "report": task.report,
         "reportTo": task.report_to.channel,
         "thread": task.thread,
+    }
+
+
+def _job(job: Job) -> dict:
+    return {
+        "id": job.id,
+        "due": job.due,
+        "what": job.what,
+        "said": job.said,
+        "every": job.every,
+        "reportTo": job.report_to.channel,
+        "thread": job.thread,
     }
 
 
