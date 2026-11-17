@@ -58,12 +58,15 @@ def build(threads: list[dict], case: dict) -> tuple[ThreadStore, dict[int, str]]
         clock.now = started - _age(spec)
         thread = store.new(spec["title"])
         keys[thread.id] = spec["key"]
-        turns = [*spec.get("turns", []), *(case.get("add", []) if case.get("add_to") == spec["key"] else [])]
-        store.save(thread.id, [message for said, answer in turns for message in _turn(said, answer)], size=500)
+        store.save(thread.id, _turns(spec.get("turns", [])), size=500)
         if summary := spec.get("summary"):
             store.summarise(thread.id, spec["title"], summary, clock.now)
         if not spec.get("open"):
             store.close(thread.id)
+    if case.get("add_to"):  # said just now: the conversation is there
+        clock.now = started
+        id = next(id for id, key in keys.items() if key == case["add_to"])
+        store.save(id, store.history(id) + _turns(case["add"]), size=500)
     return store, keys
 
 
@@ -123,8 +126,12 @@ async def main() -> None:
     print(f"Every run: {out}")
 
 
-def _turn(said: str, answer: str) -> list:
-    return [ModelRequest.user_text_prompt(f"(via sms) {said}"), ModelResponse(parts=[TextPart(answer)])]
+def _turns(turns: list[list[str]]) -> list:
+    return [
+        message
+        for said, answer in turns
+        for message in (ModelRequest.user_text_prompt(f"(via sms) {said}"), ModelResponse(parts=[TextPart(answer)]))
+    ]
 
 
 def _age(spec: dict) -> float:

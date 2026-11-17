@@ -18,7 +18,7 @@ INSTRUCTIONS = """You sort what the owner says to Archangel, their assistant, in
 topic, so Archangel answers with that thread in mind and nothing else. Choose the thread this carries on, or none \
 for something new (then give it a title of a few words). A reply to Archangel's last words ("yes", "the second one") \
 carries that thread on. They refer to something not listed? search_threads; when several match, the recent one is \
-likelier. `closes`: it wraps its thread up (thanks, that's all) and asks nothing more."""
+likelier. `closes` only when it asks for nothing at all: a thanks or goodbye that wraps its thread up."""
 
 ENDING_SHOWN = 4
 """Lines of an unfinished thread the router sees: enough to tell whether this answers it."""
@@ -28,7 +28,7 @@ LINE_SHOWN = 240
 class Choice(BaseModel):
     thread: int | None = Field(description="The thread it carries on; null for a new one")
     title: str = Field("", description="A new thread's title, a few words")
-    closes: bool = Field(False, description="It wraps its thread up and asks nothing more")
+    closes: bool = Field(False, description="Only a thanks or goodbye that asks for nothing")
 
 
 class Router:
@@ -57,9 +57,16 @@ class Router:
             return choice
 
     async def choose(self, said: str, recent: list[Thread]) -> Choice:
+        """`recent`: newest first; the first is where the conversation is, what Archangel said last."""
         now = time.time()
-        menu = "\n".join(self._describe(thread, now) for thread in recent) or "None yet."
-        result = await logs.run(self._agent, f"Recent threads, newest first:\n{menu}\n\nThe owner says {said}")
+        if recent:
+            here, *others = recent
+            menu = f"Where the conversation is (Archangel's last words):\n{self._describe(here, now)}"
+            if others:
+                menu += "\n\nOther recent threads, newest first:\n" + "\n".join(self._describe(t, now) for t in others)
+        else:
+            menu = "No threads yet."
+        result = await logs.run(self._agent, f"{menu}\n\nThe owner says {said}")
         return result.output
 
     def _describe(self, thread: Thread, now: float) -> str:

@@ -2,7 +2,7 @@
 # something the owner says. Every case starts from all the threads, aged as given.
 #   thread   the key of the thread it should go in, "new" for a new one, or several ("new | dinner"): any passes
 #   closes   whether it should be seen to wrap its thread up (default false; "either" when both are fair)
-#   add_to, add   turns said in that thread just before ([said, answer] each), to set the moment up
+#   add_to, add   turns said in that thread just now ([said, answer] each), so the conversation is there
 
 [[thread]]
 key = "india-2025"
@@ -179,3 +179,11 @@ thread = "uber"
 name = "back to an older open thread"
 says = "can you send Sam another message saying drinks are on me tonight"
 thread = "sam"
+
+[[case]]
+name = "thanks goes to where the conversation just was"
+add_to = "sam"
+add = [["did it go through?", "Yes, delivered and read: Sam replied with a heart."]]
+says = "great thanks"
+thread = "sam"
+closes = true
