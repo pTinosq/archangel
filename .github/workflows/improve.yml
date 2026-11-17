@@ -66,11 +66,11 @@ jobs:
             End with a PR title (empty if you changed nothing), and a summary for the owner, read by text: what you
             changed or found, and anything they must do (a new variable on Railway, a setting). Short, plain.
           # Its own permissions, not auto mode's: auto mode can be off for the subscription's organisation, and then
-          # every edit is refused; acceptEdits alone still refused them. Edits (a throwaway machine that can't push), and
-          # only the commands that test them.
+          # every edit is refused; acceptEdits alone still refused them. Edits, moving and deleting files (a throwaway
+          # machine that can't push: only the diff leaves it), and only the commands that test them.
           claude_args: |
             --permission-mode acceptEdits
-            --allowedTools "Edit,Write,MultiEdit,Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv sync:*),Bash(npm ci:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(ls:*)"
+            --allowedTools "Edit,Write,MultiEdit,Bash(rm:*),Bash(git rm:*),Bash(mv:*),Bash(git mv:*),Bash(mkdir:*),Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv sync:*),Bash(npm ci:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(ls:*)"
             --json-schema '{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"}},"required":["title","summary"]}'
       - name: What was refused
         if: always()
