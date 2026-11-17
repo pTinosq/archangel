@@ -130,8 +130,8 @@ class FakeSummariser:
     def __init__(self):
         self.read: list[list[str]] = []
 
-    async def summarise(self, thread: Thread, said: list[str]) -> Summary:
-        self.read.append(said)
+    async def summarise(self, thread: Thread, said: list[str], before: str = "") -> Summary:
+        self.read.append([f"(before: {before})", *said] if before else said)
         return Summary(title=f"{thread.title} (summed up)", summary=f"{len(said)} lines about {thread.title}.")
 
 

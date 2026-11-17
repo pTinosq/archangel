@@ -10,10 +10,13 @@ from dataclasses import dataclass
 
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
+from agent.history import recent
 from agent.threads.text import lines
 
 BEFORE = "Before threads"
 """The one conversation there was until threads, kept as the first."""
+ADOPTED = 40
+"""Messages of it kept: what the orchestrator saw of it then."""
 
 
 @dataclass(frozen=True)
@@ -102,8 +105,9 @@ class ThreadStore:
         self._index(id)
 
     def reopen(self, id: int) -> None:
+        """Open again, and said in now: a summary being written meanwhile mustn't close it under the owner."""
         with self._db:
-            self._db.execute("UPDATE threads SET open = 1 WHERE id = ?", (id,))
+            self._db.execute("UPDATE threads SET open = 1, updated = ? WHERE id = ?", (self._clock(), id))
 
     def close(self, id: int) -> None:
         with self._db:
@@ -152,14 +156,15 @@ class ThreadStore:
             )
 
     def _adopt_old_history(self) -> None:
-        """Until threads, the conversation was one history: it becomes the first thread, open, so nothing's lost on
-        the deploy that brings threads. Summarised once it's been quiet, like any other."""
+        """Until threads, the conversation was one history: it becomes the first thread, open, so the deploy that
+        brings threads loses nothing the orchestrator saw (its last messages; all of it is in the transcript).
+        Summarised once it's been quiet, like any other."""
         if not self._db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'history'").fetchone():
             return
         row = self._db.execute("SELECT messages FROM history").fetchone()
         if row:
             thread = self.new(BEFORE)
-            self.save(thread.id, ModelMessagesTypeAdapter.validate_json(row[0]), size=0)
+            self.save(thread.id, recent(ModelMessagesTypeAdapter.validate_json(row[0]), ADOPTED), size=0)
         with self._db:
             self._db.execute("DROP TABLE history")
 

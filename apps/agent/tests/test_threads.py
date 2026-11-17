@@ -165,7 +165,7 @@ def test_a_continuations_summary_includes_what_it_carried_on_from():
         await world.threads.idle()
 
     asyncio.run(scenario())
-    assert world.summariser.read[0][0] == '(Carrying on from "Flights": Delhi from £540.)'
+    assert world.summariser.read[0][0] == "(before: Delhi from £540.)"
 
 
 def test_threads_left_quiet_are_summarised_and_closed():
@@ -184,7 +184,7 @@ def test_a_failed_summary_is_tried_again_at_the_next_tidy():
     quiet = world.store.new("Quiet")
     world.clock.now += QUIET.total_seconds() + 1
 
-    async def broken(thread, said):
+    async def broken(thread, said, before=""):
         raise RuntimeError("model down")
 
     world.summariser.summarise = broken
@@ -285,12 +285,27 @@ def test_the_router_can_search_every_thread():
     assert asyncio.run(Router(FunctionModel(respond), store).choose("(via sms) Delhi again?", [])).thread == india.id
 
 
+def test_a_continuations_summary_is_told_what_came_before():
+    model = answering(title="t", summary="s")
+    asyncio.run(Summariser(model).summarise(World().store.new("Flights"), ["(via sms) book it"], "Delhi from £540."))
+    assert answering.seen[0].parts[-1].content == (
+        'Thread "Flights":\nIt carries on from one that went: Delhi from £540.\n(via sms) book it'
+    )
+
+
 def test_the_summariser_reads_the_thread():
     store = ThreadStore(sqlite3.connect(":memory:"))
     model = answering(title="Flights to India", summary="Delhi from £540.")
     summary = asyncio.run(Summariser(model).summarise(store.new("Flights"), ["(via sms) flights?", "Archangel: £540."]))
     assert (summary.title, summary.summary) == ("Flights to India", "Delhi from £540.")
     assert answering.seen[0].parts[-1].content == 'Thread "Flights":\n(via sms) flights?\nArchangel: £540.'
+
+
+def test_a_long_threads_summary_reads_its_end():
+    model = answering(title="t", summary="s")
+    asyncio.run(Summariser(model).summarise(World().store.new("Long"), [f"line {n} " + "x" * 100 for n in range(1000)]))
+    read = answering.seen[0].parts[-1].content
+    assert "(earlier parts left out)" in read and "line 999" in read and "line 0 " not in read
 
 
 def test_a_thread_is_as_big_as_the_last_call_that_read_it():

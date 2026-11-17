@@ -4,15 +4,17 @@ from dataclasses import replace
 
 from pydantic_ai import BinaryContent, ModelMessage, ModelRequest, UserPromptPart
 
-KEPT_MESSAGES = 40
+KEPT_MESSAGES = 100
+"""A backstop: a conversation thread is carried on in a new one at its size in tokens (threads.FULL), usually long
+before this many messages."""
 KEPT_SCREENSHOTS = 2
 
 
-def recent(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """The last turns that fit in `KEPT_MESSAGES`, cut where a turn starts so tool calls keep their results."""
-    if len(messages) <= KEPT_MESSAGES:
+def recent(messages: list[ModelMessage], keep: int = KEPT_MESSAGES) -> list[ModelMessage]:
+    """The last turns that fit in `keep` messages, cut where a turn starts so tool calls keep their results."""
+    if len(messages) <= keep:
         return messages
-    for start in range(len(messages) - KEPT_MESSAGES, len(messages)):
+    for start in range(len(messages) - keep, len(messages)):
         if _starts_turn(messages[start]):
             return messages[start:]
     return messages[-1:]
