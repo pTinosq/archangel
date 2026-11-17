@@ -6,6 +6,7 @@ from fakes import FakeRouter, FakeSummariser
 from pydantic_ai import ModelMessage, ModelRequest, ModelResponse, RequestUsage, TextPart, ToolCallPart, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from agent import activity
 from agent.events import Notice, OwnerMessage, TaskUpdate
 from agent.messages import Address, Message, Text
 from agent.store import Status, Task
@@ -299,3 +300,20 @@ def test_a_thread_is_as_big_as_the_last_call_that_read_it():
     assert world.store.get(thread.id).size == 900
     world.threads.save(Route(thread), [ModelRequest(parts=[UserPromptPart("no answer yet")])])
     assert world.store.get(thread.id).size == 0
+
+
+def test_the_cockpit_sees_who_routes_and_who_summarises():
+    world = World(Choice(thread=None, title="Flights", closes=True))
+
+    async def scenario():
+        with activity.acting("orchestrator"):
+            route = await world.threads.route(says("flights? thanks"))
+            world.threads.save(route, turn("flights? thanks", "£540."))
+        await world.threads.idle()
+
+    asyncio.run(scenario())
+    calls = [(n.source, n.target, n.text) for n in activity._recent if n.dir == "tx"]
+    assert calls == [
+        ("orchestrator", "thread router", "(via sms) flights? thanks"),
+        ("orchestrator", "thread summariser", "#1 Flights"),
+    ]

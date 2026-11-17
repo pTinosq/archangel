@@ -10,6 +10,7 @@ import { Prompts } from "./Prompts";
 import { play, setSoundOn, soundOn, subscribeSound } from "./sounds";
 import { go, Link, type Page, useRoute } from "./route";
 import { Tasks } from "./Tasks";
+import { Threads } from "./Threads";
 import { Twin } from "./Twin";
 
 /** A tab's label, where it isn't just its page's name. */
@@ -25,7 +26,7 @@ export function App() {
   // Evals only locally: they're for working on the twin, run on this machine, and the agent serves them nowhere else.
   const pages: Page[] = [
     ...(narrow ? ["chat" as Page] : []),
-    ...(["tasks", "cockpit", "twin"] as Page[]),
+    ...(["tasks", "threads", "cockpit", "twin"] as Page[]),
     ...(PUBLIC ? [] : ["evals" as Page]),
     ...(["prompts", "connectors"] as Page[]),
   ];
@@ -61,6 +62,7 @@ export function App() {
         {shown !== "chat" &&
           {
             tasks: <Tasks selected={route.id} select={(id) => go(id ? `/tasks/${id}` : "/tasks")} />,
+            threads: <Threads selected={route.id} select={(id) => go(id ? `/threads/${id}` : "/threads")} />,
             cockpit: <Cockpit />,
             twin: <Twin />,
             evals: <Evals />,

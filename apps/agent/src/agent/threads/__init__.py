@@ -120,8 +120,9 @@ class Threads:
 
     async def tidy(self) -> None:
         """Summarises (and closes) threads left quiet, and closed ones said more in since their summary."""
-        for thread in self._store.to_summarise(self._clock() - QUIET.total_seconds()):
-            await self._summarise(thread.id)
+        with activity.acting("threads"):  # in the cockpit, who asked for the summary
+            for thread in self._store.to_summarise(self._clock() - QUIET.total_seconds()):
+                await self._summarise(thread.id)
 
     async def idle(self) -> None:
         """Waits for summaries being written."""
@@ -165,11 +166,14 @@ class Threads:
             said = lines(self._store.history(id))
             if thread.continues and (before := self._store.get(thread.continues)):
                 said.insert(0, f'(Carrying on from "{before.title}": {before.summary})')
-            try:
-                summary = await self._summariser.summarise(thread, said)
-            except Exception:  # the model: tried again on the next tidy
-                log.exception("Couldn't summarise thread #%d", id)
-                return
+            with activity.call("thread summariser", "agent", f"#{id} {thread.title}") as reply:
+                try:
+                    summary = await self._summariser.summarise(thread, said)
+                except Exception:  # the model: tried again on the next tidy
+                    log.exception("Couldn't summarise thread #%d", id)
+                    reply("failed: tried again later")
+                    return
+                reply(summary.summary)
             self._store.summarise(id, summary.title.strip() or thread.title, summary.summary.strip(), as_of)
 
     def _in_background(self, work) -> None:
