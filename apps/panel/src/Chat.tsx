@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl, type Line } from "./api";
 import { useFeed, usePoll } from "./poll";
+import { Linked } from "./linked";
 import { Link } from "./route";
 import { play } from "./sounds";
 
@@ -80,7 +81,9 @@ export function Said({ line }: { line: Line }) {
   return (
     <div className={`line ${line.sender}`}>
       <span className="via">{line.channel}</span>
-      <p>{line.text}</p>
+      <p>
+        <Linked text={line.text} />
+      </p>
       {line.images.map((name) => (
         <a key={name} href={imageUrl(name)} target="_blank">
           <img src={imageUrl(name)} alt="" onError={hideExpired} />

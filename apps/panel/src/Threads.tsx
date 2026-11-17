@@ -3,6 +3,7 @@ import { api, type Thread, type ThreadDetail } from "./api";
 import { Said } from "./Chat";
 import { useNarrow } from "./narrow";
 import { usePoll } from "./poll";
+import { Linked } from "./linked";
 import { Link } from "./route";
 
 /** The conversation's threads, one per topic, newest first; `selected`: the one in the address, /threads/12. */
@@ -89,7 +90,9 @@ function ThreadPage({ thread, back }: { thread: Thread; back?: () => void }) {
           </p>
         )}
         {thread.summary ? (
-          <p className="report">{thread.summary}</p>
+          <p className="report">
+            <Linked text={thread.summary} />
+          </p>
         ) : (
           <p className="quiet">Summarised once it's finished: you wrap it up, or it's quiet for a few hours.</p>
         )}

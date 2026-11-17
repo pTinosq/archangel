@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, hideExpired, imageUrl, type Job, type Step, type Task } from "./api";
 import { useNarrow } from "./narrow";
 import { useFeed, usePoll } from "./poll";
+import { Linked } from "./linked";
 import { Link } from "./route";
 
 /** `selected`: the task in the address, /tasks/12. */
@@ -117,7 +118,11 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
           {task.thread && <Link to={`/threads/${task.thread}`}>thread #{task.thread}</Link>}
         </p>
         {task.page && <Report task={task} />}
-        {task.report && <p className="report">{task.report}</p>}
+        {task.report && (
+          <p className="report">
+            <Linked text={task.report} />
+          </p>
+        )}
         {task.open && <Controls task={task} />}
       </div>
       <div className="screen" ref={screen}>
@@ -149,7 +154,9 @@ function TaskDetail({ task, back }: { task: Task; back?: () => void }) {
             onClick={() => step.screen && setViewing(step)}
           >
             <time>{clock(step.time)}</time>
-            <span>{step.text}</span>
+            <span>
+              <Linked text={step.text} />
+            </span>
           </li>
         ))}
       </ol>
