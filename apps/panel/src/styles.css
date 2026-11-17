@@ -85,8 +85,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 /* Frame: a header bar, then panes side by side. */
 .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 header { display: flex; align-items: center; gap: var(--s5); height: 48px; padding: 0 var(--s4); border-bottom: 1px solid var(--line); }
-.brand { font-size: 16px; line-height: 16px; color: var(--accent); text-decoration: none; }
-.brand::after { content: "_"; animation: blink 1.1s steps(1) infinite; }
+/* The name and what's running share one cell, so the brand is as wide as the longer and the tabs never sit under it. */
+.brand { display: inline-grid; font-size: 16px; line-height: 16px; color: var(--accent); text-decoration: none; }
+.brand .name, .brand .version { grid-area: 1 / 1; transition: transform 160ms ease-out, opacity 160ms ease-out; }
+.brand .name::after { content: "_"; animation: blink 1.1s steps(1) infinite; }
+/* Hovered, the name moves up and what's running shows beneath it. */
+.brand .version {
+  align-self: end; margin-bottom: -14px; font-size: 8px; line-height: 8px; white-space: nowrap; color: var(--quiet);
+  opacity: 0; pointer-events: none;
+}
+.brand .version.fresh { color: var(--accent); }
+.brand:hover .name, .brand:hover .version { transform: translateY(-6px); }
+.brand:hover .version { opacity: 1; }
 @keyframes blink { 50% { opacity: 0; } }
 nav { display: flex; height: 100%; }
 /* Every tab the same box; the current one is lit, nothing moves. */

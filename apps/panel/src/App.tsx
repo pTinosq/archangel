@@ -41,9 +41,7 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <Link to={`/${home}`} className="brand">
-          Archangel
-        </Link>
+        <Brand home={home} />
         <nav>
           {pages.map((name) => (
             <Link key={name} to={`/${name}`} className={shown === name ? "active" : ""}>
@@ -106,4 +104,32 @@ function useTaskSounds() {
     if (changed.some((t) => t.status.startsWith("needs"))) play("needs");
     else if (changed.some((t) => t.status === "done")) play("done");
   }, [tasks]);
+}
+
+/** The name; hovered, it moves up to show what's running and since when, so a deploy can be seen landing (lit while
+ * it's fresh). */
+function Brand({ home }: { home: Page }) {
+  const version = usePoll(api.version);
+  const age = version ? Date.now() / 1000 - version.started : Infinity;
+  return (
+    <Link to={`/${home}`} className="brand">
+      <span className="name" title={version ? `Deployed ${ago(age)}: ${version.message || "not from GitHub"}` : undefined}>
+        Archangel
+      </span>
+      {version && (
+        <span className={age < FRESH ? "version fresh" : "version"}>
+          {version.commit || "local"} · {ago(age)}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+const FRESH = 10 * 60;
+
+function ago(seconds: number) {
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 48 * 3600) return `${Math.floor(seconds / 3600)} h ago`;
+  return `${Math.floor(seconds / 86400)} days ago`;
 }

@@ -17,6 +17,8 @@ goes through the one conversation and the orchestrator knows about it.
 
 import json
 import logging
+import os
+import time
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import asdict
@@ -98,6 +100,10 @@ class Visibility(BaseModel):
     public: bool
 
 
+STARTED = time.time()
+"""When this deploy went live, near enough: Archangel starts as it does."""
+
+
 class NewConnector(BaseModel):
     kind: Kind
     settings: dict[str, str] = {}
@@ -114,6 +120,14 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
     @app.post("/api/messages")
     async def say(said: Said) -> None:
         await channel.receive(said.text)
+
+    @app.get("/api/version")
+    async def version() -> dict:
+        """What's running, so the owner sees a deploy land: the commit (Railway's, for a deploy from GitHub) and
+        since when."""
+        message = os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE", "")
+        commit = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:7]
+        return {"commit": commit, "message": message.split("\n")[0], "started": STARTED}
 
     @app.get("/api/tasks")
     async def tasks() -> list[dict]:

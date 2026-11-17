@@ -1,6 +1,7 @@
 import asyncio
 import json
 import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -305,3 +306,11 @@ def test_what_s_scheduled_soonest_first(store):
         {"id": 1, "due": 2_000_000_000, "what": "Ring them with the weather", "said": "every weekday at 7 call me",
          "every": "0 7 * * 1-5", "reportTo": "sms", "thread": 3},
     ]  # fmt: skip
+
+
+def test_what_s_running_and_since_when(store, monkeypatch):
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "b64e71c701f55fa50519b9e0db1e538ecd444")
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_MESSAGE", "Add Telegram\n\nThe owner can text it on Telegram.")
+    running = Panel(store).call("GET", "/api/version").json()
+    assert (running["commit"], running["message"]) == ("b64e71c", "Add Telegram")
+    assert running["started"] <= time.time()

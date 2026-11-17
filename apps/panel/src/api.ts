@@ -139,6 +139,8 @@ export type EvalReport = {
   graphs: Record<string, EvalGraph>;
   results: EvalRun[];
 };
+/** What's running: `commit` "" when not deployed from GitHub; `started`, in seconds, when the deploy went live. */
+export type Version = { commit: string; message: string; started: number };
 /** Where to send the owner to sign in; null if they still are. */
 export type SignIn = { signIn: string | null };
 
@@ -161,6 +163,7 @@ export const api = {
   /** Everything the owner does here, buttons included, is a message in the one conversation. */
   say: (text: string) => call<null>("POST", "/messages", { text }),
   tasks: () => call<Task[]>("GET", "/tasks"),
+  version: () => call<Version>("GET", "/version"),
   /** Not a message: who can open a report is the owner's own setting. */
   makePublic: (task: number, isPublic: boolean) => call<{ public: boolean }>("PUT", `/tasks/${task}/public`, { public: isPublic }),
   schedule: () => call<Job[]>("GET", "/schedule"),
