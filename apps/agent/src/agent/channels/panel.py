@@ -291,7 +291,7 @@ def _thread_routes(app: FastAPI, threads: ThreadStore, store: Store) -> None:
         return {
             **_thread(thread),
             "lines": store.lines(thread=id),
-            "tasks": [_task(task, store.has_page(task.id)) for task in store.tasks() if task.thread == id],
+            "tasks": [_task(task, store.has_page(task.id)) for task in store.tasks(thread=id)],
         }
 
 

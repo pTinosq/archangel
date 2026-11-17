@@ -2,6 +2,8 @@ import sqlite3
 
 from pydantic_ai import ModelMessagesTypeAdapter, ModelRequest, ModelResponse, TextPart
 
+from agent.messages import Address, Message, Text
+from agent.store import Store
 from agent.threads.store import ADOPTED, BEFORE, ThreadStore
 
 
@@ -108,6 +110,16 @@ def test_reopening_counts_as_said_in():
     store.reopen(thread.id)  # the owner came back to it meanwhile
     store.summarise(thread.id, "Flights", "…", as_of)
     assert store.get(thread.id).open
+
+
+def test_adopting_files_what_was_said_and_done_before_under_the_first_thread(tmp_path):
+    store = Store(tmp_path)  # as on the deploy: the store's tables first, with their thread columns added
+    store.db.execute("CREATE TABLE history (id INTEGER PRIMARY KEY CHECK (id = 1), messages BLOB)")
+    store.db.execute("INSERT INTO history VALUES (1, ?)", (ModelMessagesTypeAdapter.dump_json(turn("hi", "Hello.")),))
+    store.add_line(Message(Address("sms", "+44"), (Text("hi"),)), "owner")
+    store.add_task("Find flights", Address("sms", "+44"), "research")
+    [thread] = ThreadStore(store.db).recent()
+    assert store.lines()[0].thread == thread.id and store.task(1).thread == thread.id
 
 
 def test_with_no_conversation_before_there_are_no_threads():

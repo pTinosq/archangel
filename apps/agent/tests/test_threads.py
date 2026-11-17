@@ -10,10 +10,10 @@ from agent import activity
 from agent.events import Notice, OwnerMessage, TaskUpdate
 from agent.messages import Address, Message, Text
 from agent.store import Status, Task
-from agent.threads import FULL, QUIET, Route, Threads
+from agent.threads import CHECK, FULL, QUIET, RETRY, Route, Threads
 from agent.threads.router import Choice, Router
 from agent.threads.store import ThreadStore
-from agent.threads.summariser import Summariser
+from agent.threads.summariser import Summariser, Summary
 
 SMS = Address("sms", "+44")
 
@@ -179,21 +179,107 @@ def test_threads_left_quiet_are_summarised_and_closed():
     assert world.store.get(busy.id).open and not world.store.get(busy.id).summary
 
 
-def test_a_failed_summary_is_tried_again_at_the_next_tidy():
+def test_a_failed_summary_is_tried_again_an_hour_later_not_every_minute():
     world = World()
     quiet = world.store.new("Quiet")
     world.clock.now += QUIET.total_seconds() + 1
+    tries = []
 
     async def broken(thread, said, before=""):
+        tries.append(thread.id)
         raise RuntimeError("model down")
 
     world.summariser.summarise = broken
     asyncio.run(world.threads.tidy())
-    assert world.store.get(quiet.id).open
-    world.summariser = FakeSummariser()
-    world.threads._summariser = world.summariser
+    world.clock.now += CHECK.total_seconds()
+    asyncio.run(world.threads.tidy())
+    assert tries == [quiet.id] and world.store.get(quiet.id).open
+    world.threads._summariser = FakeSummariser()
+    world.clock.now += RETRY.total_seconds()
     asyncio.run(world.threads.tidy())
     assert not world.store.get(quiet.id).open
+
+
+def test_a_summary_never_closes_a_thread_said_in_while_it_was_written():
+    world = World()
+    thread = world.store.new("Shopping")
+    world.threads.save(Route(thread), turn("add milk", "Added."))
+    world.clock.now += QUIET.total_seconds() + 1
+    writing, carry_on = asyncio.Event(), asyncio.Event()
+
+    async def slow(found, said, before=""):
+        writing.set()
+        await carry_on.wait()
+        return Summary(title="Shopping", summary="Added milk.")
+
+    world.summariser.summarise = slow
+    world.router.choices = [Choice(thread=thread.id)]
+
+    async def scenario():
+        tidying = asyncio.create_task(world.threads.tidy())
+        await writing.wait()  # the summary's being written as the owner comes back to the thread
+        route = await world.threads.route(says("and eggs"))
+        carry_on.set()
+        await tidying  # it finishes mid-answer
+        assert world.store.get(thread.id).open
+        world.threads.save(route, world.store.history(thread.id) + turn("and eggs", "Added."))
+
+    asyncio.run(scenario())
+    after = world.store.get(thread.id)
+    assert after.open and after.stale and after.summary == "Added milk."
+
+
+def test_a_wrap_up_and_a_tidy_summarise_a_thread_once():
+    world = World(Choice(thread=None, title="Flights", closes=True))
+
+    async def scenario():
+        route = await world.threads.route(says("thanks"))
+        world.threads.save(route, turn("thanks", "Any time."))
+        await world.threads.tidy()
+        await world.threads.idle()
+
+    asyncio.run(scenario())
+    assert len(world.summariser.read) == 1
+
+
+def test_a_full_thread_is_carried_on_at_once_and_summarised_meanwhile():
+    world = World()
+    flights = world.store.new("Flights")
+    world.threads.save(Route(flights), turn("flights?", "£540.", tokens=FULL))
+    world.router.choices = [Choice(thread=flights.id)]
+
+    async def scenario():
+        route = await world.threads.route(says("and hotels?"))
+        assert "(its summary is on its way: read_thread 1)" in world.threads.describe(route.thread)
+        await world.threads.idle()
+        return route
+
+    route = asyncio.run(scenario())
+    assert route.thread.continues == flights.id and world.store.get(flights.id).summary
+
+
+def test_a_task_from_a_thread_since_carried_on_reports_where_it_carried_on():
+    world = World()
+    flights = world.store.new("Flights")
+    world.threads.save(Route(flights), turn("flights?", "Looking.", tokens=FULL))
+    world.router.choices = [Choice(thread=flights.id), Choice(thread=flights.id)]
+    carried = world.route(says("and hotels?")).thread
+    update = TaskUpdate(Task(4, "Find flights", SMS, Status.DONE, "£540.", thread=flights.id))
+    assert world.route(update).thread.id == carried.id
+    assert world.route(says("book the £540 one")).thread.id == carried.id  # not a second continuation
+    assert [t.id for t in world.store.recent() if t.continues == flights.id] == [carried.id]
+
+
+def test_if_routing_breaks_the_message_still_gets_a_thread():
+    world = World()
+    latest = world.store.new("Latest")
+
+    def broken(id):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    world.store.successor = broken  # anything unforeseen below the router
+    world.router.choices = [Choice(thread=latest.id)]
+    assert world.route(says("hello")).thread.id == latest.id
 
 
 def test_the_orchestrator_is_told_its_thread_and_the_others():

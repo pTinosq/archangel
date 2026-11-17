@@ -33,7 +33,7 @@ flowchart LR
 | Event | Thread |
 |---|---|
 | Something the owner says | The router's choice. If the router fails: where the conversation is. |
-| A task's update | The thread that started it (`Task.thread`), however the conversation has moved on. No model call. |
+| A task's update | The thread that started it (`Task.thread`), however the conversation has moved on, or what carried it on if it was full. No model call. |
 | A notice (voicemail, the twin's notes, a shared location) | The latest thread. |
 
 A task from before threads has no thread: its update goes to the latest.
@@ -61,7 +61,8 @@ stateDiagram-v2
 - **Quiet threads** (nothing said for 3 hours) are summarised and closed too, so every finished thread has a summary for the router and for search.
 - **Summaries** are a few lines keeping the concrete facts (prices, names, times, links, task numbers) and what's left open, and they retitle the thread. Written by the main model (in the background, so it can think). A thread said more in after its summary (a task update arriving late) is summarised again.
 - **Reopening.** A closed thread the owner comes back to opens again with its whole history.
-- **Full.** Each thread records how big the orchestrator's last call in it was, in tokens (its `size`). At 30,000 (`FULL`) the next message carries on in a new thread, which starts from the full one's summary, so nothing silently falls out of the context. The old 40-message trim stays only as a backstop, at 100 messages.
+- **Full.** Each thread records how big the orchestrator's last call in it was, in tokens (its `size`). At 30,000 (`FULL`) the next message (or task update) carries on in a new thread at once; the full one's summary, which the new one starts from, follows in the background, and until it does the orchestrator is told to read the full one if it needs to. Nothing silently falls out of the context. The old 40-message trim stays only as a backstop, at 100 messages.
+- **Said in counts from the moment it's routed**, so a summary being written as the owner comes back can't close the thread under them: a summary only closes a thread nothing was said in since it was read. A summary that fails is tried again an hour later, not every minute.
 
 ## What the orchestrator sees
 
@@ -87,7 +88,7 @@ The task list marks tasks started in other threads (`(thread #14)`). Two tools: 
 | `summariser.py` | `Summariser.summarise(thread, said, before) → Summary(title, summary)`. |
 | `text.py` | A thread's history as plain lines (what was said, tool calls as short notes), and `ago`. |
 
-Storage, in `data/archangel.db`: `threads`, `thread_history`, `thread_text` (FTS5), and a `thread` column on `transcript` and `tasks`. The old one-row `history` table is adopted on first start and dropped.
+Storage, in `data/archangel.db`: `threads`, `thread_history`, `thread_text` (FTS5), and a `thread` column on `transcript` and `tasks`. The old one-row `history` table is adopted on first start, in one transaction (the last 40 messages, as the orchestrator saw them; everything said and every task until then is filed under it), and dropped. Rolling back to before threads would start the conversation afresh (the adopted history stays in `thread_history`); rolling forward again would adopt that stretch as a second "Before threads".
 
 The prompts are editable on the panel like the rest ("thread router", "thread summariser").
 
@@ -114,5 +115,6 @@ First runs, 2026-11-17, on `deepseek/deepseek-v4.1-flash`:
 
 - The router is a model: it can put a message in the wrong thread. The orchestrator still sees the other threads' names and can search and read them, so it can recover what it needs, but its answer lands in the thread chosen.
 - A notice goes to the latest thread, not necessarily the one it's about.
+- The chat's marks are worked out in the browser: an owner's newest line isn't filed yet when it arrives, so it's shown in its answer's thread; if a task's update lands between the two, it can show under the wrong one until a reload.
 - Search is by words, not meaning: "the cheap flights" finds "flights", not a thread that only said "fares".
 - Summaries are a model's: they can leave out what turns out to matter later. The thread's whole history stays, and `read_thread` reads it.

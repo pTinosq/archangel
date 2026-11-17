@@ -104,8 +104,12 @@ class ThreadStore:
             self._db.execute("UPDATE threads SET updated = ?, size = ? WHERE id = ?", (self._clock(), size, id))
         self._index(id)
 
+    def touch(self, id: int) -> None:
+        """Being said in now: a summary being written meanwhile mustn't close it under the owner."""
+        with self._db:
+            self._db.execute("UPDATE threads SET updated = ? WHERE id = ?", (self._clock(), id))
+
     def reopen(self, id: int) -> None:
-        """Open again, and said in now: a summary being written meanwhile mustn't close it under the owner."""
         with self._db:
             self._db.execute("UPDATE threads SET open = 1, updated = ? WHERE id = ?", (self._clock(), id))
 
@@ -113,15 +117,23 @@ class ThreadStore:
         with self._db:
             self._db.execute("UPDATE threads SET open = 0 WHERE id = ?", (id,))
 
-    def summarise(self, id: int, title: str, summary: str, as_of: float) -> None:
-        """Its summary as of `as_of`; closes it too unless something was said in it since."""
+    def summarise(self, id: int, title: str, summary: str, seen: float) -> None:
+        """Its summary of everything said up to `seen` (its `updated` when read); closes it too, unless something was
+        said in it since."""
         with self._db:
             self._db.execute(
                 "UPDATE threads SET title = ?, summary = ?, summarised = ?, "
                 "open = CASE WHEN updated <= ? THEN 0 ELSE open END WHERE id = ?",
-                (title, summary, as_of, as_of, id),
+                (title, summary, seen, seen, id),
             )
         self._index(id)
+
+    def successor(self, id: int) -> Thread | None:
+        """The thread carrying this one on, once it was full."""
+        row = self._db.execute(
+            f"SELECT {_COLUMNS} FROM threads WHERE continues = ? ORDER BY id DESC LIMIT 1", (id,)
+        ).fetchone()
+        return _thread(row) if row else None
 
     def to_summarise(self, quiet_since: float) -> list[Thread]:
         """Open threads nothing's been said in since `quiet_since`, and closed ones said more in since their summary.
@@ -157,16 +169,29 @@ class ThreadStore:
 
     def _adopt_old_history(self) -> None:
         """Until threads, the conversation was one history: it becomes the first thread, open, so the deploy that
-        brings threads loses nothing the orchestrator saw (its last messages; all of it is in the transcript).
-        Summarised once it's been quiet, like any other."""
+        brings threads loses nothing the orchestrator saw (its last messages), with everything said and every task
+        until then filed under it. Summarised once it's been quiet, like any other. All at once or not at all: a
+        crash halfway would adopt it twice."""
         if not self._db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'history'").fetchone():
             return
         row = self._db.execute("SELECT messages FROM history").fetchone()
-        if row:
-            thread = self.new(BEFORE)
-            self.save(thread.id, recent(ModelMessagesTypeAdapter.validate_json(row[0]), ADOPTED), size=0)
+        id = None
         with self._db:
+            if row:
+                messages = recent(ModelMessagesTypeAdapter.validate_json(row[0]), ADOPTED)
+                now = self._clock()
+                id = self._db.execute(
+                    "INSERT INTO threads (title, created, updated) VALUES (?, ?, ?)", (BEFORE, now, now)
+                ).lastrowid
+                self._db.execute(
+                    "INSERT INTO thread_history VALUES (?, ?)", (id, ModelMessagesTypeAdapter.dump_json(messages))
+                )
+                for table in ("transcript", "tasks"):  # the store's, made (with their thread column) before this
+                    if any(column == "thread" for _, column, *_ in self._db.execute(f"PRAGMA table_info({table})")):
+                        self._db.execute(f"UPDATE {table} SET thread = ? WHERE thread IS NULL", (id,))
             self._db.execute("DROP TABLE history")
+        if id:
+            self._index(id)
 
 
 _COLUMNS = "id, title, summary, open, created, updated, size, summarised, continues"
