@@ -43,6 +43,8 @@ jobs:
         with:
           node-version: 22
       - uses: extractions/setup-just@v3
+      - name: Claude Code's sandbox
+        run: sudo apt-get install -y -qq bubblewrap socat > /dev/null
       - id: claude
         uses: anthropics/claude-code-action@v1
         env:
@@ -69,6 +71,12 @@ jobs:
             --permission-mode acceptEdits
             --allowedTools "Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv sync:*),Bash(npm ci:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(ls:*)"
             --json-schema '{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"}},"required":["title","summary"]}'
+      - name: What was refused
+        if: always()
+        env:
+          RAN: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          [ -f "$RAN" ] && jq -c '.[] | select(.type == "result") | .permission_denials[]? | {tool_name, input: (.tool_input | tostring | .[:200])}' "$RAN" || true
       - name: Save the change
         run: git add -A && git diff --cached --binary "$START" > change.patch
       - uses: actions/upload-artifact@v4
