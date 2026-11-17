@@ -80,6 +80,10 @@ twin *graph:
 twin-eval *args:
     cd {{agent}} && uv run python -m evals.twin.run {{args}}
 
+# The thread router's evals on a real model (costs a little): `just threads-eval [name filter] [--runs N]`
+threads-eval *args:
+    cd {{agent}} && uv run python -m evals.threads.run {{args}}
+
 test:
     cd {{agent}} && uv run pytest -q
     cd {{relay}} && uv run pytest -q
