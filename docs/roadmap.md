@@ -26,6 +26,7 @@ Each milestone ships something usable and proves one idea.
 | M17b ✅ | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
 | M17c ✅ | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
 | M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
+| M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -261,3 +262,19 @@ The owner also tests across channels and reports changes.
 - **Tasks belong to the thread that started them**, so their updates come back into it.
 - **Beside the twin, not instead of it:** the twin keeps what's lasting about the owner; threads keep what was said and done.
 - **Built and live (2026-11-17).** As planned, with: the thread the conversation is in shown to the router apart from the rest; a thread full at 30k tokens carried on in a new one from its summary; quiet threads (3 h) summarised too; the old single history adopted as the first thread. Router eval 85/85 on the real model. Design: [threads.md](threads.md). To tick: used for a while.
+
+## M19 requirements (files and storage) (from the owner)
+
+Today Archangel has no place to keep a file: chat pictures and screens are short-lived images, and a report is one page of HTML. This gives it a folder of its own, scoped so nothing outside it can be read or written.
+
+- **The owner hands it files.** PDFs, images and other documents, from any channel that can carry them (the panel, texts where the carrier allows), kept until deleted.
+- **It stores, reads and works with them.** List, open, search and summarise what's there; a PDF's text, an image looked at, a document answered from, a new file made from an old one.
+- **It keeps what it generates.** Images from image-generation models are saved rather than shown once and lost, and can be sent back on any channel that shows pictures.
+- **It writes code to disk.** Scripts and other code files it makes are written as files the owner can open, download or hand to a later task, not left in a chat message.
+- **Scoped.** One storage root, paths checked in code so nothing escapes it (no `..`, no symlinks out); size limits; deleting needs the owner's word.
+- **On the panel.** A Files page to browse, upload, download and delete.
+
+**Plan (sketch, undecided)**
+- **A `files` tool set for the orchestrator**, beside the quick tools, over a directory on the agent's volume; the store records each file's name, type, size, where it came from and the thread it belongs to.
+- **Tasks can be given files**, so a phone or PC task can be handed a document, and what a task produces is filed in the same place.
+- **Not decided:** whether the twin links to files, how long generated files are kept, and which image-generation model to use.
