@@ -47,10 +47,10 @@ days_ago = 3
 summary = "Rain all day Saturday, dry Sunday."
 
 [[thread]]
-key = "steam"
+key = "pc-game"
 title = "Install a game on the PC"
 days_ago = 2
-summary = "Installed a chess game on the PC through Steam."
+summary = "Installed a chess game on the PC."
 
 [[thread]]
 key = "news"
