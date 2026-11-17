@@ -22,7 +22,8 @@ const PUBLIC = !["localhost", "127.0.0.1"].includes(location.hostname);
 export function App() {
   const narrow = useNarrow();
   const route = useRoute();
-  // On a phone the conversation is a page of its own, and the one it opens on; on a desktop it's always beside.
+  // On a phone the conversation is a page of its own, and the one it opens on; on a desktop it's beside every page
+  // but Connectors, whose three columns are its own.
   // Evals only locally: they're for working on the twin, run on this machine, and the agent serves them nowhere else.
   const pages: Page[] = [
     ...(narrow ? ["chat" as Page] : []),
@@ -67,7 +68,7 @@ export function App() {
             prompts: <Prompts />,
             connectors: <Connectors />,
           }[shown]}
-        <Chat visible={!narrow || shown === "chat"} />
+        <Chat visible={narrow ? shown === "chat" : shown !== "connectors"} />
       </main>
     </div>
   );

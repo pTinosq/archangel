@@ -198,6 +198,8 @@ class Connectors:
         if connector.kind == "google":
             await self._google_tokens(connector, code)
         else:
+            if signing_in.connecting.done():  # it gave up waiting: say why, not that the code came too late
+                signing_in.connecting.result()
             signing_in.code.set_result(AuthorizationCodeResult(code=code, state=state, iss=issuer))
             await signing_in.connecting
             connector = self._get(connector.name)  # tokens saved meanwhile
@@ -290,7 +292,8 @@ class Connectors:
         )
 
     async def _connect(self, connector: Connector, auth: OAuthClientProvider) -> None:
-        async with MCPToolset(connector.url, auth=auth):  # connecting is what signs in
+        # Connecting is what signs in, so it waits as long as the owner may take: MCPToolset gives up after 5 seconds.
+        async with MCPToolset(connector.url, auth=auth, init_timeout=SIGN_IN_SECONDS):
             pass
 
     def _signed_in(self, name: str) -> Connector:
