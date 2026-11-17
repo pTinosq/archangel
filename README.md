@@ -76,3 +76,5 @@ To text or call it: a Twilio number, its webhooks pointed at the agent, and the 
 To have it improve itself: run `claude setup-token` and save the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN` (`gh secret set CLAUDE_CODE_OAUTH_TOKEN`, in your own terminal), let Actions open PRs (Settings → Actions → General), and give the agent `GITHUB_TOKEN`, a fine-grained token for this repo only (Actions, Contents, Pull requests: read and write).
 
 Details: [CLAUDE.md](CLAUDE.md).
+
+made with love
