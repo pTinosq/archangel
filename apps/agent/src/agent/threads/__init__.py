@@ -31,6 +31,8 @@ FULL = 30_000
 QUIET = timedelta(hours=3)
 """An open thread nothing's been said in for this long is finished: summarised and closed."""
 CHECK = timedelta(minutes=1)
+RETRY = timedelta(hours=1)
+"""A summary that failed is tried again after this, not every minute: a model that refuses keeps refusing."""
 RECENT = 10
 """Threads the router reads; older ones it finds by searching."""
 OTHERS_SHOWN = 5
@@ -58,14 +60,18 @@ class Threads:
         self._clock = clock
         self._summarising = asyncio.Lock()  # one at a time: they're background work, never urgent
         self._pending: set[asyncio.Task] = set()
+        self._failed: dict[int, float] = {}  # threads whose summary failed, and when
 
     async def route(self, event: Event) -> Route:
-        """The thread `event` belongs in, made or reopened as needed. Never fails: if the router does, the latest."""
-        if isinstance(event, TaskUpdate) and event.task.thread and (thread := self._store.get(event.task.thread)):
-            return Route(thread)  # back where it was asked for, however the conversation has moved on
-        if isinstance(event, OwnerMessage):
-            return await self._choose(event)
-        return Route(self._store.latest() or self._store.new(_title(event)))  # a notice, or an old task
+        """The thread `event` belongs in, made or reopened as needed, and marked as said in now. Never fails: if
+        routing does, the latest thread."""
+        try:
+            route = await self._route(event)
+        except Exception:  # the store, or something unforeseen: an answer in the wrong thread beats none
+            log.exception("Couldn't route %s", type(event).__name__)
+            route = Route(self._store.latest() or self._store.new(_title(event)))
+        self._store.touch(route.thread.id)
+        return Route(self._store.get(route.thread.id), route.closes)
 
     def history(self, thread: Thread) -> list[ModelMessage]:
         return self._store.history(thread.id)
@@ -75,14 +81,19 @@ class Threads:
         self._store.save(route.thread.id, messages, _size(messages))
         if route.closes:
             self._store.close(route.thread.id)
-            self._in_background(self._summarise(route.thread.id))
+            self._in_background(self._summarise(self._store.get(route.thread.id)))
 
     def describe(self, thread: Thread) -> str:
         """For the orchestrator's situation: the thread it's in, what it carries on from, and the others recent."""
         now = self._clock()
         about = [f'You\'re in thread #{thread.id}, "{thread.title}", started {ago(thread.created, now)}.']
         if thread.continues and (before := self._store.get(thread.continues)):
-            about.append(f'It carries on #{before.id}, "{before.title}", which went:\n{before.summary}')
+            went = (
+                f"which went:\n{before.summary}"
+                if before.summary
+                else f"(its summary is on its way: read_thread {before.id})"
+            )
+            about.append(f'It carries on #{before.id}, "{before.title}", {went}')
         others = [t for t in self._store.recent(OTHERS_SHOWN + 1) if t.id != thread.id][:OTHERS_SHOWN]
         if others:
             listed = "; ".join(
@@ -120,14 +131,23 @@ class Threads:
 
     async def tidy(self) -> None:
         """Summarises (and closes) threads left quiet, and closed ones said more in since their summary."""
+        now = self._clock()
         with activity.acting("threads"):  # in the cockpit, who asked for the summary
-            for thread in self._store.to_summarise(self._clock() - QUIET.total_seconds()):
-                await self._summarise(thread.id)
+            for thread in self._store.to_summarise(now - QUIET.total_seconds()):
+                if now - self._failed.get(thread.id, 0) >= RETRY.total_seconds():
+                    await self._summarise(thread)
 
     async def idle(self) -> None:
         """Waits for summaries being written."""
         while self._pending:
             await asyncio.gather(*self._pending, return_exceptions=True)
+
+    async def _route(self, event: Event) -> Route:
+        if isinstance(event, TaskUpdate) and event.task.thread and (thread := self._store.get(event.task.thread)):
+            return Route(self._current(thread))  # back where it was asked for, however the conversation has moved on
+        if isinstance(event, OwnerMessage):
+            return await self._choose(event)
+        return Route(self._store.latest() or self._store.new(_title(event)))  # a notice, or a task from before threads
 
     async def _choose(self, event: OwnerMessage) -> Route:
         said = f"(via {event.message.address.channel}) {event.message.text}" + " [image]" * len(event.message.images)
@@ -143,37 +163,48 @@ class Threads:
             reply(f"#{choice.thread}" if choice.thread else f"new: {choice.title}")
         if choice.thread is None:
             return Route(self._store.new(choice.title.strip()), choice.closes)
-        thread = self._store.get(choice.thread)
-        if thread.size >= FULL:
-            return Route(await self._carry_on(thread), choice.closes)
+        thread = self._current(self._store.get(choice.thread))
         if not thread.open:
             self._store.reopen(thread.id)
             thread = self._store.get(thread.id)
         return Route(thread, choice.closes)
 
-    async def _carry_on(self, full: Thread) -> Thread:
-        """A new thread for a full one, starting from its summary (written now if it isn't fresh)."""
-        if full.stale:
-            await self._summarise(full.id)
+    def _current(self, thread: Thread) -> Thread:
+        """Where a thread's conversation is now: its latest continuation, carried on afresh if that's full."""
+        while after := self._store.successor(thread.id):
+            thread = after
+        return self._carry_on(thread) if thread.size >= FULL else thread
+
+    def _carry_on(self, full: Thread) -> Thread:
+        """A new thread for a full one, at once; the full one's summary, which the new one starts from, follows in
+        the background (the orchestrator can read the full one meanwhile)."""
         self._store.close(full.id)
         log.info("Thread #%d is full (%d tokens): carried on in a new one", full.id, full.size)
+        if full.stale:
+            self._in_background(self._summarise(self._store.get(full.id)))
         return self._store.new(full.title, continues=full.id)
 
-    async def _summarise(self, id: int) -> None:
+    async def _summarise(self, found: Thread) -> None:
+        """Summarises a thread found finished (and closes it), unless it's been said in since, or summed up already
+        (a wrap-up and a tidy can both ask)."""
         async with self._summarising:
-            thread = self._store.get(id)
-            as_of = self._clock()  # anything said from now on makes this summary stale
-            said = lines(self._store.history(id))
+            thread = self._store.get(found.id)
+            if thread.updated != found.updated or not thread.stale:
+                return
+            said = lines(self._store.history(thread.id))
             before = self._store.get(thread.continues) if thread.continues else None
-            with activity.call("thread summariser", "agent", f"#{id} {thread.title}") as reply:
+            with activity.call("thread summariser", "agent", f"#{thread.id} {thread.title}") as reply:
                 try:
                     summary = await self._summariser.summarise(thread, said, before.summary if before else "")
-                except Exception:  # the model: tried again on the next tidy
-                    log.exception("Couldn't summarise thread #%d", id)
+                except Exception:  # the model: tried again later
+                    log.exception("Couldn't summarise thread #%d", thread.id)
+                    self._failed[thread.id] = self._clock()
                     reply("failed: tried again later")
                     return
                 reply(summary.summary)
-            self._store.summarise(id, summary.title.strip() or thread.title, summary.summary.strip(), as_of)
+            self._failed.pop(thread.id, None)
+            title = summary.title.strip() or thread.title
+            self._store.summarise(thread.id, title, summary.summary.strip(), thread.updated)
 
     def _in_background(self, work) -> None:
         task = asyncio.create_task(work)

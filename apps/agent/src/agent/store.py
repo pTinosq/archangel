@@ -222,9 +222,10 @@ class Store:
         row = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks WHERE id = ?", (id,)).fetchone()
         return _task(row) if row else None
 
-    def tasks(self, limit: int = 100) -> list[Task]:
-        """Newest first."""
-        rows = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks ORDER BY id DESC LIMIT ?", (limit,))
+    def tasks(self, limit: int = 100, thread: int | None = None) -> list[Task]:
+        """Newest first; only `thread`'s, if given."""
+        where, args = ("WHERE thread = ?", [thread]) if thread is not None else ("", [])
+        rows = self._db.execute(f"SELECT {_TASK_COLUMNS} FROM tasks {where} ORDER BY id DESC LIMIT ?", [*args, limit])
         return [_task(row) for row in rows]
 
     def interrupt_running(self) -> list[Task]:
