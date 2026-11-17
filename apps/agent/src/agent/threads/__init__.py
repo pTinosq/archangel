@@ -164,11 +164,10 @@ class Threads:
             thread = self._store.get(id)
             as_of = self._clock()  # anything said from now on makes this summary stale
             said = lines(self._store.history(id))
-            if thread.continues and (before := self._store.get(thread.continues)):
-                said.insert(0, f'(Carrying on from "{before.title}": {before.summary})')
+            before = self._store.get(thread.continues) if thread.continues else None
             with activity.call("thread summariser", "agent", f"#{id} {thread.title}") as reply:
                 try:
-                    summary = await self._summariser.summarise(thread, said)
+                    summary = await self._summariser.summarise(thread, said, before.summary if before else "")
                 except Exception:  # the model: tried again on the next tidy
                     log.exception("Couldn't summarise thread #%d", id)
                     reply("failed: tried again later")

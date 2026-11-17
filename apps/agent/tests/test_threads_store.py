@@ -2,7 +2,7 @@ import sqlite3
 
 from pydantic_ai import ModelMessagesTypeAdapter, ModelRequest, ModelResponse, TextPart
 
-from agent.threads.store import BEFORE, ThreadStore
+from agent.threads.store import ADOPTED, BEFORE, ThreadStore
 
 
 class Clock:
@@ -87,6 +87,27 @@ def test_the_conversation_before_threads_becomes_the_first():
     assert store.search("hello")[0].thread.id == thread.id
     assert not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'history'").fetchone()
     assert ThreadStore(db).recent() == [store.get(thread.id)]  # once only
+
+
+def test_the_conversation_before_threads_keeps_what_the_orchestrator_saw():
+    db = sqlite3.connect(":memory:")
+    db.execute("CREATE TABLE history (id INTEGER PRIMARY KEY CHECK (id = 1), messages BLOB)")
+    everything = [message for n in range(100) for message in turn(f"message {n}", f"answer {n}")]
+    db.execute("INSERT INTO history VALUES (1, ?)", (ModelMessagesTypeAdapter.dump_json(everything),))
+    kept = ThreadStore(db).history(1)
+    assert len(kept) == ADOPTED and kept[-1].parts[0].content == "answer 99"
+
+
+def test_reopening_counts_as_said_in():
+    clock = Clock()
+    store = ThreadStore(sqlite3.connect(":memory:"), clock)
+    thread = store.new("Flights")
+    as_of = clock.now  # a summary started
+    clock.now += 1
+    store.close(thread.id)
+    store.reopen(thread.id)  # the owner came back to it meanwhile
+    store.summarise(thread.id, "Flights", "…", as_of)
+    assert store.get(thread.id).open
 
 
 def test_with_no_conversation_before_there_are_no_threads():

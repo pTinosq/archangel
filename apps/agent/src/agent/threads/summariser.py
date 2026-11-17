@@ -15,6 +15,10 @@ INSTRUCTIONS = """You summarise a finished conversation between the owner and Ar
 what they asked, what was found or done (keep the concrete facts: prices, names, times, links, task numbers), and \
 anything left open. A few short lines, plain text. And a title of a few words."""
 
+READ = 60_000
+"""Characters of a thread the summariser reads, from its end: a long one's start is in the summary it carries on from,
+or long settled."""
+
 
 class Summary(BaseModel):
     title: str = Field(description="A few words")
@@ -30,7 +34,11 @@ class Summariser:
             instructions=[instructions, lambda: f"Today is {date.today():%A %d %B %Y}."],
         )
 
-    async def summarise(self, thread: Thread, said: list[str]) -> Summary:
+    async def summarise(self, thread: Thread, said: list[str], before: str = "") -> Summary:
+        """`before`: the summary of the thread this one carries on from, so this summary stands alone."""
         conversation = "\n".join(said) or "(nothing was said)"
-        result = await logs.run(self._agent, f'Thread "{thread.title}":\n{conversation}')
+        if len(conversation) > READ:
+            conversation = "(earlier parts left out)\n…" + conversation[-READ:]
+        carried = f"It carries on from one that went: {before}\n" if before else ""
+        result = await logs.run(self._agent, f'Thread "{thread.title}":\n{carried}{conversation}')
         return result.output
