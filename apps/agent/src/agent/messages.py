@@ -33,6 +33,8 @@ class Message:
     """A reply to what the owner just said, not news: a channel they've since left (a call) may drop it."""
     ends: bool = False
     """The last word: a call hangs up once it's said."""
+    thread: int | None = None
+    """The conversation thread it belongs to, for the transcript: the orchestrator's replies are in one."""
 
     @property
     def text(self) -> str:

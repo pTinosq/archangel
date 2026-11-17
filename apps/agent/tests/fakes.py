@@ -8,6 +8,11 @@ from agent.channels import Channel, Deliver
 from agent.messages import Address, Image, Message, Text
 from agent.reports import Report
 from agent.runs import Outcome
+from agent.store import Store
+from agent.threads import Threads
+from agent.threads.router import Choice
+from agent.threads.store import Thread, ThreadStore
+from agent.threads.summariser import Summary
 
 SCREEN = Image(b"jpg", "image/jpeg")
 
@@ -105,3 +110,31 @@ class FakeConnectors:
 
     def describe(self) -> str:
         return self.described
+
+
+class FakeRouter:
+    """Carries on the latest thread, as there was one conversation before threads; `choices`, in turn, if given."""
+
+    def __init__(self, *choices: Choice):
+        self.choices = list(choices)
+        self.heard: list[tuple[str, list[int]]] = []
+
+    async def choose(self, said: str, recent: list[Thread]) -> Choice:
+        self.heard.append((said, [thread.id for thread in recent]))
+        if self.choices:
+            return self.choices.pop(0)
+        return Choice(thread=recent[0].id) if recent else Choice(thread=None, title="Chat")
+
+
+class FakeSummariser:
+    def __init__(self):
+        self.read: list[list[str]] = []
+
+    async def summarise(self, thread: Thread, said: list[str]) -> Summary:
+        self.read.append(said)
+        return Summary(title=f"{thread.title} (summed up)", summary=f"{len(said)} lines about {thread.title}.")
+
+
+def threads(store: Store, router: FakeRouter | None = None, summariser: FakeSummariser | None = None) -> Threads:
+    """Real threads, in the store's file, with a router and summariser that need no model."""
+    return Threads(ThreadStore(store.db), router or FakeRouter(), summariser or FakeSummariser())

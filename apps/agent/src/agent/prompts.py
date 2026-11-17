@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from agent import helper, orchestrator, reports
 from agent.devices import guard, investigator, pc, phone, vision
 from agent.store import Store
+from agent.threads import router, summariser
 from agent.twin import reader, writer
 
 DEFAULTS = {
@@ -21,6 +22,8 @@ DEFAULTS = {
     "helper": helper.INSTRUCTIONS,
     "twin reader": reader.INSTRUCTIONS,
     "twin writer": writer.INSTRUCTIONS,
+    "thread router": router.INSTRUCTIONS,
+    "thread summariser": summariser.INSTRUCTIONS,
 }
 
 

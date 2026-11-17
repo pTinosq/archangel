@@ -11,7 +11,10 @@ from fakes import (
     FakePilot,
     FakeReporter,
     FakeResearcher,
+    FakeRouter,
+    FakeSummariser,
     devices,
+    threads,
 )
 from pydantic_ai import (
     BinaryContent,
@@ -31,6 +34,7 @@ from agent.location import Whereabouts
 from agent.messages import Image, Message, Text
 from agent.orchestrator import Orchestrator
 from agent.runs import Outcome
+from agent.threads.router import Choice
 from agent.store import Location
 from agent.tasks import Tasks
 from agent.web import Web
@@ -46,14 +50,17 @@ class Owner:
         outcome: Outcome = Outcome("done", "WhatsApp is open."),
         whereabouts: Whereabouts | None = None,
         pc: str | None = None,
+        router: FakeRouter | None = None,
     ):
-        """`pc`: the PC's state (None: there isn't one)."""
+        """`pc`: the PC's state (None: there isn't one). `router`: by default, one conversation, as before threads."""
         self.requests: list[list[ModelMessage]] = []
         self.pilot, self.pc_pilot = FakePilot(outcome), FakePilot(Outcome("done", "Excel is open."))
         pilots = {"phone": self.pilot, "pc": self.pc_pilot}
         self.tasks = Tasks(store, pilots, FakeResearcher(), FakeReporter(), FakeHelper())
         self.cli, self.email = FakeChannel("cli"), FakeChannel("email")
         self.store = store
+        self.router, self.summariser = router or FakeRouter(), FakeSummariser()
+        self.threads = threads(store, self.router, self.summariser)
 
         def recording(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
             self.requests.append(messages)
@@ -69,6 +76,7 @@ class Owner:
             FakeConnectors(),
             devices(pc),
             whereabouts or Whereabouts(store, Web(), None),
+            self.threads,
         )
 
     def says(self, *parts, via: FakeChannel | None = None) -> list[Message]:
@@ -113,7 +121,8 @@ def say(text: str) -> ModelResponse:
 def test_replies_go_back_where_the_owner_wrote(store):
     owner = Owner(store, ok)
     owner.says(Text("hi"), via=owner.email)
-    assert (owner.cli.sent, owner.email.sent) == ([], [Message(owner.email.owner, (Text("ok"),), answering=True)])
+    reply = Message(owner.email.owner, (Text("ok"),), answering=True, thread=1)
+    assert (owner.cli.sent, owner.email.sent) == ([], [reply])
 
 
 def test_the_model_sees_the_channel_text_and_images(store):
@@ -407,6 +416,7 @@ def test_the_twin_is_read_for_whatever_the_owner_says_before_the_answer(store):
         FakeConnectors(),
         devices(),
         Whereabouts(store, Web(), None),
+        threads(store),
         twin=twin,
     )
     asyncio.run(orchestrator.handle(OwnerMessage(Message(cli.owner, (Text("who is my mum?"),)))))
@@ -440,3 +450,99 @@ def test_without_a_pc_it_isnt_offered_or_used(store):
     assert owner.says(Text("open excel on my pc"))[-1].text == "There's no PC: none has ever connected."
     assert "Devices: phone (online)." in owner.requests[0][-1].instructions
     assert owner.pc_pilot.calls == []
+
+
+# Threads: each topic its own history
+
+
+def new(title: str) -> Choice:
+    return Choice(thread=None, title=title)
+
+
+def test_each_thread_is_answered_with_its_own_history(store):
+    router = FakeRouter(new("Flights"), new("Birthday"), Choice(thread=1))
+    owner = Owner(store, ok, router=router)
+    owner.says(Text("flights to India?"))
+    owner.says(Text("text Sam happy birthday"))
+    owner.says(Text("how much were the flights?"))
+    _, birthday, back = owner.requests
+    assert len(birthday) == 1  # a new topic: nothing of the flights
+    assert [prompt_of(back[:1]), prompt_of(back)] == [
+        "(via cli) flights to India?",
+        "(via cli) how much were the flights?",
+    ]
+    assert router.heard[-1] == ("(via cli) how much were the flights?", [2, 1])
+
+
+def test_what_was_said_is_filed_under_its_thread(store):
+    owner = Owner(store, ok, router=FakeRouter(new("Flights"), new("Birthday")))
+
+    async def scenario():  # as the gateway does: the owner's line is in the transcript before it's routed
+        for text, channel in (("flights to India?", owner.cli), ("text Sam", owner.email)):
+            message = Message(channel.owner, (Text(text),))
+            await owner.orchestrator.handle(OwnerMessage(message, store.add_line(message, "owner")))
+
+    asyncio.run(scenario())
+    assert [(line.sender, line.text, line.thread) for line in store.lines()] == [
+        ("owner", "flights to India?", 1),
+        ("archangel", "ok", 1),
+        ("owner", "text Sam", 2),
+        ("archangel", "ok", 2),
+    ]
+
+
+def test_it_knows_its_thread_and_the_others_and_whose_tasks_are_whose(store):
+    def model(prompt: str) -> ModelResponse:
+        return starts_a_task_then_relays_updates(prompt) if "whatsapp" in prompt else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("WhatsApp"), new("Chat")))
+    owner.says(Text("open whatsapp"))
+    owner.says(Text("hello"))
+    seen = owner.requests[-1][-1].instructions
+    assert 'You\'re in thread #2, "Chat", started just now.' in seen
+    assert 'Other recent threads (search_threads and read_thread for what was said in any): #1 "WhatsApp"' in seen
+    assert "#1 [done] Open WhatsApp → WhatsApp is open. (thread #1)" in seen
+
+
+def test_a_tasks_update_is_answered_in_the_thread_that_started_it(store):
+    def model(prompt: str) -> ModelResponse:
+        return starts_a_task_then_relays_updates(prompt) if "something else" not in prompt else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("WhatsApp"), new("Chat")))
+    owner.pilot.hold = hold = asyncio.Event()
+
+    async def scenario():
+        await owner.orchestrator.handle(OwnerMessage(Message(owner.cli.owner, (Text("open whatsapp"),))))
+        await owner.orchestrator.handle(OwnerMessage(Message(owner.cli.owner, (Text("something else"),))))
+        hold.set()
+        await owner.tasks.idle()
+
+    asyncio.run(scenario())
+    update = owner.requests[-1]
+    assert prompt_of(update).startswith("[Update on task #1")
+    assert prompt_of(update[:1]) == "(via cli) open whatsapp"  # the WhatsApp thread, not the one moved on to
+    assert store.task(1).thread == 1 and store.lines()[-1].thread == 1
+
+
+def test_wrapping_up_a_thread_closes_and_summarises_it(store):
+    owner = Owner(store, ok, router=FakeRouter(new("Flights"), Choice(thread=1, closes=True)))
+    owner.says(Text("flights to India?"))
+    owner.says(Text("thanks!"))
+    asyncio.run(owner.threads.idle())
+    [thread] = owner.threads._store.recent()
+    assert not thread.open and thread.summary == "4 lines about Flights."
+
+
+def test_it_can_look_into_other_threads(store):
+    def model(messages, info) -> ModelResponse:
+        last = messages[-1].parts[-1]
+        if isinstance(last, ToolReturnPart):
+            return say(str(last.content))
+        if "how much" in prompt_of(messages):
+            return call("search_threads", words="flights")
+        return say("Return flights to Delhi from £540.")
+
+    owner = Owner(store, model, router=FakeRouter(new("Flights to India"), new("Elsewhere")))
+    owner.says(Text("flights to India?"))
+    replies = owner.says(Text("how much were the flights?"))
+    assert replies[-1].text.startswith('#1 "Flights to India" · just now: ')

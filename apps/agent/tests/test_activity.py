@@ -9,6 +9,7 @@ from fakes import (
     FakeReporter,
     FakeResearcher,
     devices,
+    threads,
 )
 from pydantic_ai import (
     ModelResponse,
@@ -128,6 +129,7 @@ def test_one_request_can_be_followed_through_its_task_and_back(store):
         FakeConnectors(),
         devices(),
         Whereabouts(store, Web(), None),
+        threads(store),
     )
 
     async def main():
