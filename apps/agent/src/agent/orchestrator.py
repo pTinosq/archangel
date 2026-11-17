@@ -244,7 +244,8 @@ class Orchestrator:
                 ctx: RunContext[Event], request: str, pr: int | None = None, report_via: str | None = None
             ) -> str:
                 """Change Archangel itself, when the owner asks for a new ability or a fix ("add a Telegram channel"),
-                or ask why it does something: Claude Code works on its code in the background (often 10-20 minutes)
+                or ask why it does something: Claude Code works on its code (the archangel repo on GitHub, README
+                included; never a device) in the background (often 10-20 minutes)
                 and opens a PR for the owner to merge, or answers. `pr`: carry on that PR instead ("no, make it
                 shorter"). The repo is public: write `request` with nothing about the owner's life (no names, places,
                 numbers, accounts); say what to build or find out. `report_via` as for start_task."""
