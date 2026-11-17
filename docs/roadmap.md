@@ -18,7 +18,7 @@ Each milestone ships something usable and proves one idea.
 | M11 ✅ | Connectors | "summarise today's emails" without the phone | MCP servers as a helper's tools, added and signed in to from the panel |
 | M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 ✅ | Autonomy | "in 15 minutes get me an Uber home", "every weekday at 7 call me with the weather"; see and cancel them on the panel | time as a trigger: scheduled and repeating work wakes the orchestrator in the thread it was asked in; rows and a sleeping loop, no Temporal |
-| M14 ✅ | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
+| M14 ✅ | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text | a coding agent works on Archangel's own repo; the owner approves every merge |
 | M15 ✅ | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | M17 ✅ | Windows PC | "do X on my PC" from anywhere, the PC unattended at home, even locked | a second device behind the same relay and pilot; Windows' lock screen and UAC passed without the model seeing a password |
@@ -194,15 +194,13 @@ The owner also tests across channels and reports changes.
 
 - **Builds its own features.** Ask from any channel ("add a Telegram channel", "make the panel show costs"); a coding agent works on this repo the way Claude Code does locally, following `CLAUDE.md`.
 - **Investigate a bug from anywhere (added 2026-10-23).** The owner sees something wrong ("Notion sign-in says invalid state") and says so from any channel; a coding agent investigates Archangel's code and logs, reports the cause, and proposes the fix as a PR. Investigating is free to start; changing code is a PR the owner reviews.
-- **Heals itself.** Failures (a stuck task, an orchestrator error, a bad deploy) are diagnosed from logs and steps, and a fix is proposed.
 
 **Built (2026-11-17)**
 - **On the owner's Claude subscription, in GitHub Actions** (`.github/workflows/improve.yml`): no API tokens, and Actions are free on a public repo. The orchestrator's `improve(request, pr?)` starts the workflow; a `code` task follows its run and reports the PR (or the answer to a question) like any task. `pr` carries on a PR ("no, make it shorter").
 - **The token stays put.** The Claude token is a repo secret, only in the job that makes the change, which can't write to the repo (its subprocesses don't see the token). A second job refuses a change or summary containing it, then tests, pushes and opens the PR. Archangel holds only a GitHub token for this repo.
 - **Only the owner.** `improve` and `merge` refuse anything not from the owner's own message (a web page, an email, a task's update), in code. Merging to `main` deploys, so the owner always says when.
 - **Public.** The request, the run and the PR are public: the orchestrator words the request with nothing personal, and the coding agent follows `CLAUDE.md`. So no prod logs or twin go to it yet: investigating is from the code only.
-- **Healing proposes, never applies.** A recurring failure becomes an issue with its diagnosis; the owner decides whether it becomes a fix.
-- **Healing is still open.** Described, not built: a recurring failure becoming an issue with a proposed diagnosis. What's built is the owner asking for a change or an investigation; nothing yet watches for failures on its own.
+- **Working on the code, not healing (2026-11-17).** M14 is the owner changing Archangel from inside it. Nothing watches for failures and proposes fixes on its own, and that isn't wanted.
 
 ## M15 requirements (intelligent tools) (from the owner)
 
