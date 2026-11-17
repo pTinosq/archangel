@@ -1,5 +1,5 @@
 """Everything that must survive a restart: the transcript across channels, every task and its steps, edited prompts,
-connectors with their sign-ins, where the owner last was, and each device's latest hello. SQLite, one file in data/,
+connectors with their sign-ins, quick tools' settings, where the owner last was, and each device's latest hello. SQLite, one file in data/,
 which the conversation's threads (`agent.threads`) and the context twin keep their own tables in.
 
 A paused task is stored with its run as Pydantic AI JSON, so it resumes exactly.
@@ -132,6 +132,7 @@ class Store:
             CREATE INDEX IF NOT EXISTS steps_by_task ON steps (task);
             CREATE TABLE IF NOT EXISTS prompts (name TEXT PRIMARY KEY, text TEXT);
             CREATE TABLE IF NOT EXISTS connectors (name TEXT PRIMARY KEY, data TEXT);
+            CREATE TABLE IF NOT EXISTS tools (name TEXT PRIMARY KEY, data TEXT);
             CREATE TABLE IF NOT EXISTS location (
                 id INTEGER PRIMARY KEY CHECK (id = 1), lat REAL, lon REAL, accuracy REAL, address TEXT, time REAL
             );
@@ -320,6 +321,16 @@ class Store:
                 self._db.execute("DELETE FROM connectors WHERE name = ?", (name,))
             else:
                 self._db.execute("INSERT OR REPLACE INTO connectors VALUES (?, ?)", (name, json.dumps(data)))
+
+    # Quick tools
+
+    def tools(self) -> dict[str, dict]:
+        """What the owner has set for each quick tool (on or off, its settings), by name (shaped by `Tools`)."""
+        return {name: json.loads(data) for name, data in self._db.execute("SELECT name, data FROM tools")}
+
+    def save_tool(self, name: str, data: dict) -> None:
+        with self._db:
+            self._db.execute("INSERT OR REPLACE INTO tools VALUES (?, ?)", (name, json.dumps(data)))
 
     # Where the owner is
 

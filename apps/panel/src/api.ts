@@ -68,6 +68,17 @@ export type Connector = {
   profile: string;
   signedIn: boolean;
 };
+/** A quick tool (live data the orchestrator answers from): on or off, and what it needs. A secret's value never
+ * comes back: `set` says whether it's there. */
+export type QuickTool = {
+  name: string;
+  title: string;
+  about: string;
+  enabled: boolean;
+  /** On and set up: what the orchestrator actually has. */
+  active: boolean;
+  settings: { key: string; label: string; secret: boolean; required: boolean; set: boolean; value: string }[];
+};
 /** The context twin's graph: every node (an empty page makes it a router) and link, without the pages. */
 export type TwinGraph = {
   nodes: { name: string; aliases: string[]; router: boolean }[];
@@ -178,6 +189,10 @@ export const api = {
     call<SignIn>("POST", "/connectors", { kind, settings, profile }),
   signIn: (name: string) => call<SignIn>("POST", `/connectors/${name}/sign-in`),
   removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
+  tools: () => call<QuickTool[]>("GET", "/tools"),
+  /** Only what's given changes; an empty setting clears it. */
+  setTool: (name: string, change: { enabled?: boolean; settings?: Record<string, string> }) =>
+    call<QuickTool[]>("PUT", `/tools/${name}`, change),
   evals: () => call<{ cases: string[]; results: EvalSummary[] }>("GET", "/evals"),
   evalReport: (id: string) => call<EvalReport>("GET", `/evals/${id}`),
   runEvals: (filter: string, runs: number) => call<{ id: string }>("POST", "/evals", { filter, runs }),

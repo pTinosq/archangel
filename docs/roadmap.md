@@ -19,7 +19,7 @@ Each milestone ships something usable and proves one idea.
 | M12 ✅ | Context twin | say "never show me sponsored restaurants" once; every later task obeys it | a second brain that grows: a graph of linked pages, written from what the owner says, walked before each task ([design](twin.md)) |
 | M13 ✅ | Autonomy | "in 15 minutes get me an Uber home", "every weekday at 7 call me with the weather"; see and cancel them on the panel | time as a trigger: scheduled and repeating work wakes the orchestrator in the thread it was asked in; rows and a sleeping loop, no Temporal |
 | M14 ✅ | Self-improvement | "add a Telegram channel" or "find out why Notion won't connect" by text; a task that keeps failing gets a proposed fix | a coding agent works on Archangel's own repo; the owner approves every merge |
-| M15 | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
+| M15 ✅ | Intelligent tools | "is the Victoria line running?", "will it rain at 5?" answered in seconds, from anywhere | live data as quick tools (TfL, weather, more as they earn a place), beside the web: no phone, no browsing |
 | M16 | Pebble Time 2 | talk to Archangel from the watch: dictate, read the answer, approve with a button | the wrist as a channel; one conversation across watch, texts, calls and panel |
 | M17 ✅ | Windows PC | "do X on my PC" from anywhere, the PC unattended at home, even locked | a second device behind the same relay and pilot; Windows' lock screen and UAC passed without the model seeing a password |
 | M17a ✅ | PC hands | tasks on an unlocked, auto-signed-in PC, beside phone tasks | a Windows bridge (a service with a settings window) speaks the same protocol; Jev finds things on desktop screens |
@@ -220,10 +220,12 @@ The owner also tests across channels and reports changes.
   - **Places:** open now?, rating, the walk there (Google Places: a key, a free monthly allowance, then paid).
 - **More as they earn a place:** anything asked often that the phone or the web answers slowly or unreliably. Passed on for now: National Rail, Santander bikes, air quality and pollen, parcel tracking, sports, food hygiene ratings, bin days, postcodes.
 
-**Plan (sketch, undecided)**
-- **Built-in tools or connectors.** Inline like `search_web`: seconds, no task. As MCP servers they'd show on the Connectors page and suit the helper too; as tools they're a few lines each. Decide when building.
-- **Free, keyless APIs where possible** (TfL's, Open-Meteo for weather), so no new env vars.
-- **Where they are:** weather "here" uses `owner_location`.
+**Built (2026-11-17)**
+- **Built-in tools, not MCP connectors.** Each is a `Tool` (`agent/tools/`): a few async functions the orchestrator calls inline, like `search_web`, seconds and no task. Adding one is a subclass listed in `BUILT_IN`; it appears on the panel by itself. They show on the Connectors page (a "Quick tools" column) beside the connectors, but aren't connectors: nothing to sign in to, and the owner's on/off and settings live in the store's `tools` table.
+- **First four:** TfL (line status and why, journeys with unclear places resolved to the best match and said, next buses and trains at a stop), weather (Open-Meteo: now, by the hour, the days, sunrise and sunset), exchange rates (Frankfurter) and time and dates (the time anywhere, UK bank holidays, days between dates, exact arithmetic). All free and keyless: no new env vars. TfL takes an optional app key from the panel (rate limit only).
+- **Routing.** The orchestrator is told each turn which tools are on and the order to try things: a quick tool, `search_web`, research, and only then a device. A tool that's off, or lacks a setting it requires, isn't offered at all, so the model can't pick it. A tool whose source is down answers "isn't answering: try the web", and the conversation goes on.
+- **Where they are:** weather and journeys "from here" use `owner_location` first.
+- **Not yet:** flight status, markets, news, Wikipedia and dictionary, places (each needs a source chosen, some a paid key); the helper and device pilots don't get the quick tools (the orchestrator answers these itself).
 
 ## M16 requirements (Pebble Time 2) (from the owner)
 

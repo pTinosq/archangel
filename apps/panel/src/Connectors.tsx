@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Connector, type Service, type SignIn } from "./api";
+import { QuickTools } from "./QuickTools";
 
 const LABELS: Record<string, string> = { client_id: "Client ID", client_secret: "Client secret", url: "Address" };
 
@@ -121,6 +122,7 @@ export function Connectors() {
         )}
         {error && <p className="error">{error}</p>}
       </section>
+      <QuickTools />
     </>
   );
 }

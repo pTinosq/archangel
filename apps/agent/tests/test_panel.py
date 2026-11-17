@@ -18,6 +18,7 @@ from agent.schedule import Schedule
 from agent.store import Store
 from agent.tasks import Tasks
 from agent.threads.store import ThreadStore
+from agent.tools import Tools
 from agent.twin.graph import ROOT, Graph
 from agent.web import Web
 
@@ -30,8 +31,9 @@ class Panel:
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
         self.threads = ThreadStore(store.db)
         self.schedule = Schedule(store.db)
+        self.tools = Tools(store, httpx.AsyncClient())
         self.channel = PanelChannel(
-            store, self.prompts, self.connectors, Graph(store.db), self.threads, self.schedule, self.web
+            store, self.prompts, self.connectors, self.tools, Graph(store.db), self.threads, self.schedule, self.web
         )
         self.delivered: list[Message] = []
 
@@ -139,7 +141,7 @@ def test_activity_streams_as_server_sent_events():
     activity.hop("gateway", "message", "hi", source="cli")
 
     async def first():
-        events = panel._events(PanelChannel(None, None, None, None, None, None, Web()))
+        events = panel._events(PanelChannel(None, None, None, None, None, None, None, Web()))
         line = await anext(events)
         await events.aclose()
         return line
@@ -187,6 +189,28 @@ def test_a_report_opens_for_anyone_only_once_made_public(store):
     assert stranger("/reports/1") == 307
     assert local.call("GET", "/api/tasks").json()[-1]["public"] is False
     assert local.call("PUT", "/api/tasks/2/public", json={"public": True}).status_code == 404  # no report
+
+
+def test_quick_tools_are_listed_switched_and_set_from_the_panel(store):
+    panel = Panel(store)
+    listed = {t["name"]: t for t in panel.call("GET", "/api/tools").json()}
+    assert list(listed) == ["tfl", "weather", "currency", "dates"]
+    assert listed["tfl"]["enabled"] and listed["tfl"]["active"] and listed["tfl"]["about"]
+
+    changed = panel.call("PUT", "/api/tools/tfl", json={"enabled": False, "settings": {"app_key": "k3y"}})
+    tfl = changed.json()[0]
+    assert (tfl["enabled"], tfl["active"]) == (False, False)
+    assert tfl["settings"][0] | {"label": ""} == {
+        "key": "app_key", "label": "", "secret": True, "required": False, "set": True, "value": "",
+    }
+    assert "k3y" not in changed.text
+    assert store.tools()["tfl"]["settings"] == {"app_key": "k3y"}
+
+    again = panel.call("PUT", "/api/tools/tfl", json={"enabled": True}).json()[0]  # on again, its key kept
+    assert again["active"] and again["settings"][0]["set"]
+
+    assert panel.call("PUT", "/api/tools/nothing", json={"enabled": True}).status_code == 404
+    assert panel.call("PUT", "/api/tools/tfl", json={"settings": {"colour": "red"}}).status_code == 400
 
 
 def test_connectors_are_added_and_listed_without_their_secrets(store):
