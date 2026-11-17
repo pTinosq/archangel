@@ -57,12 +57,17 @@ jobs:
             The request: ${{ inputs.request }}
 
             If it asks for a change, make it, with tests and docs as CLAUDE.md says, and run the tests that cover it
-            until they pass. Don't commit or push: that's done after you. If it's only a question (why something
-            happens, how something works), change nothing and answer it.
+            until they pass (from the app's folder: `cd apps/agent && uv run pytest -q`; the panel's `npx tsc
+            --noEmit`). Don't commit or push: that's done after you. If it's only a question (why something happens,
+            how something works), change nothing and answer it.
 
             End with a PR title (empty if you changed nothing), and a summary for the owner, read by text: what you
             changed or found, and anything they must do (a new variable on Railway, a setting). Short, plain.
+          # Its own permissions, not auto mode's: auto mode can be off for the subscription's organisation, and then
+          # every edit is refused. Edits in the checkout, and only the commands that test it.
           claude_args: |
+            --permission-mode acceptEdits
+            --allowedTools "Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv sync:*),Bash(npm ci:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(ls:*)"
             --json-schema '{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"}},"required":["title","summary"]}'
       - name: Save the change
         run: git add -A && git diff --cached --binary "$START" > change.patch
