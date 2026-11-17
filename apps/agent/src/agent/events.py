@@ -31,6 +31,8 @@ class Event(ABC):
 @dataclass(frozen=True)
 class OwnerMessage(Event):
     message: Message
+    line: int | None = None
+    """Its line in the transcript, filed under its thread once that's known."""
     from_owner = True
 
     @property
