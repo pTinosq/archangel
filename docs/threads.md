@@ -69,7 +69,7 @@ stateDiagram-v2
 Its situation gains three lines:
 
 ```
-You're in thread #15, "Text Anselm", started 2 min ago.
+You're in thread #15, "Text Sam", started 2 min ago.
 It carries on #12, "Flights to India", which went: …        (only for a continuation)
 Other recent threads (search_threads and read_thread for what was said in any): #14 "Flights to India" (closed, 8 days ago); …
 ```

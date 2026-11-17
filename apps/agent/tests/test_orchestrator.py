@@ -463,7 +463,7 @@ def test_each_thread_is_answered_with_its_own_history(store):
     router = FakeRouter(new("Flights"), new("Birthday"), Choice(thread=1))
     owner = Owner(store, ok, router=router)
     owner.says(Text("flights to India?"))
-    owner.says(Text("text Anselm happy birthday"))
+    owner.says(Text("text Sam happy birthday"))
     owner.says(Text("how much were the flights?"))
     _, birthday, back = owner.requests
     assert len(birthday) == 1  # a new topic: nothing of the flights
@@ -478,7 +478,7 @@ def test_what_was_said_is_filed_under_its_thread(store):
     owner = Owner(store, ok, router=FakeRouter(new("Flights"), new("Birthday")))
 
     async def scenario():  # as the gateway does: the owner's line is in the transcript before it's routed
-        for text, channel in (("flights to India?", owner.cli), ("text Anselm", owner.email)):
+        for text, channel in (("flights to India?", owner.cli), ("text Sam", owner.email)):
             message = Message(channel.owner, (Text(text),))
             await owner.orchestrator.handle(OwnerMessage(message, store.add_line(message, "owner")))
 
@@ -486,7 +486,7 @@ def test_what_was_said_is_filed_under_its_thread(store):
     assert [(line.sender, line.text, line.thread) for line in store.lines()] == [
         ("owner", "flights to India?", 1),
         ("archangel", "ok", 1),
-        ("owner", "text Anselm", 2),
+        ("owner", "text Sam", 2),
         ("archangel", "ok", 2),
     ]
 

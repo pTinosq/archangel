@@ -47,10 +47,10 @@ days_ago = 3
 summary = "Rain all day Saturday, dry Sunday."
 
 [[thread]]
-key = "steam"
+key = "pc-game"
 title = "Install a game on the PC"
 days_ago = 2
-summary = "Installed Slay the Spire 2 on the PC through Steam."
+summary = "Installed a chess game on the PC."
 
 [[thread]]
 key = "news"
@@ -62,15 +62,15 @@ summary = "Top stories: rail strike Thursday, interest rates held."
 key = "pub"
 title = "Pub lunch with the crew"
 hours_ago = 20
-summary = "Asked the Discord crew about a pub lunch Saturday: Oscar and Jock in, at The Crown, 1pm."
+summary = "Asked the group chat about a pub lunch Saturday: Priya and Tom in, at The Crown, 1pm."
 
 [[thread]]
-key = "anselm"
-title = "Text Anselm happy birthday"
+key = "sam"
+title = "Text Sam happy birthday"
 minutes_ago = 40
 open = true
 turns = [
-  ["text Anselm happy birthday", "Sent on WhatsApp: \"Happy birthday Anselm! Hope it's a great one.\""],
+  ["text Sam happy birthday", "Sent on WhatsApp: \"Happy birthday Sam! Hope it's a great one.\""],
 ]
 
 [[thread]]
@@ -101,8 +101,8 @@ thread = "india"
 
 [[case]]
 name = "refers back with no thread named"
-says = "did Anselm reply?"
-thread = "anselm"
+says = "did Sam reply?"
+thread = "sam"
 
 [[case]]
 name = "an old thread only search finds"
@@ -177,13 +177,13 @@ thread = "uber"
 
 [[case]]
 name = "back to an older open thread"
-says = "can you send Anselm another message saying drinks are on me tonight"
-thread = "anselm"
+says = "can you send Sam another message saying drinks are on me tonight"
+thread = "sam"
 
 [[case]]
 name = "thanks goes to where the conversation just was"
-add_to = "anselm"
-add = [["did it go through?", "Yes, delivered and read: Anselm replied with a heart."]]
+add_to = "sam"
+add = [["did it go through?", "Yes, delivered and read: Sam replied with a heart."]]
 says = "great thanks"
-thread = "anselm"
+thread = "sam"
 closes = true

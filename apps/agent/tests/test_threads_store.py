@@ -42,7 +42,7 @@ def test_search_finds_words_and_their_beginnings_best_first():
     store = ThreadStore(sqlite3.connect(":memory:"))
     india = store.new("Flights to India")
     store.save(india.id, turn("flights to Delhi in March?", "Return from £540 with Air India."), size=10)
-    store.save(store.new("Birthday").id, turn("text Anselm happy birthday", "Sent."), size=10)
+    store.save(store.new("Birthday").id, turn("text Sam happy birthday", "Sent."), size=10)
     [found] = store.search("delhi")
     assert found.thread.id == india.id and "[Delhi]" in found.snippet
     assert [f.thread.title for f in store.search("Ind")] == ["Flights to India"]  # a word's beginning

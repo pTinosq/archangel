@@ -286,9 +286,9 @@ def test_the_orchestrator_is_told_its_thread_and_the_others():
     world = World()
     flights = world.store.new("Flights to India")
     world.store.close(flights.id)
-    birthday = world.store.new("Text Anselm")
+    birthday = world.store.new("Text Sam")
     described = world.threads.describe(birthday)
-    assert described.startswith(f'You\'re in thread #{birthday.id}, "Text Anselm", started just now.')
+    assert described.startswith(f'You\'re in thread #{birthday.id}, "Text Sam", started just now.')
     assert f'#{flights.id} "Flights to India" (closed, just now)' in described
 
 
@@ -319,17 +319,17 @@ def answering(**output) -> FunctionModel:
 
 def test_the_router_reads_summaries_and_how_unfinished_threads_end():
     store = ThreadStore(sqlite3.connect(":memory:"))
-    flights, birthday = store.new("Flights to India"), store.new("Text Anselm")
+    flights, birthday = store.new("Flights to India"), store.new("Text Sam")
     store.summarise(flights.id, "Flights to India", "Delhi from £540.", store.get(flights.id).updated + 1)
-    store.save(birthday.id, turn("text Anselm happy birthday", "Which number?"), size=10)
+    store.save(birthday.id, turn("text Sam happy birthday", "Which number?"), size=10)
     router = Router(answering(thread=birthday.id), store)
     choice = asyncio.run(router.choose("(via sms) the mobile", store.recent()))
     assert choice == Choice(thread=birthday.id)
     prompt = answering.seen[0].parts[-1].content
     assert prompt == (
         "Where the conversation is (Archangel's last words):\n"
-        f'#{birthday.id} "Text Anselm" · open · just now\n'
-        "  (via sms) text Anselm happy birthday\n"
+        f'#{birthday.id} "Text Sam" · open · just now\n'
+        "  (via sms) text Sam happy birthday\n"
         "  Archangel: Which number?\n\n"
         "Other recent threads, newest first:\n"
         f'#{flights.id} "Flights to India" · closed · just now\n'

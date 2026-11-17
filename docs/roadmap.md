@@ -232,7 +232,7 @@ Temporal waits for M13: Pydantic AI supports it natively, so it wraps the agent 
 ## M18 requirements (threads) (from the owner)
 
 - **Context bloat.** Today the orchestrator sees the last 40 messages, whatever they're about (`history.py`), so an old topic falls out and unrelated ones crowd in.
-- **Threads, like folders of discussion.** A small, fast, cheap model in front of the orchestrator puts each message in a thread: a new one when it's unrelated ("text Anselm happy birthday" after "flights to India"), or back to an old one ("for the India flights, how much were they?").
+- **Threads, like folders of discussion.** A small, fast, cheap model in front of the orchestrator puts each message in a thread: a new one when it's unrelated ("text Sam happy birthday" after "flights to India"), or back to an old one ("for the India flights, how much were they?").
 - **Finding the thread.** It reads the summaries of the last few threads; nothing likely, or the owner says "we discussed X before": a search of all threads (by word, "India"). The most likely wins: last week's India thread over 2025's.
 - **Each thread knows its size** (context length), so a full one is summarised or continued in a new one rather than overfilled.
 - **A summary once it's done.** Written when the thread is finished, not after every message. The owner closing it ("thanks", "thx") is the signal.
