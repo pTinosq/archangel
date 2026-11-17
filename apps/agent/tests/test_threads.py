@@ -239,9 +239,16 @@ def test_the_router_reads_summaries_and_how_unfinished_threads_end():
     choice = asyncio.run(router.choose("(via sms) the mobile", store.recent()))
     assert choice == Choice(thread=birthday.id)
     prompt = answering.seen[0].parts[-1].content
-    assert f'#{flights.id} "Flights to India" · closed · just now\n  summary: Delhi from £540.' in prompt
-    assert f'#{birthday.id} "Text Anselm" · open · just now\n  (via sms) text Anselm happy birthday\n' in prompt
-    assert prompt.endswith("The owner says (via sms) the mobile")
+    assert prompt == (
+        "Where the conversation is (Archangel's last words):\n"
+        f'#{birthday.id} "Text Anselm" · open · just now\n'
+        "  (via sms) text Anselm happy birthday\n"
+        "  Archangel: Which number?\n\n"
+        "Other recent threads, newest first:\n"
+        f'#{flights.id} "Flights to India" · closed · just now\n'
+        "  summary: Delhi from £540.\n\n"
+        "The owner says (via sms) the mobile"
+    )
 
 
 @pytest.mark.parametrize(
