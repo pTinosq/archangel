@@ -29,6 +29,7 @@ Each milestone ships something usable and proves one idea.
 | M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or an open thread; what's said in one goes to it unrouted |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
 | M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
+| M21 | Email gateway | email Archangel at its own address, or forward it a message, and it reads it; "email Sam the details" sends from that address | email as a channel: a dedicated inbox in, outbound mail out, one conversation with the owner's other channels |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -294,3 +295,17 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 
 **Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
 - **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").
+
+## M21 requirements (email gateway) (from the owner)
+
+A new channel, email, with an inbox and address of its own. Not the owner's Gmail connector (M11): that is the owner's mail, reached by tools; this is Archangel's.
+
+- **Its own address.** People can write to it, and the owner can forward things to it.
+- **Sends.** It emails people from that address when asked ("email Sam the details"), in the style for that audience (M20).
+- **Reads.** Mail the owner sends or forwards to it arrives as an event and is routed into the owner's conversation, in the right thread, like a text.
+
+**Plan (sketch, undecided; not built)**
+- **A `Channel` subclass** registered in `__main__.py`: `send` out, inbound mail through `start(deliver)`, with its own `Address` kind; `shows` says what an email can carry.
+- **Only the owner's mail is a message.** Mail proved to be from the owner becomes an `OwnerMessage`; anything else is a `Notice` the orchestrator judges, never an instruction: an email can't approve, `improve` or `merge`.
+- **Outbound is consequential.** Mail to someone else goes through the owner's approval, unless they've said otherwise for that person.
+- **Not decided:** the inbox provider and the address (a domain it can use, set up by the owner), how inbound arrives (webhook or polling), how the sender is proved (SPF/DKIM results, a signed token, an allow-list), how replies thread, attachments, and cost. Credentials will be env vars on Railway, never in the repo.
