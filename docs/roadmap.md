@@ -28,7 +28,7 @@ Each milestone ships something usable and proves one idea.
 | M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or an open thread; what's said in one goes to it unrouted |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
-| M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base |
+| M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -291,7 +291,5 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 - **Picked by channel, person or app.** A message to the owner by text uses the owner's profile; to a named person, theirs; in an app, the app's. Nothing matches: a sensible default (semi-formal).
 - **Extensible.** A new profile is a small addition: a name, what it matches, a few lines of style. No code change to add one.
 
-**Plan (sketch, undecided)**
-- **A `styles` set beside the prompts:** profiles as data (name, matches, rules, an example or two), edited on the panel like prompts, kept in the store.
-- **Evals like the twin's and the router's:** a made-up owner, the same content in each profile, checked in code (length, banned phrases) and by a model judge otherwise.
-- **Not decided:** whether the twin holds who gets which profile, whether a profile can be set per message ("make it casual"), and how a person's profile is learned.
+**Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for, then the style as prose; chosen in code. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
+- **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").

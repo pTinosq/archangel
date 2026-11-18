@@ -30,6 +30,7 @@ from agent.reports import Reporter
 from agent.research import DEEP, DEEP_TIMEOUT, RESEARCH, Researcher, tavily
 from agent.schedule import Schedule
 from agent.store import DATA, Store, Task
+from agent.styles import Styles
 from agent.tasks import Tasks
 from agent.threads import Threads
 from agent.threads.router import Router
@@ -68,6 +69,7 @@ def main() -> None:
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
     connectors = Connectors(store, site, DATA)
     tools = Tools(store)
+    styles = Styles(own=DATA / "styles")
     # Everything the owner says waits behind the orchestrator, so it answers without reasoning first; the twin's
     # reader too, as every task waits for its briefing. The background agents (pilot, guard, ...) keep reasoning:
     # they find their way through screens and judge risk.
@@ -93,7 +95,7 @@ def main() -> None:
             Kit(devices[kind], vision, guard, investigator),
             platform,
             prompts.live(f"{kind} pilot"),
-            [twin.tools],
+            [twin.tools, styles.tools],
         )
         for kind, platform in (("phone", PHONE), ("pc", PC))
     }
@@ -102,7 +104,7 @@ def main() -> None:
         pilots,
         researcher,
         Reporter(model, prompts.live("reporter")),
-        Helper(model, connectors, prompts.live("helper"), [twin.tools]),
+        Helper(model, connectors, prompts.live("helper"), [twin.tools, styles.tools]),
         site,
         twin.brief,
         coder,
@@ -136,6 +138,7 @@ def main() -> None:
         schedule,
         coder,
         tools,
+        styles,
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
