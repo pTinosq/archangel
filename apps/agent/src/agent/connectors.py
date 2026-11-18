@@ -16,6 +16,7 @@ import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -33,7 +34,7 @@ from pydantic_ai import ApprovalRequired, RunContext
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset, ToolsetTool, WrapperToolset
 
-from agent import activity
+from agent import activity, gmail
 from agent.store import Store
 
 log = logging.getLogger(__name__)
@@ -216,7 +217,8 @@ class Connectors:
 
     def _toolset(self, connector: Connector) -> MCPToolset:
         if connector.kind == "google":
-            return MCPToolset(self._workspace(connector), id=connector.name)
+            files = self._google / connector.name / "files"
+            return MCPToolset(self._workspace(connector), id=connector.name, process_tool_call=gmail.processor(files))
         return MCPToolset(connector.url, id=connector.name, auth=self._oauth(connector))
 
     def _workspace(self, connector: Connector) -> StdioTransport:
@@ -224,20 +226,29 @@ class Connectors:
         # Its single-user mode uses whichever sign-in it finds: one folder per account.
         folder = self._google / connector.name
         folder.mkdir(parents=True, exist_ok=True)
+        # Written only for a new sign-in: afterwards the file is workspace-mcp's, holding the access token it last
+        # refreshed. Rewritten each run with the first token and no expiry (so taken as good), every call met a 401.
         tokens = connector.tokens or {}
-        credentials = {
-            "token": tokens.get("access_token"),
-            "refresh_token": tokens.get("refresh_token"),
-            "token_uri": GOOGLE_TOKEN,
-            "client_id": connector.settings["client_id"],
-            "client_secret": connector.settings["client_secret"],
-            "scopes": GOOGLE_SCOPES,
-        }
-        (folder / f"{connector.account}.json").write_text(json.dumps(credentials))
+        path = folder / f"{connector.account}.json"
+        kept = json.loads(path.read_text()) if path.exists() else {}
+        if kept.get("refresh_token") != tokens.get("refresh_token") or not kept.get("expiry"):
+            # An older sign-in has no expires_at: taken as expired, so refreshed on its first call, and kept.
+            expiry = datetime.fromtimestamp(tokens.get("expires_at", 0), UTC).replace(tzinfo=None)  # as it writes it
+            credentials = {
+                "token": tokens.get("access_token"),
+                "refresh_token": tokens.get("refresh_token"),
+                "token_uri": GOOGLE_TOKEN,
+                "client_id": connector.settings["client_id"],
+                "client_secret": connector.settings["client_secret"],
+                "scopes": GOOGLE_SCOPES,
+                "expiry": expiry.isoformat(),
+            }
+            path.write_text(json.dumps(credentials))
         env = {
             "GOOGLE_OAUTH_CLIENT_ID": connector.settings["client_id"],
             "GOOGLE_OAUTH_CLIENT_SECRET": connector.settings["client_secret"],
             "WORKSPACE_MCP_CREDENTIALS_DIR": str(folder.resolve()),
+            "WORKSPACE_ATTACHMENT_DIR": str((folder / "files").resolve()),  # where gmail.py reads whole emails from
             "USER_GOOGLE_EMAIL": connector.account,
             "WORKSPACE_MCP_DISABLED_TOOLS": ",".join(WORKSPACE_MCP_OFF),
         }
@@ -258,6 +269,7 @@ class Connectors:
         )
         response.raise_for_status()
         connector.tokens = response.json()
+        connector.tokens["expires_at"] = time.time() + connector.tokens.get("expires_in", 0)
         bearer = {"Authorization": f"Bearer {connector.tokens['access_token']}"}
         user = await self._http.get(GOOGLE_USER, headers=bearer)
         user.raise_for_status()

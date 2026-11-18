@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import json
+from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -9,7 +10,7 @@ from pydantic_ai import ModelResponse, TextPart, Tool, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.toolsets import FunctionToolset
 
-from agent import activity
+from agent import activity, gmail
 from agent.connectors import GOOGLE_TOKEN, GOOGLE_USER, SIGN_IN_SECONDS, Connector, Connectors, _Guarded
 from agent.helper import Helper
 from agent.runs import Answer
@@ -67,6 +68,67 @@ def test_a_sign_in_only_finishes_once(store, tmp_path):
             await found.finish(state, "the-code")
 
     asyncio.run(scenario())
+
+
+def test_workspace_mcp_keeps_the_token_it_refreshed_until_the_owner_signs_in_again(store, tmp_path):
+    async def scenario():
+        found = connectors(store, tmp_path)
+        found.add("google", {"client_id": "id", "client_secret": "secret"})
+        state = parse_qs(urlparse(await found.sign_in("google")).query)["state"][0]
+        connector = await found.finish(state, "the-code")
+        path = tmp_path / "google" / "google" / "owner@gmail.com.json"
+
+        found._workspace(connector)
+        first = json.loads(path.read_text())
+        assert first["token"] == "at" and datetime.fromisoformat(first["expiry"]) > datetime.now(UTC).replace(
+            tzinfo=None
+        )  # with an expiry, a stale token is refreshed before use, not sent to meet a 401
+
+        refreshed = {**first, "token": "at-2", "expiry": "2026-11-18T12:00:00"}  # as workspace-mcp saves it
+        path.write_text(json.dumps(refreshed))
+        found._workspace(connector)
+        assert json.loads(path.read_text()) == refreshed
+
+        connector.tokens = {"access_token": "new", "refresh_token": "rt-2"}  # signed in again, long ago
+        found._workspace(connector)
+        again = json.loads(path.read_text())
+        assert (again["token"], again["refresh_token"], again["expiry"]) == ("new", "rt-2", "1970-01-01T00:00:00")
+
+    asyncio.run(scenario())
+
+
+def test_a_gmail_message_comes_with_its_links_and_without_inline_images(tmp_path):
+    files = tmp_path / "files"
+    files.mkdir()
+    image = "data:image/png;base64," + "iVBORw0KGgo" * 3000
+    button = '<a href="https://shop.example.com/track?order=123&amp;ref=email"><b>Track your parcel</b></a>'
+    html = f'<p>Hi Sam,</p><img src="{image}"><p>Your order is on its way.</p>{button}'
+    html += '<a href="https://shop.example.com/track?order=123&ref=email">here</a>'  # the same link again
+    html += '<a href="https://shop.example.com"><img src="https://shop.example.com/logo.png" alt="Example Shop"></a>'
+    calls = []
+
+    async def call_tool(name, args):
+        calls.append(args)
+        if args.get("full"):
+            saved = files / "Your order.html"
+            saved.write_text(html)
+            return f"Subject: Your order\n\n--- FULL MESSAGE EXPORT ---\n📎 Saved to: {saved}\n"
+        return f"Subject: Your order\n\n--- BODY ---\n{html[:20000]}\n\n[Content truncated...]"  # cut before the button
+
+    process = gmail.processor(files)
+    result = asyncio.run(process(None, call_tool, "get_gmail_message_content", {"message_id": "m1"}))
+
+    assert "iVBORw0KGgo" not in result and "data:[inline image]" in result
+    assert result.endswith(
+        "--- LINKS (from the HTML) ---\n"
+        "Track your parcel → https://shop.example.com/track?order=123&ref=email\n"
+        "Example Shop → https://shop.example.com"
+    )
+    assert calls[1] == {"message_id": "m1", "full": True, "body_format": "html"}
+    assert not list(files.iterdir())  # read and gone
+
+    other = asyncio.run(process(None, call_tool, "search_gmail_messages", {"query": "order"}))
+    assert "iVBORw0KGgo" in other  # only message contents are touched
 
 
 class Notion:
