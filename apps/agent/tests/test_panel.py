@@ -335,10 +335,10 @@ def test_what_s_scheduled_soonest_first(store):
     panel.schedule.add(2_000_000_000, "Ring them with the weather", "every weekday at 7 call me", sms, 3, "0 7 * * 1-5")
     panel.schedule.add(1_900_000_000, "Text them: call Sam", "", sms, None)
     assert panel.call("GET", "/api/schedule").json() == [
-        {"id": 2, "due": 1_900_000_000, "what": "Text them: call Sam", "said": "", "every": "", "reportTo": "sms",
-         "thread": None},
+        {"id": 2, "due": 1_900_000_000, "what": "Text them: call Sam", "said": "", "every": "", "progress": "",
+         "reportTo": "sms", "thread": None},
         {"id": 1, "due": 2_000_000_000, "what": "Ring them with the weather", "said": "every weekday at 7 call me",
-         "every": "0 7 * * 1-5", "reportTo": "sms", "thread": 3},
+         "every": "0 7 * * 1-5", "progress": "", "reportTo": "sms", "thread": 3},
     ]  # fmt: skip
 
 

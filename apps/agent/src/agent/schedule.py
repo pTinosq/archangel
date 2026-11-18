@@ -58,6 +58,8 @@ class Job:
     """Times it has fired."""
     max_runs: int = 0
     """How many times a repeat may fire in all (0 if it doesn't repeat)."""
+    progress: str = ""
+    """What its running (or latest) run last noted for the owner's panel ("Still 3 of 7"); "" if nothing yet."""
 
     @property
     def last(self) -> bool:
@@ -83,6 +85,7 @@ class Schedule:
                 ("every", "TEXT", "''"),
                 ("runs", "INTEGER", "0"),
                 ("max_runs", "INTEGER", "0"),
+                ("progress", "TEXT", "''"),
             ):
                 if column not in have:  # added as it grew
                     db.execute(f"ALTER TABLE schedule ADD COLUMN {column} {kind} NOT NULL DEFAULT {default}")
@@ -112,6 +115,11 @@ class Schedule:
             gone = self._db.execute("DELETE FROM schedule WHERE id = ? AND fired IS NULL", (id,)).rowcount
         self._changed.set()
         return bool(gone)
+
+    def note(self, id: int, progress: str) -> bool:
+        """What the panel shows beside a job while it runs. A job that has gone (cancelled) isn't brought back."""
+        with self._db:
+            return bool(self._db.execute("UPDATE schedule SET progress = ? WHERE id = ?", (progress, id)).rowcount)
 
     def get(self, id: int) -> Job | None:
         """A job still to come (not one already run out or cancelled)."""
@@ -173,12 +181,12 @@ class Schedule:
         return _job(self._db.execute(f"SELECT {_COLUMNS} FROM schedule WHERE id = ?", (id,)).fetchone())
 
 
-_COLUMNS = "id, due, what, said, channel, address, thread, created, every, runs, max_runs"
+_COLUMNS = "id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress"
 
 
 def _job(row: tuple) -> Job:
-    id, due, what, said, channel, address, thread, created, every, runs, max_runs = row
-    return Job(id, due, what, said, Address(channel, address), thread, created, every, runs, max_runs)
+    id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress = row
+    return Job(id, due, what, said, Address(channel, address), thread, created, every, runs, max_runs, progress)
 
 
 def repeats(job: Job) -> str:
