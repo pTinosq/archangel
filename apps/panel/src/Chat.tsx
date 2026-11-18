@@ -12,10 +12,10 @@ export function Chat({ visible }: { visible: boolean }) {
   const titles = new Map(threads?.map((t) => [t.id, t.title]));
   const threadOf = threadsOf(lines);
   // Main is the whole conversation, the router placing each message; choosing an open thread shows only it, and what's
-  // said there stays there. Closed ones are the Threads page; the one chosen stays listed if it closes meanwhile.
+  // said there stays there. Closed ones are the Threads page: one that closes while chosen goes back to Main.
   const [tab, setTab] = useState<number | null>(null);
-  const current = threads?.find((t) => t.id === tab);
-  const listed = (threads ?? []).filter((t) => t.open || t.id === tab).sort((a, b) => b.id - a.id);
+  const listed = (threads ?? []).filter((t) => t.open).sort((a, b) => b.id - a.id);
+  const current = listed.find((t) => t.id === tab);
   const shown = current ? lines.filter((_, i) => threadOf[i] === current.id) : lines;
   const marks = current ? new Map<number, number>() : threadMarks(lines, threadOf);
   const [draft, setDraft] = useState("");
@@ -66,11 +66,10 @@ export function Chat({ visible }: { visible: boolean }) {
           {listed.map((thread) => (
             <option key={thread.id} value={thread.id}>
               #{thread.id} {thread.title}
-              {thread.open ? "" : " (closed)"}
             </option>
           ))}
         </select>
-        {current?.open && (
+        {current && (
           <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
             Close
           </button>
