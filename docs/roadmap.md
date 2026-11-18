@@ -90,7 +90,7 @@ Each milestone ships something usable and proves one idea.
 - **Sign-in:** a GitHub OAuth App used directly (`channels/login.py`), no auth platform. Only `ARCHANGEL_OWNER` gets in; a signed session cookie lasts 30 days. The panel only listens publicly when sign-in is configured, so it can't be public by mistake.
 - **Headless:** no terminal on Railway, so the panel is the only channel.
 - **Phone:** the bridge keeps a Dev and a Prod relay; one tap switches.
-- **Open:** the cockpit once went blank in the cloud after a phone task started; not reproduced locally.
+- **Closed (2026-11-18):** the cockpit once went blank in the cloud after a phone task started; never seen again.
 
 ## M6 (done)
 
@@ -152,7 +152,7 @@ The owner also tests across channels and reports changes.
 
 - **Locator fallback:** Jev first; if it can't find the target or fails, Luna (`openai/gpt-6-luna`) looks at the same screenshot.
 - **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too. (Since M8: no loop rules; the pilot calls `second_opinion` when it judges it's going in circles, with 120 steps only as a backstop.)
-- **Still open:** a cheap text model (DeepSeek) for the orchestrator. DeepSeek can't see images, and the orchestrator gets approval screenshots, so it needs them stripped first.
+- **Done:** a cheap model. DeepSeek V4.1 Flash now sees images, so it runs everything in prod (`ARCHANGEL_MODEL`), the pilots and guard included.
 
 ## M5 (done)
 
@@ -232,7 +232,7 @@ The owner also tests across channels and reports changes.
 - **First four:** TfL (line status and why, journeys with unclear places resolved to the best match and said, next buses and trains at a stop), weather (Open-Meteo: now, by the hour, the days, sunrise and sunset), exchange rates (Frankfurter) and time and dates (the time anywhere, UK bank holidays, days between dates, exact arithmetic). All free and keyless: no new env vars. TfL takes an optional app key from the panel (rate limit only).
 - **Routing.** The orchestrator is told each turn which tools are on and the order to try things: a quick tool, `search_web`, research, and only then a device. A tool that's off, or lacks a setting it requires, isn't offered at all, so the model can't pick it. A tool whose source is down answers "isn't answering: try the web", and the conversation goes on.
 - **Where they are:** weather and journeys "from here" use `owner_location` first.
-- **Not yet:** flight status, markets, news, Wikipedia and dictionary, places (each needs a source chosen, some a paid key); the helper and device pilots don't get the quick tools (the orchestrator answers these itself).
+- **Not planned (2026-11-18):** flight status, markets, news, Wikipedia and dictionary. The helper and device pilots don't get the quick tools: the orchestrator answers these itself and puts what a task needs in its goal.
 
 ## M16 requirements (Pebble Time 2) (from the owner)
 
