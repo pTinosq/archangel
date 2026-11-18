@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, ModelRetry, RunContext, ToolOutput
 from pydantic_ai.capabilities import ProcessHistory
 from pydantic_ai.models import Model
 
@@ -55,6 +55,14 @@ def _own_code(goal: str) -> bool:
     return "archangel" in goal and any(word in goal for word in ("repo", "readme", "github", "pull request"))
 
 
+def stay_quiet(ctx: RunContext[Event]) -> str:
+    """Tell the owner nothing this time, instead of replying: nothing they'd want to hear yet, like a repeat's check
+    that found no change, or a step on the way to what they asked for."""
+    if ctx.deps.from_owner:
+        raise ModelRetry("The owner spoke to you: answer them.")
+    return ""  # the gateway sends nothing for nothing
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -91,6 +99,7 @@ class Orchestrator:
             deps_type=Event,
             instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
+            output_type=[str, ToolOutput(stay_quiet, name="stay_quiet", max_retries=TOOL_RETRIES)],
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
             toolsets=[
                 threads.tools,
@@ -361,7 +370,7 @@ class Orchestrator:
                     result = await logs.run(self._agent, prompt(event.prompt()), deps=event, message_history=messages)
                     self._threads.save(route, result.all_messages())
                     log.debug("out to %s: %s", event.reply_to, result.output)
-                    parts = (Text(result.output), *event.attachments())
+                    parts = (Text(result.output), *event.attachments()) if result.output else ()
                 except Exception as error:
                     log.exception("Failed to handle: %s", describe(event.prompt()))
                     parts = (Text(event.fallback(error)),)

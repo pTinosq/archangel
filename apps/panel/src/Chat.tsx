@@ -80,9 +80,17 @@ export function Chat({ visible }: { visible: boolean }) {
           send();
         }}
       >
-        <input
+        <textarea
+          rows={1}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter is a new line. Not mid-composition (an IME's Enter picks a word).
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              send();
+            }
+          }}
           placeholder={current ? `Message in #${current.id}` : "Message Archangel"}
           enterKeyHint="send"
         />

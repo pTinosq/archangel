@@ -216,7 +216,9 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 }
 .thread-mark::before, .thread-mark::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
 .thread-mark:hover { color: var(--accent); }
-.chat input { flex: 1; min-width: 0; }
+/* Grows with what's typed (Shift+Enter for a new line), up to a few lines, then scrolls. */
+.chat textarea { flex: 1; min-width: 0; resize: none; field-sizing: content; max-height: 160px; }
+.chat form { align-items: flex-end; }
 /* Which thread the chat shows: Main (everything, routed) or one open thread. */
 .chat-bar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
 .chat-bar select { flex: 1; min-width: 0; cursor: pointer; }

@@ -708,6 +708,28 @@ def test_a_repeat_wakes_the_agent_which_stops_it_itself_in_its_own_thread(store)
     assert not owner.schedule.upcoming()
 
 
+def test_a_repeat_that_finds_nothing_yet_tells_the_owner_nothing(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("stay_quiet") if prompt.startswith("[Scheduled") else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("Delivery")))
+    owner.says(Text("hello"))
+    job = owner.schedule.add(time.time(), "Check the delivery", "", owner.cli.owner, 1, "*/15 * * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, runs=1))))
+    assert [m.text for m in owner.cli.sent] == ["ok"]
+    assert owner.schedule.upcoming()  # it carries on
+
+
+def test_the_owner_always_gets_an_answer(store):
+    def model(messages, info) -> ModelResponse:
+        if isinstance(messages[-1].parts[-1], pydantic_ai.RetryPromptPart):
+            return say("Here.")
+        return call("stay_quiet")
+
+    owner = Owner(store, model)
+    assert owner.says(Text("you there?"))[-1].text == "Here."
+
+
 def test_the_agent_cannot_cancel_another_thread_s_schedule_on_its_own(store):
     def model(prompt: str) -> ModelResponse:
         return call("cancel_later", id=1) if prompt.startswith("[Scheduled") or "stop" in prompt else say("ok")
