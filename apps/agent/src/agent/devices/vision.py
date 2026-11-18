@@ -71,7 +71,8 @@ class JevVision:
                     },
                 },
             )
-            response.raise_for_status()
+            if response.is_error:  # the body says why (raise_for_status drops it): "Invalid image dimensions."
+                raise RuntimeError(f"Jev {response.status_code}: {response.text[:300]}")
             answers = response.json()["answers"]
             reply(f"visible {answers['visible']['noul']:.2f}")
         log.debug("jev %r: %s", target, answers)
