@@ -17,6 +17,12 @@ class Event(ABC):
     from_owner: bool
     """Only events from the owner may approve anything."""
 
+    @property
+    def owner_asked(self) -> bool:
+        """The owner asked for this in their own words: enough for what only they may start (`improve`, `merge`, deep
+        research, a public report), never for an approval, which needs them now."""
+        return self.from_owner
+
     @abstractmethod
     def prompt(self) -> list[Part | str]:
         """What the orchestrator model is shown."""
@@ -116,6 +122,10 @@ class Scheduled(Event):
     last_task: Task | None = None
     """The task the repeat's previous run started (`Job.last_task`), as it stands now."""
     from_owner = False
+
+    @property
+    def owner_asked(self) -> bool:
+        return bool(self.job.said)  # set only from the owner's own message
 
     @property
     def reply_to(self) -> Address:

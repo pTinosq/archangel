@@ -43,19 +43,19 @@ What `apps/agent/` does, beyond the one-line roles in CLAUDE.md. Threads, the co
 
 - `start_task(goal, report_via?, on?)`: a device task, `on` the phone or the PC.
 - `use_connectors(goal, report_via?)`: a background task in the owner's connected services; it sees which are connected.
-- `research(question, deep?, report_via?)`: a background task. `deep` only from the owner's own message, once they've agreed to its cost.
+- `research(question, deep?, report_via?)`: a background task. `deep` only when the owner asked (`owner_asked`), once they've agreed to its cost.
 - The quick tools' functions (`tfl_status`, `weather`, `convert_currency`, `calculate`…, from `tools/`, only while on): answers inline. The order to try: a tool, then the web, then research, a device last.
 - `search_web(question)`, `read_page(url)`: answers inline; read what a result only points to.
 - `installed_apps(on?)`: what's installed, to choose between the web and an app.
 - `answer_task`: a waiting task's answer, or the owner's word to a running one. `redirect_task(id, channel)` ("text me when it's done"), `cancel_task`.
-- `report_visibility(id, public?)`: says whether a report is public, or changes it; public only from the owner's own message.
+- `report_visibility(id, public?)`: says whether a report is public, or changes it; public only when the owner asked (`owner_asked`).
 - `send(channel, text, screenshot?)`; `hang_up` (on a call, after this reply).
 - `owner_location`: for "near me"; tasks get the address typed.
 - `do_later`, `cancel_later`, `note_progress`: below.
 - `remember`, `forget`: the owner's words, to the twin's writer at once. `ask_twin`.
 - `writing_style`: how to write to someone else; its own replies come with their style.
 - `search_threads`, `read_thread`: another thread, when the owner refers to one.
-- `improve(request, pr?)`: Archangel changing itself (M14), a background `code` task. `merge(pr)` deploys. Both only from the owner's own message.
+- `improve(request, pr?)`: Archangel changing itself (M14), a background `code` task. `merge(pr)` deploys. Both only when the owner asked (`owner_asked`): their own message, or a schedule set with one ("at 19:10 ask Claude to…"; `Job.said` is only ever the owner's words). Approvals still need them now (`from_owner`).
 
 ### What it sees, every turn
 

@@ -98,7 +98,7 @@ The pilot never handles coordinates: it describes what to tap, vision finds the 
 
 **Orchestrator rules** (tools in `docs/agent.md#orchestrator`):
 
-- Only from the owner's own message: `research(deep=True)` (once they've agreed to its cost), making a report public, `improve` and `merge`. Approvals only when `event.from_owner`: it never decides one for the owner.
+- Only from the owner's own message, or a schedule they set with one (`event.owner_asked`): `research(deep=True)` (once they've agreed to its cost), making a report public, `improve` and `merge`. Approvals only when `event.from_owner`, the owner now: it never decides one for the owner.
 - The owner always gets an answer. On anything else it may `stay_quiet`.
 - A repeat's runs are silent in code, whatever the model writes, except the one that ends it and the last.
 - It may cancel on its own only what was scheduled in its thread.

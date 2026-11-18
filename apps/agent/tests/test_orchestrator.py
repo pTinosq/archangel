@@ -410,6 +410,25 @@ def test_only_the_owner_changes_archangel(store):
     assert (owner.coder.changes, owner.coder.merged, store.tasks()) == ([], [], [])
 
 
+def test_a_change_the_owner_scheduled_is_theirs(store):
+    def respond(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Scheduled"):
+            return call("improve", request="Raise the thread size to 200k tokens")
+        return call("do_later", what="Ask Claude to raise the thread size to 200k tokens", in_minutes=10)
+
+    owner = Owner(store, tool_result_or(respond))
+    owner.says(Text("in 10 minutes ask claude to raise the thread size to 200k"))
+    [job] = owner.schedule.upcoming()
+    asyncio.run(owner.orchestrator.handle(Scheduled(job)))
+    assert owner.coder.changes == [("Raise the thread size to 200k tokens", "archangel/task-1", None)]
+
+    # Scheduled on something else's word (a notice, an email), it is not the owner's.
+    theirs = owner.schedule.add(time.time(), "Improve yourself", "", owner.cli.owner, None)
+    asyncio.run(owner.orchestrator.handle(Scheduled(theirs)))
+    assert owner.cli.sent[-1].text == "Only the owner can ask for changes to Archangel. Ask them."
+    assert len(owner.coder.changes) == 1
+
+
 def test_reports_are_private_until_the_owner_shares_one(store):
     def respond(prompt: str) -> ModelResponse:
         if prompt.startswith("[Update"):

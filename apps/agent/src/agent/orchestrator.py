@@ -147,7 +147,7 @@ class Orchestrator:
             Normally a minute or two and a few pence: many sources, good rather than exhaustive. `deep`: exhaustive,
             ~5 minutes and ~70p. Offer it with its cost when they want it thorough; set it only once they've agreed.
             """
-            if deep and not ctx.deps.from_owner:
+            if deep and not ctx.deps.owner_asked:
                 return "Only the owner can agree to deep research's cost. Ask them."
             return start(ctx, question, report_via, "deep research" if deep else "research")
 
@@ -222,7 +222,7 @@ class Orchestrator:
             default). Set `public` to change it: public to share it with someone."""
             if not store.has_page(id):
                 return f"Task #{id} has no report."
-            if public and not ctx.deps.from_owner:
+            if public and not ctx.deps.owner_asked:
                 return "Only the owner can make a report public. Ask them."
             if public is not None:
                 store.make_public(id, public)
@@ -314,14 +314,14 @@ class Orchestrator:
                 and opens a PR for the owner to merge, or answers. `pr`: carry on that PR instead ("no, make it
                 shorter"). The repo is public: write `request` with nothing about the owner's life (no names, places,
                 numbers, accounts); say what to build or find out. `report_via` as for start_task."""
-                if not ctx.deps.from_owner:
+                if not ctx.deps.owner_asked:
                     return "Only the owner can ask for changes to Archangel. Ask them."
                 return start(ctx, request, report_via, "code", pr)
 
             @self._agent.tool
             async def merge(ctx: RunContext[Event], pr: int) -> str:
                 """Merge an improvement's PR, which deploys it (Archangel restarts): only when the owner says so."""
-                if not ctx.deps.from_owner:
+                if not ctx.deps.owner_asked:
                     return "Only the owner can merge a change. Ask them."
                 try:
                     merged = await coder.merge(pr)
