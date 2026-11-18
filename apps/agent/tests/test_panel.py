@@ -329,14 +329,6 @@ def test_what_is_said_in_a_chosen_thread_goes_there_unrouted(store):
     assert panel.call("POST", "/api/messages", json={"text": "x", "thread": 99}).status_code == 404
 
 
-def test_closing_an_empty_thread_needs_no_model(store):
-    panel = Panel(store)
-    thread = panel.threads.new("Flights")
-    closed = panel.call("POST", f"/api/threads/{thread.id}/close").json()
-    assert not closed["open"] and closed["summary"] == "Nothing was said in it."
-    assert panel.call("POST", "/api/threads/99/close").status_code == 404
-
-
 def test_what_s_scheduled_soonest_first(store):
     panel = Panel(store)
     sms = Address("sms", "owner")

@@ -181,8 +181,6 @@ export const api = {
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
   threads: () => call<Thread[]>("GET", "/threads"),
   thread: (id: number) => call<ThreadDetail>("GET", `/threads/${id}`),
-  /** Wraps it up: closed now, summarised in the background. */
-  closeThread: (id: number) => call<Thread>("POST", `/threads/${id}/close`),
   prompts: () => call<Prompt[]>("GET", "/prompts"),
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),
   resetPrompt: (name: string) => call<Prompt>("DELETE", `/prompts/${name}`),

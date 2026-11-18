@@ -92,12 +92,12 @@ Storage, in `data/archangel.db`: `threads`, `thread_history`, `thread_text` (FTS
 
 The prompts are editable on the panel like the rest ("thread router", "thread summariser").
 
-## Choosing and closing by hand (M18a)
+## Choosing a thread by hand (M18a)
 
 The router is the default; the owner can also take the choice. The panel's chat has a dropdown: **Main**, the whole conversation as it is routed, or an open thread (the router opens and names them all).
 
 - **Saying something in a thread.** `POST /api/messages` takes a `thread`; the message carries it (`Message.thread`, so its transcript line is filed at once, and `OwnerMessage.thread` is set), and `Threads.route` takes it as the answer without asking the router, like a task's update. Its replies and tasks are filed there as always. If the thread was full or closed, the full one's continuation takes it, and a closed one reopens.
-- **Closing.** `Close` (`POST /api/threads/{id}/close`, `Threads.close`) does what the router's wrap-up does: closed now, summarised in the background (`summariser`), kept under Threads with its history. A thread nothing was said in gets "Nothing was said in it." with no model call. Threads the router or the quiet timer closes leave the dropdown the same way; the chat goes back to Main.
+- **Closing** stays Archangel's (a wrap-up, or quiet for 3 hours): a closed thread leaves the dropdown, and the chat goes back to Main if it was chosen.
 - **Closed threads** are the Threads page (summary, tasks, everything said).
 
 Trade-off: the router still files what's said in Main, so a topic can land in a thread the owner didn't expect. Choosing a thread is the way to say "this stays apart" without waiting for the router to agree.
@@ -105,7 +105,7 @@ Trade-off: the router still files what's said in Main, so a topic can land in a 
 ## Panel
 
 - **Threads** tab (`/threads`, `/threads/{id}`): the threads, newest first, each open or closed, how long ago, and a bar for how full it is (amber when nearly). One opened: its summary (or when it'll get one), size, what it carries on from, its tasks (links), and everything said in it.
-- **Choosing a thread**: the chat's dropdown and Close (above).
+- **Choosing a thread**: the chat's dropdown (above).
 - **Chat**: in Main, a quiet rule with the thread's name where the conversation moves to another thread; click it to open the thread.
 - **Tasks**: each links to its thread.
 - **Cockpit**: the thread router and summariser are parts of their own, called by the orchestrator (or, for quiet threads, by `threads`).

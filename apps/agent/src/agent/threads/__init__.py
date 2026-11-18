@@ -66,19 +66,6 @@ class Threads:
     def store(self) -> ThreadStore:
         return self._store
 
-    def close(self, id: int) -> Thread | None:
-        """Wraps a thread up at the owner's word, as if the router had judged it: closed now, summarised in the
-        background (a thread nothing was said in has nothing to summarise). None if there's no such thread."""
-        if not (thread := self._store.get(id)):
-            return None
-        if thread.open:
-            self._store.close(id)
-            if self._store.history(id):
-                self._in_background(self._summarise(self._store.get(id)))
-            else:
-                self._store.summarise(id, thread.title, "Nothing was said in it.", thread.updated)
-        return self._store.get(id)
-
     async def route(self, event: Event) -> Route:
         """The thread `event` belongs in, made or reopened as needed, and marked as said in now. Never fails: if
         routing does, the latest thread."""

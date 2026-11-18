@@ -342,13 +342,6 @@ def _thread_routes(app: FastAPI, threads: Threads, store: Store) -> None:
     async def listed() -> list[dict]:
         return [_thread(thread) for thread in threads.store.recent(THREADS_LISTED)]
 
-    @app.post("/api/threads/{id}/close")
-    async def close(id: int) -> dict:
-        """Wraps it up: closed now, summarised in the background; said in again, it reopens."""
-        if not (thread := threads.close(id)):
-            raise HTTPException(404, f"No thread #{id}")
-        return _thread(thread)
-
     @app.get("/api/threads/{id}")
     async def one(id: int) -> dict:
         if not (thread := threads.store.get(id)):

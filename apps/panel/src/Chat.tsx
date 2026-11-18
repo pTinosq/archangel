@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { api, hideExpired, imageUrl, type Line, type Thread } from "./api";
+import { api, hideExpired, imageUrl, type Line } from "./api";
 import { useFeed, usePoll } from "./poll";
 import { Linked } from "./linked";
 import { Link } from "./route";
@@ -46,17 +46,6 @@ export function Chat({ visible }: { visible: boolean }) {
     }
   };
 
-  const close = async (thread: Thread) => {
-    try {
-      await api.closeThread(thread.id);
-      setTab(null);
-      setError("");
-    } catch {
-      play("error");
-      setError("Couldn't close the thread.");
-    }
-  };
-
   return (
     <section className="chat" hidden={!visible}>
       <h2>Conversation</h2>
@@ -69,11 +58,6 @@ export function Chat({ visible }: { visible: boolean }) {
             </option>
           ))}
         </select>
-        {current && (
-          <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
-            Close
-          </button>
-        )}
       </div>
       <div className="lines">
         {current && !shown.length && <p className="quiet">Nothing said here yet.</p>}

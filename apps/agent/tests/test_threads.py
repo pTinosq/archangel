@@ -149,32 +149,8 @@ def test_what_the_owner_says_in_a_chosen_thread_goes_there_without_the_router():
 def test_saying_something_in_a_closed_thread_reopens_it():
     world = World()
     thread = world.store.new("Flights")
-    world.threads.close(thread.id)
-    assert not world.store.get(thread.id).open
+    world.store.close(thread.id)
     assert world.route(said_in(thread.id, "back again")).thread.open
-
-
-def test_closing_a_thread_by_hand_summarises_it():
-    world = World()
-
-    async def scenario():
-        thread = world.store.new("Flights")
-        route = await world.threads.route(said_in(thread.id, "flights to India?"))
-        world.threads.save(route, turn("flights to India?", "From £540."))
-        assert world.threads.close(thread.id).open is False
-        await world.threads.idle()
-        return thread.id
-
-    thread = world.store.get(asyncio.run(scenario()))
-    assert not thread.open and thread.summary == "2 lines about Flights."
-    assert world.threads.close(99) is None
-
-
-def test_closing_a_thread_nothing_was_said_in_needs_no_summary():
-    world = World()
-    thread = world.store.new("Flights")
-    world.threads.close(thread.id)
-    assert world.store.get(thread.id).summary == "Nothing was said in it." and world.summariser.read == []
 
 
 def route_history(world: World, route: Route) -> list[ModelMessage]:
