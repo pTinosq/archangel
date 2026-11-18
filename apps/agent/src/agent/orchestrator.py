@@ -31,7 +31,7 @@ from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.research import Researcher
 from agent.runs import Answer
-from agent.schedule import TIMEZONE, Schedule, parse, when
+from agent.schedule import DEFAULT_RUNS, TIMEZONE, Schedule, parse, when
 from agent.store import Kind, Status, Store
 from agent.styles import Audience, Styles
 from agent.tasks import Tasks
@@ -234,13 +234,16 @@ class Orchestrator:
                 in_minutes: float | None = None,
                 every: str | None = None,
                 report_via: str | None = None,
+                max_runs: int = DEFAULT_RUNS,
             ) -> str:
                 """Do something later, when the owner asks: "in 15 minutes get me an Uber home", "at 20:30 text me to
                 call Sam", "tomorrow morning ring me with the weather". When: `at`, their local time ("2026-11-18
                 08:00"), or `in_minutes`. Repeating ("every weekday at 7"): `every`, cron in their time ("0 7 * * 1-5"),
                 with `at` only if it starts later. `what`: all you'll need then, as it'll read then ("today's weather",
                 not "tomorrow's"), e.g. "Start a phone task: book an Uber home"; you're woken with it, in this thread.
-                Replies go where you're talking now; `report_via` as for start_task ("voice" rings them)."""
+                Replies go where you're talking now; `report_via` as for start_task ("voice" rings them).
+                A repeat stops after `max_runs` (default 50, at most 200: each run costs a model call); size it to
+                the need. "Check every 30 minutes until it changes": repeat, and cancel_later it yourself when it has."""
                 report_to = ctx.deps.reply_to
                 if report_via and not (report_to := gateway.owner(report_via)):
                     return no_channel(report_via)
@@ -250,14 +253,20 @@ class Orchestrator:
                 except ValueError as error:
                     return str(error)
                 said = ctx.deps.message.text if isinstance(ctx.deps, OwnerMessage) else ""
-                job = schedule.add(due, what, said, report_to, self._thread.id, every or "")
-                repeats = f", then {every} (cron)" if every else ""
+                job = schedule.add(due, what, said, report_to, self._thread.id, every or "", max_runs)
+                repeats = f", then {every} (cron), at most {job.max_runs} runs" if every else ""
                 return f"Scheduled #{job.id} for {when(due, now)}{repeats}, via {report_to.channel}."
 
-            @self._agent.tool_plain
-            async def cancel_later(id: int) -> str:
-                """Cancel something scheduled (all its repeats)."""
-                return f"Cancelled #{id}." if schedule.cancel(id) else f"Nothing scheduled as #{id}."
+            @self._agent.tool
+            async def cancel_later(ctx: RunContext[Event], id: int) -> str:
+                """Cancel something scheduled, all its repeats too. The owner can cancel any; on your own, only what
+                was scheduled in this thread (a repeat you're woken by, once it has done its job). Then tell them."""
+                job = schedule.get(id)
+                if job and not ctx.deps.from_owner and job.thread != self._thread.id:
+                    return f"#{id} was scheduled in another conversation: only the owner can cancel it."
+                if not job or not schedule.cancel(id):
+                    return f"Nothing scheduled as #{id} (it has run, or was cancelled)."
+                return f"Cancelled #{id}" + (f": no more of its {job.every} repeats." if job.every else ".")
 
         if coder:
 

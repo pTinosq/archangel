@@ -190,6 +190,7 @@ The owner also tests across channels and reports changes.
 - **Never twice.** Marked fired before it runs: a crash loses it rather than ordering two Ubers. Anything due while Archangel was down fires on start, saying how late; the orchestrator judges whether it still makes sense.
 - **Repeating** ("every weekday at 7"): a cron expression in the owner's time (models write cron well; cronsim gets daylight saving right). Missed while down: fires once, not once per miss.
 - **Seen on the panel:** what's scheduled, soonest first, above the tasks; Cancel sends a message like the task buttons.
+- **The agent ends its own loops (2026-11-18).** "Check my email every 30 minutes until it changes, then text me": a repeat's wake-up tells the orchestrator its run number and that `cancel_later` stops it for good once what it waited for has happened. On its own it may cancel only what was scheduled in its own thread; the owner may cancel anything. Every repeat has a cap on runs (`max_runs`, default 50, at most 200: each run is a model call); the run that uses the last is told it was the last, so the owner hears it stopped. Not its own milestone: a part of M13.
 - **Done (2026-11-17):** scheduled, repeating, on the panel.
 - **Notification triggers, parked (2026-11-17)** as their own "Later" milestone: the owner judged them not worth it for now: watching for "when my Uber arrives" means a loop and model calls on every notification.
 
