@@ -7,10 +7,15 @@ when nothing else fits. Adding a style is adding a file; nothing else in the cod
 real people or accounts, go in `data/styles/` (the volume), never the public repo. `python -m agent.styles` shows
 which one an audience gets.
 
-A profile may name where it applies (`via`: a channel or an app, "sms", "discord", "email"), who (`people`, by name),
-and whether it's for the owner (`owner = true`). All it names must fit. Of the profiles that fit, the most specific
-wins: one naming the person, then one for the owner, then one naming where; the default only when none fit. Two
-profiles that could both win the same message are refused at start, so the choice never depends on file order.
+A profile may name where it applies (`via`: a channel or an app, "sms", "discord", "email"), who (`people`, by name;
+`groups`: the owner's buckets of people, "uni friends"), and whether it's for the owner (`owner = true`). All it names
+must fit. Of the profiles that fit, the most specific wins: one naming the person, then their group, then one for the
+owner, then one naming where; the default only when none fit. Two profiles that could both win the same message are
+refused at start, so the choice never depends on file order.
+
+Who's in which group is the owner's life, so it's the context twin's, not a file's: a person's node linked (either way)
+to a node named for the group. The twin also gives a person's aliases, so "Sam Taylor" finds a profile for "Sam". The
+lookup is code, not a model call. Someone in two groups whose profiles tie gets the first by file name.
 """
 
 import tomllib
@@ -19,11 +24,13 @@ from pathlib import Path
 
 from pydantic_ai.toolsets import FunctionToolset
 
+from agent.twin.graph import Graph
+
 FOLDER = Path(__file__).parent
 BASE, DEFAULT = "base", "default"
 OWNER = "owner"
 """What `writing_style` is told for `to` when it's writing to the owner."""
-_KEYS = {"about", "owner", "people", "via"}
+_KEYS = {"about", "groups", "owner", "people", "via"}
 
 
 def _clean(name: str) -> str:
@@ -58,34 +65,44 @@ class Style:
     owner: bool = False
     people: tuple[str, ...] = ()
     via: tuple[str, ...] = ()
+    groups: tuple[str, ...] = ()
 
     @property
     def general(self) -> bool:
         """Names nothing: it fits every audience, which only the default may."""
-        return not (self.owner or self.people or self.via)
+        return not (self.owner or self.people or self.groups or self.via)
 
     @property
     def applies(self) -> str:
         """Who it's for, in a few words."""
         names = ["the owner"] if self.owner else []
         names += [f"to {', '.join(self.people)}"] if self.people else []
+        names += [f"in {', '.join(self.groups)}"] if self.groups else []
         names += [f"via {', '.join(self.via)}"] if self.via else []
         return "; ".join(names) or "otherwise"
 
-    def rank(self, audience: Audience) -> tuple[bool, bool, bool] | None:
-        """None if it doesn't fit; else what it names, most telling first, so that larger is more specific."""
-        person, via = _clean(audience.person), _clean(audience.via)
-        if (self.owner and not audience.owner) or (self.people and person not in self.people):
+    def rank(
+        self, audience: Audience, names: frozenset[str] = frozenset(), groups: frozenset[str] = frozenset()
+    ) -> tuple[bool, ...] | None:
+        """None if it doesn't fit; else what it names, most telling first, so that larger is more specific. `names`:
+        the person's names (theirs and their aliases); `groups`: what they're in."""
+        names = names or frozenset([_clean(audience.person)] if audience.person else [])
+        if (self.owner and not audience.owner) or (self.people and not names & set(self.people)):
             return None
-        if self.via and via not in self.via:
+        if (self.groups and not groups & set(self.groups)) or (self.via and _clean(audience.via) not in self.via):
             return None
-        return bool(self.people), self.owner, bool(self.via)
+        return self._named()
+
+    def _named(self) -> tuple[bool, ...]:
+        return bool(self.people), bool(self.groups), self.owner, bool(self.via)
 
     def clashes(self, other: "Style") -> bool:
-        """Could both win the same audience? Same things named, and every list shares a name."""
+        """Could both win the same audience? Same things named, and every list shares a name. (Two groups can't be
+        checked: who's in both is the twin's.)"""
         return (
-            (self.owner, bool(self.people), bool(self.via)) == (other.owner, bool(other.people), bool(other.via))
+            self._named() == other._named()
             and (not self.people or bool(set(self.people) & set(other.people)))
+            and (not self.groups or bool(set(self.groups) & set(other.groups)))
             and (not self.via or bool(set(self.via) & set(other.via)))
         )
 
@@ -107,7 +124,7 @@ def parse(name: str, source: str) -> Style:
     if not isinstance(owner := settings.get("owner", False), bool):
         raise ValueError(f"{name}: `owner` is true or false")
     lists = {}
-    for key in ("people", "via"):
+    for key in ("people", "groups", "via"):
         values = settings.get(key, [])
         if not (isinstance(values, list) and all(isinstance(v, str) and v.strip() for v in values)):
             raise ValueError(f"{name}: `{key}` is a list of names")
@@ -120,9 +137,10 @@ def parse(name: str, source: str) -> Style:
 class Styles:
     """The profiles in a folder: pick one for an audience, and say how to write for it."""
 
-    def __init__(self, folder: Path = FOLDER, own: Path | None = None):
+    def __init__(self, folder: Path = FOLDER, own: Path | None = None, twin: Graph | None = None):
         """`own`: the owner's folder (on the volume, never in the repo), for styles that name real people or accounts.
-        A file there adds a style, or replaces the built-in one of its name."""
+        A file there adds a style, or replaces the built-in one of its name. `twin`: who's in which group."""
+        self._twin = twin
         found = {
             path.stem: parse(path.stem, path.read_text())
             for where in (folder, own)
@@ -138,10 +156,10 @@ class Styles:
         self.default = found.pop(DEFAULT)
         if not self.default.general:
             raise ValueError("default: fits when nothing else does, so names no audience")
-        self.profiles = list(found.values())
+        self.profiles = sorted(found.values(), key=lambda style: style.name)  # a tie goes to the first by name
         for style in self.profiles:
             if style.general:
-                raise ValueError(f"{style.name}: names no one (owner, people or via); only the default does that")
+                raise ValueError(f"{style.name}: names no one (owner, people, groups, via); only the default may")
         for i, style in enumerate(self.profiles):
             for other in self.profiles[i + 1 :]:
                 if style.clashes(other):
@@ -149,8 +167,20 @@ class Styles:
 
     def choose(self, audience: Audience) -> Style:
         """The most specific profile that fits, else the default."""
-        fits = [(rank, style) for style in self.profiles if (rank := style.rank(audience)) is not None]
+        names, groups = self._known(audience.person)
+        fits = [(rank, style) for style in self.profiles if (rank := style.rank(audience, names, groups)) is not None]
         return max(fits, key=lambda fit: fit[0])[1] if fits else self.default
+
+    def _known(self, person: str) -> tuple[frozenset[str], frozenset[str]]:
+        """What the twin knows of `person`: their names, and the names of every node they're linked to (their groups,
+        among others: only those a profile names matter)."""
+        if not (person.strip() and self._twin and (node := self._twin.find(person))):
+            return frozenset([_clean(person)] if person.strip() else []), frozenset()
+        linked = [link.target for link in self._twin.links_from(node.name)]
+        linked += [link.source for link in self._twin.links_to(node.name)]
+        nodes = [other for name in linked if (other := self._twin.find(name))]
+        groups = {_clean(n) for other in nodes for n in (other.name, *other.aliases)}
+        return frozenset(_clean(n) for n in (person, node.name, *node.aliases)), frozenset(groups)
 
     def guidance(self, audience: Audience) -> str:
         """How to write for them: the base, then the profile chosen."""

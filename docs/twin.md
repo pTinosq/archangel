@@ -9,6 +9,7 @@ A second brain of the owner's personal context: who is in their life, what they 
 - **You** is the root: name, date of birth, home, allergies, the rules that must never be missed. Everything is about two links from it; depth comes from cross-links, not nesting.
 - **Hubs, not duplicates.** Uber is one node, linked from Travel, Work and Personal. Names and aliases ("Mum" = Helen) are unique, enforced by the database, so the writer links to what exists.
 - **The source, not the result.** A date of birth, not an age; "moved to London in March 2024", not "two years". Dates are absolute; a temporary fact carries its end date. Agents know today's date.
+- **Groups are nodes.** The owner's buckets of people ("uni friends") are a node each, linked from every person in them. Code reads them too: a writing style for a group goes to whoever is linked to it ([styles.md](styles.md#groups)).
 - **Placed as high as it holds.** "No morning flights" sits on Flights; once it holds for trains too, it moves up to Travel.
 
 ## Two agents

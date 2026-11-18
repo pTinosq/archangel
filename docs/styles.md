@@ -25,22 +25,33 @@ You're writing as the owner on Discord: informal, quick, like a friend in a chat
 | `owner.md` | `owner = true`: the owner, any channel. Short and polite; plain text. |
 | `owner-voice.md` | `owner = true`, `via = ["voice"]`: the owner on a call. Written to be heard. |
 | `discord.md` | `via = ["discord"]`: informal. |
+| `texting.md` | `via = ["whatsapp", "telegram", "signal", "messenger", "imessage"]`: casual, like texting someone you know. |
 | `semi-formal.md` | `via = ["email", "gmail", "outlook", "slack", "teams", "linkedin"]`: polite, direct. |
 | `default.md` | Nothing else fits (an unknown person or app). Neutral, friendly, brief. |
 
-Settings: `about` (a line: who it is for), `owner` (true or false), `people` (names), `via` (channels or apps, as the app or channel calls itself: `sms`, `voice`, `panel`, `discord`, `email`). Names match without regard to case. The file name is the style's name.
+Settings: `about` (a line: who it is for), `owner` (true or false), `people` (names), `groups` (the owner's groups of people, below), `via` (channels or apps, as the app or channel calls itself: `sms`, `voice`, `panel`, `discord`, `email`). Names match without regard to case. The file name is the style's name.
 
 ## Choosing
 
 `Styles.choose(Audience(owner, person, via))`:
 
-1. A profile fits when everything it names fits: its `owner` if set, one of its `people`, one of its `via`. Naming nothing fits all, which only `default` may.
-2. Of those that fit, the most specific wins: one naming the person, then one naming the owner, then one naming where. Between two, whichever names more of the things the audience has.
+1. A profile fits when everything it names fits: its `owner` if set, one of its `people`, one of its `groups`, one of its `via`. Naming nothing fits all, which only `default` may.
+2. Of those that fit, the most specific wins: one naming the person, then their group, then one naming the owner, then one naming where. Between two, whichever names more of the things the audience has; still tied (someone in two groups), the first by file name.
 3. None fit: `default`.
 
 So the owner on a call gets `owner-voice` (owner and where) over `owner`; the owner on Discord gets `owner`, not `discord` (the owner outranks the app); anyone else on Discord gets `discord`.
 
-Two profiles that could win the same audience (both for the owner, or both for Discord) fail at start, so the choice never depends on file order. So do a typo in a key, a missing `about`, an empty text, and a missing base or default: a style that quietly never matches is worse than a refusal.
+## Groups
+
+The owner talks to buckets of people: uni friends, climbing friends, family. A profile with `groups = ["uni friends"]` is for everyone in that group, in any app (or only in some, with `via`).
+
+Who's in a group isn't in the file: it's the owner's life, so it's the context twin's. A group is a node in the twin (an alias works too: "uni lot"), and a person is in it when their node links to it, or it to them. The twin's writer makes the node and the links when the owner says so ("Sam and Priya are my uni lot"), or the owner links them on the Context twin page. `writing_style` looks the person up in the graph in code, no model call: their node (so an alias, "Sam Taylor", finds a profile for "Sam") and every node linked to it. Only the ones a profile names matter.
+
+The twin holds who's in the group, never which style they get: that's the profile's.
+
+## Refused at start
+
+Two profiles that could win the same audience (both for the owner, both for Discord, both for the same group) fail at start, so the choice never depends on file order. Two groups can't be checked (who's in both is the twin's), hence the tie rule above. So do a typo in a key, a missing `about`, an empty text, and a missing base or default: a style that quietly never matches is worse than a refusal.
 
 ## Where it is applied
 
@@ -50,13 +61,13 @@ Two profiles that could win the same audience (both for the owner, or both for D
 
 ## Adding one
 
-1. Write `styles/telegram.md` with `about`, `via = ["telegram"]` and the prose.
-2. `just style Sam telegram` shows the one chosen and the text a model would get; `just style` lists them all.
+1. Write `styles/bluesky.md` with `about`, `via = ["bluesky"]` and the prose.
+2. `just style Sam bluesky` shows the one chosen and the text a model would get; `just style` lists them all.
 3. Run the tests (`tests/test_styles.py` covers the selection rules, and the starter profiles' routing; add a line for the new one).
 
 No code changes. To tune one, edit its file and look again.
 
-The owner's own styles (naming real people or accounts, which can't go in this public repo) go the same way into `apps/agent/data/styles/` on the volume (Railway: `/app/apps/agent/data/styles/`). A file there adds a style or replaces the built-in of its name; a style for one person is `people = ["Sam"]`. Read at start.
+The owner's own styles (naming real people or accounts, which can't go in this public repo) go the same way into `apps/agent/data/styles/` on the volume (Railway: `/app/apps/agent/data/styles/`). A file there adds a style or replaces the built-in of its name; a style for one person is `people = ["Sam"]`; for a group, `groups = ["uni friends"]`, no names needed, so a group's style can live in the repo. Read at start.
 
 ## Files or the panel's Prompts tab?
 
@@ -66,4 +77,3 @@ The built-in profiles live as files, with the Prompts tab left for later. The fi
 
 - A real-model eval, like the twin's and router's: drafts for a made-up audience, checked in code for what the style forbids (openers, closers, emoji, length) and by a judge for the rest.
 - The Prompts tab, as above.
-- The twin knowing who the owner's people are, so the style for one is chosen without the model naming them.

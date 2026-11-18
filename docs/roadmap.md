@@ -291,5 +291,5 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 - **Picked by channel, person or app.** A message to the owner by text uses the owner's profile; to a named person, theirs; in an app, the app's. Nothing matches: a sensible default (semi-formal).
 - **Extensible.** A new profile is a small addition: a name, what it matches, a few lines of style. No code change to add one.
 
-**Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for, then the style as prose; chosen in code. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
+**Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
 - **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").

@@ -11,6 +11,7 @@ from agent.messages import Message, Text
 from agent.orchestrator import Orchestrator
 from agent.styles import Audience, Style, Styles, parse
 from agent.tasks import Tasks
+from agent.twin.graph import Graph
 from agent.web import Web
 from test_orchestrator import say
 
@@ -37,7 +38,8 @@ def test_the_starter_styles_go_to_who_they_are_for():
     assert chosen(styles, "Sam", "Discord") == "discord"
     assert chosen(styles, "Priya", "Gmail") == "semi-formal"
     assert chosen(styles, "Priya", "email") == "semi-formal"
-    assert chosen(styles, "Sam", "WhatsApp") == "default"  # nothing fits
+    assert chosen(styles, "Sam", "WhatsApp") == "texting"
+    assert chosen(styles, "Sam", "Bluesky") == "default"  # nothing fits
     assert chosen(styles) == "default"
 
 
@@ -73,6 +75,43 @@ def test_the_most_specific_style_wins_the_person_then_the_owner_then_where(tmp_p
     assert chosen(styles, "Tom", "email") == "default"
 
 
+def twin(store) -> Graph:
+    """A made-up owner's people: Sam (also "Sam Taylor") in Uni friends and Climbing, Tom in Climbing, which links to
+    him rather than he to it, and Priya in nothing."""
+    graph = Graph(store.db)
+    for name in ("People", "Sam", "Tom", "Priya", "Uni friends", "Climbing"):
+        graph.add(name)
+    graph.alias("Sam", "Sam Taylor")
+    graph.alias("Uni friends", "uni lot")
+    graph.link("Sam", "Uni friends", "in", "from uni")
+    graph.link("Sam", "Climbing", "in", "climbs")
+    graph.link("Climbing", "Tom", "member", "climbs")
+    for name in ("Sam", "Tom", "Priya"):
+        graph.link("People", name, "friend", "a friend")
+    return graph
+
+
+def test_a_group_is_a_node_the_twin_links_them_to(tmp_path, store):
+    styles = Styles(
+        folder(
+            tmp_path / "styles",
+            uni='about = "u"\ngroups = ["uni lot"]\n+++\nU',
+            climbing='about = "c"\ngroups = ["Climbing"]\n+++\nC',
+            climbing_email='about = "ce"\ngroups = ["climbing"]\nvia = ["email"]\n+++\nCE',
+            where='about = "w"\nvia = ["discord"]\n+++\nW',
+            sam_email='about = "s"\npeople = ["sam"]\nvia = ["email"]\n+++\nS',
+        ),
+        twin=twin(store),
+    )
+    assert chosen(styles, "Tom", "discord") == "climbing"  # a group beats where, linked either way
+    assert chosen(styles, "Tom", "email") == "climbing_email"
+    assert chosen(styles, "Sam Taylor", "discord") == "climbing"  # in two that tie: the first by name
+    assert chosen(styles, "Sam Taylor", "email") == "sam_email"  # an alias finds the profile naming them
+    assert chosen(styles, "Priya", "discord") == "where"
+    assert chosen(styles, "Someone new", "discord") == "where"
+    assert chosen(Styles(tmp_path / "styles"), "Tom", "discord") == "where"  # no twin: no groups
+
+
 def test_what_a_style_names_must_all_fit(tmp_path):
     styles = Styles(folder(tmp_path, both='about = "x"\nowner = true\nvia = ["sms"]\n+++\nX'))
     assert chosen(styles, "owner", "sms") == "both"
@@ -93,6 +132,7 @@ def test_a_new_style_is_one_file(tmp_path):
         ({"x": 'about = "x"\n+++\nX'}, "names no one"),
         ({"x": 'about = "x"\nvia = ["a"]\n+++\nX', "y": 'about = "y"\nvia = ["a", "b"]\n+++\nY'}, "could both be chosen"),
         ({"x": 'about = "x"\nowner = true\n+++\nX', "y": 'about = "y"\nowner = true\n+++\nY'}, "could both be chosen"),
+        ({"x": 'about = "x"\ngroups = ["Uni"]\n+++\nX', "y": 'about = "y"\ngroups = ["uni"]\n+++\nY'}, "could both"),
         ({"x": 'about = "x"\nvai = ["a"]\n+++\nX'}, "unknown vai"),
         ({"x": 'via = ["a"]\n+++\nX'}, "`about`"),
         ({"x": 'about = "x"\nvia = "a"\n+++\nX'}, "`via` is a list"),

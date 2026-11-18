@@ -69,12 +69,12 @@ def main() -> None:
     site = config.public_url() or f"http://127.0.0.1:{config.port()}"
     connectors = Connectors(store, site, DATA)
     tools = Tools(store)
-    styles = Styles(own=DATA / "styles")
     # Everything the owner says waits behind the orchestrator, so it answers without reasoning first; the twin's
     # reader too, as every task waits for its briefing. The background agents (pilot, guard, ...) keep reasoning:
     # they find their way through screens and judge risk.
     quick = openrouter(config.model(), think=False)
     graph = Graph(store.db)
+    styles = Styles(own=DATA / "styles", twin=graph)  # the twin knows who's in which of the owner's groups
     thread_store = ThreadStore(store.db)
     threads = Threads(
         thread_store,
