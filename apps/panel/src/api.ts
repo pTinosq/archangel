@@ -155,6 +155,8 @@ export type EvalReport = {
 };
 /** What's running: `commit` "" when not deployed from GitHub; `started`, in seconds, when the deploy went live. */
 export type Version = { commit: string; message: string; started: number };
+/** A picture the owner attaches in the chat: base64 data, and a type every model reads. */
+export type Picture = { data: string; media_type: string };
 /** Where to send the owner to sign in; null if they still are. */
 export type SignIn = { signIn: string | null };
 
@@ -175,7 +177,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   transcript: (after: number) => call<Line[]>("GET", `/transcript?after=${after}`),
   /** Everything the owner does here, buttons included, is a message in the one conversation. */
-  say: (text: string, thread?: number) => call<null>("POST", "/messages", { text, thread }),
+  say: (text: string, thread?: number, images: Picture[] = []) => call<null>("POST", "/messages", { text, thread, images }),
   tasks: () => call<Task[]>("GET", "/tasks"),
   version: () => call<Version>("GET", "/version"),
   /** Not a message: who can open a report is the owner's own setting. */

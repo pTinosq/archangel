@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import tempfile
 import time
@@ -10,9 +11,9 @@ from fakes import FakeHelper, FakePilot, FakeReporter, FakeResearcher, FakeSumma
 from agent import activity, web
 from agent.channels import panel
 from agent.channels.login import GitHub
-from agent.channels.panel import PanelChannel
+from agent.channels.panel import MAX_IMAGE_BYTES, PanelChannel
 from agent.connectors import Connectors
-from agent.messages import Address, Message, Text
+from agent.messages import Address, Image, Message, Text
 from agent.prompts import Prompts
 from agent.schedule import Schedule
 from agent.store import Store
@@ -55,6 +56,30 @@ def test_messages_go_to_the_conversation(store):
     panel = Panel(store)
     assert panel.call("POST", "/api/messages", json={"text": "hi"}).status_code == 200
     assert panel.delivered == [Message(PanelChannel.owner, (Text("hi"),))]
+
+
+def test_pictures_go_to_the_conversation_with_or_without_text(store):
+    panel = Panel(store)
+    png = b"\x89PNG fake"
+    picture = {"data": base64.b64encode(png).decode(), "media_type": "image/png"}
+    assert panel.call("POST", "/api/messages", json={"text": "what's this?", "images": [picture]}).status_code == 200
+    assert panel.call("POST", "/api/messages", json={"images": [picture]}).status_code == 200
+    assert [m.parts for m in panel.delivered] == [
+        (Image(png, "image/png"), Text("what's this?")),
+        (Image(png, "image/png"),),
+    ]
+
+
+def test_pictures_are_checked(store):
+    panel = Panel(store)
+
+    def send(**picture) -> int:
+        return panel.call("POST", "/api/messages", json={"images": [picture]}).status_code
+
+    assert send(data=base64.b64encode(b"x" * (MAX_IMAGE_BYTES + 1)).decode(), media_type="image/png") == 413
+    assert send(data=base64.b64encode(b"<svg/>").decode(), media_type="image/svg+xml") == 422
+    assert panel.call("POST", "/api/messages", json={"text": " "}).status_code == 400
+    assert panel.delivered == []
 
 
 def test_transcript_and_its_images(store):

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { api, hideExpired, imageUrl, type Line } from "./api";
+import { api, hideExpired, imageUrl, type Line, type Picture } from "./api";
 import { useFeed, usePoll } from "./poll";
 import { Linked } from "./linked";
 import { Link } from "./route";
@@ -19,7 +19,11 @@ export function Chat({ visible }: { visible: boolean }) {
   const shown = current ? lines.filter((_, i) => threadOf[i] === current.id) : lines;
   const marks = current ? new Map<number, number>() : threadMarks(lines, threadOf);
   const [draft, setDraft] = useState("");
+  const [pictures, setPictures] = useState<Attached[]>([]);
+  const [sending, setSending] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const [error, setError] = useState("");
+  const chooser = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
@@ -32,22 +36,57 @@ export function Chat({ visible }: { visible: boolean }) {
     if (lines.length) heard.current = last!.id;
   }, [lines.length]);
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text) return;
+  const attach = async (files: File[]) => {
+    const images = files.filter((file) => file.type.startsWith("image/"));
+    if (!images.length) return;
     try {
-      await api.say(text, current?.id);
-      play("send");
-      setDraft("");
-      setError("");
+      const added = await Promise.all(images.map(attachable));
+      const all = [...pictures, ...added];
+      setPictures(all.slice(0, MAX_PICTURES));
+      setError(all.length > MAX_PICTURES ? `Up to ${MAX_PICTURES} pictures at a time.` : "");
     } catch {
       play("error");
-      setError("Couldn't reach Archangel. Is `just agent` running?");
+      setError("Couldn't read that picture.");
+    }
+  };
+
+  const send = async () => {
+    const text = draft.trim();
+    if ((!text && !pictures.length) || sending) return;
+    setSending(true);
+    try {
+      await api.say(text, current?.id, pictures.map(({ data, media_type }) => ({ data, media_type })));
+      play("send");
+      setDraft("");
+      setPictures([]);
+      setError("");
+    } catch (e) {
+      play("error");
+      setError(e instanceof TypeError ? "Couldn't reach Archangel. Is `just agent` running?" : `Not sent: ${(e as Error).message}`);
+    } finally {
+      setSending(false);
     }
   };
 
   return (
-    <section className="chat" hidden={!visible}>
+    <section
+      className={dropping ? "chat dropping" : "chat"}
+      hidden={!visible}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(false);
+        attach([...e.dataTransfer.files]);
+      }}
+    >
       <h2>Conversation</h2>
       <div className="chat-bar">
         <select value={current?.id ?? ""} onChange={(e) => setTab(e.target.value ? Number(e.target.value) : null)} aria-label="Thread">
@@ -74,16 +113,53 @@ export function Chat({ visible }: { visible: boolean }) {
         <div ref={end} />
       </div>
       {error && <p className="error">{error}</p>}
+      {pictures.length > 0 && (
+        <ul className="attached">
+          {pictures.map((picture, i) => (
+            <li key={i}>
+              <img src={picture.url} alt="" />
+              <button
+                type="button"
+                aria-label="Remove picture"
+                onClick={() => setPictures((now) => now.filter((_, j) => j !== i))}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
       >
+        <input
+          ref={chooser}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = ""; // choosing the same file again still counts
+            attach(files);
+          }}
+        />
+        <button type="button" className="attach" aria-label="Attach pictures" onClick={() => chooser.current?.click()}>
+          +
+        </button>
         <textarea
           rows={1}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files];
+            if (!files.some((file) => file.type.startsWith("image/"))) return; // text pastes as text
+            e.preventDefault();
+            attach(files);
+          }}
           onKeyDown={(e) => {
             // Enter sends; Shift+Enter is a new line. Not mid-composition (an IME's Enter picks a word).
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -94,12 +170,42 @@ export function Chat({ visible }: { visible: boolean }) {
           placeholder={current ? `Message in #${current.id}` : "Message Archangel"}
           enterKeyHint="send"
         />
-        <button type="submit" data-sound="">
+        <button type="submit" data-sound="" disabled={sending}>
           Send
         </button>
       </form>
     </section>
   );
+}
+
+const MAX_PICTURES = 4; // the agent's MAX_IMAGES
+const MAX_BYTES = 5 * 1024 * 1024; // the agent's MAX_IMAGE_BYTES
+const MAX_SIDE = 2048;
+const SENT_AS_IS = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/** A picture ready to send, and a `url` to show it by until then. */
+type Attached = Picture & { url: string };
+
+/** A file as the agent takes it: as it is when it can, otherwise (too big, or a type models don't read) redrawn as a
+ * JPEG small enough. Throws on what the browser can't read. */
+async function attachable(file: File): Promise<Attached> {
+  if (SENT_AS_IS.includes(file.type) && file.size <= MAX_BYTES) {
+    const url = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    return { url, data: url.split(",")[1], media_type: file.type };
+  }
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const url = canvas.toDataURL("image/jpeg", 0.85);
+  return { url, data: url.split(",")[1], media_type: "image/jpeg" };
 }
 
 /** One thing said, by the owner or Archangel, on any channel. */

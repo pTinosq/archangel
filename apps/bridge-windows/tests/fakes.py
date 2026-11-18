@@ -1,4 +1,4 @@
-from bridge.device import CommandError, Screen, Shot
+from bridge.device import CommandError, Ran, Screen, Shot
 from bridge.protocol import ErrorCode, Message
 
 
@@ -47,3 +47,9 @@ class FakeDevice:
 
     async def unlock(self):
         raise CommandError(ErrorCode.FAILED, "No PIN or password is set in the bridge's settings")
+
+    async def powershell(self, script):
+        self.calls.append(f"powershell {script}")
+        if "Start-Sleep" in script:
+            return Ran(None, "", "")
+        return Ran(0, "hello\n", "")

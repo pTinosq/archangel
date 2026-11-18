@@ -23,15 +23,16 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import asdict
 from html import escape
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import Base64Bytes, BaseModel, Field
 
 from agent import activity, evals_tab
 from agent.channels import Channel, Deliver
 from agent.connectors import Connector, Connectors, Kind
-from agent.messages import Address, Message, Text
+from agent.messages import Address, Image, Message, Part, Text
 from agent.prompts import Prompt, Prompts
 from agent.schedule import Job, Schedule
 from agent.store import Line, Step, Store, Task
@@ -45,6 +46,8 @@ log = logging.getLogger(__name__)
 
 FOREVER = "max-age=31536000, immutable"  # an image never changes under its name
 HEARTBEAT_SECONDS = 1
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # what the models take; the panel shrinks a bigger photo before sending it
+MAX_IMAGES = 4
 
 
 class PanelChannel(Channel):
@@ -90,14 +93,27 @@ class PanelChannel(Channel):
     def stopping(self) -> bool:
         return self._web.stopping
 
-    async def receive(self, text: str, thread: int | None = None) -> None:
-        """What the owner typed; in `thread` if they chose one, otherwise for the router to place."""
-        if self._deliver:
-            await self._deliver(Message(self.owner, (Text(text),), thread=thread))
+    async def receive(self, text: str, thread: int | None = None, images: tuple[Image, ...] = ()) -> None:
+        """What the owner typed and attached; in `thread` if they chose one, otherwise for the router to place."""
+        parts: tuple[Part, ...] = (*images, Text(text)) if text.strip() else images
+        if self._deliver and parts:
+            await self._deliver(Message(self.owner, parts, thread=thread))
 
 
 class Said(BaseModel):
     text: str
+
+
+class Picture(BaseModel):
+    data: Base64Bytes
+    media_type: Literal["image/jpeg", "image/png", "image/gif", "image/webp"]  # what every model reads
+
+
+class Sent(BaseModel):
+    """What the owner sends from the chat: text, pictures, or both."""
+
+    text: str = ""
+    images: list[Picture] = Field(default=[], max_length=MAX_IMAGES)
     thread: int | None = None
     """The thread chosen when it was typed; none: the main conversation."""
 
@@ -129,10 +145,15 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts,
         return store.lines(after)
 
     @app.post("/api/messages")
-    async def say(said: Said) -> None:
-        if said.thread is not None and not threads.store.get(said.thread):
-            raise HTTPException(404, f"No thread #{said.thread}")
-        await channel.receive(said.text, said.thread)
+    async def say(sent: Sent) -> None:
+        if sent.thread is not None and not threads.store.get(sent.thread):
+            raise HTTPException(404, f"No thread #{sent.thread}")
+        if not sent.text.strip() and not sent.images:
+            raise HTTPException(400, "Nothing to send")
+        if any(len(picture.data) > MAX_IMAGE_BYTES for picture in sent.images):
+            raise HTTPException(413, f"An image over {MAX_IMAGE_BYTES // 1024 // 1024} MB")
+        images = tuple(Image(picture.data, picture.media_type) for picture in sent.images)
+        await channel.receive(sent.text, sent.thread, images)
 
     @app.get("/api/version")
     async def version() -> dict:

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 
 from bridge import keys, uia, win32
-from bridge.device import CommandError, Screen, Shot
+from bridge.device import CommandError, Ran, Screen, Shot
 from bridge.protocol import ErrorCode, Message
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,8 @@ WHEEL_GAP_SECONDS = 0.02
 CURTAIN_SECONDS = 1.5
 """For the lock screen's picture to slide away, showing the PIN box."""
 SIGN_IN_SECONDS = 6.0
+COMMAND_SECONDS = 10.0
+"""How long a powershell command may run: inside the relay's 15 s, so the caller hears how it ended."""
 LOCKED = (
     "The PC is locked, and only the bridge's service can reach the lock screen. "
     "Install the service from the bridge's settings to have it unlocked."
@@ -83,9 +85,8 @@ class WindowsDevice:
         listed, apps = self._apps
         if time.monotonic() - listed < APPS_KEPT_SECONDS:
             return apps
-        output = await asyncio.to_thread(
-            win32.powershell, "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Compress"
-        )
+        script = "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Compress"
+        output = (await asyncio.to_thread(win32.powershell, script)).stdout
         try:
             found = json.loads(output or "[]")
         except ValueError as error:
@@ -103,6 +104,10 @@ class WindowsDevice:
 
     async def unlock(self) -> None:
         await self._on_desktop(self._unlock)
+
+    async def powershell(self, script: str) -> Ran:
+        # Not on the desktop thread: it needs no input, and runs as the user while the PC is locked too.
+        return await asyncio.to_thread(win32.powershell, script, COMMAND_SECONDS)
 
     # On the desktop thread
 
@@ -224,7 +229,7 @@ def _mac() -> str | None:
         "ForEach-Object { $_.NetAdapter.MacAddress }"
     )
     try:
-        found = win32.powershell(script, as_user=False).strip()
+        found = win32.powershell(script, as_user=False).stdout.strip()
     except Exception:
         log.warning("Couldn't find the network card's address; the PC can't be woken", exc_info=True)
         return None

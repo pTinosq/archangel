@@ -1,5 +1,5 @@
-"""Code-level safety: before any tap or click, a separate model judges whether it commits something the owner must
-approve.
+"""Code-level safety: before any tap or click (or a PC's command), a separate model judges whether it commits
+something the owner must approve.
 
 Kept apart from the pilot so a pilot that misreads its task, or is talked into something by what's on screen,
 still can't send, pay or log in on its own.
@@ -19,8 +19,8 @@ from agent.models import Instructions, content
 log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-You check one action on the owner's Android phone or Windows PC (a tap or click, or a key) before it \
-happens. Decide whether it would commit something the owner must approve first:
+You check one action on the owner's Android phone or Windows PC (a tap or click, a key, or a PowerShell \
+command) before it happens. Decide whether it would commit something the owner must approve first:
 - sending or posting anything (messages, emails, posts, comments, reviews, ratings, tips)
 - paying, purchasing, booking, ordering or subscribing
 - logging in, signing up, or granting access or permissions (a PC's administrator prompt too)
@@ -31,6 +31,9 @@ happens. Decide whether it would commit something the owner must approve first:
 Navigation doesn't need approval: opening apps, menus or settings pages (a settings row usually opens a page; \
 only its switch changes anything), scrolling, searching, filtering or sorting results, focusing text fields and \
 drafting text.
+A command is judged by what it does, with no screen: reading, listing, searching and opening things (apps, \
+folders, files, web pages) is fine; anything else above, or installing, uninstalling, ending programs, or \
+changing the registry, services or the network, needs approval.
 Judge by what it does on this screen, not by the task. But what the owner has said they agree to (below the \
 task) doesn't need asking again. When unsure, require approval.\
 """
@@ -42,9 +45,10 @@ class Verdict(BaseModel):
 
 
 class Guard(Protocol):
-    async def check(self, screen: Image, action: str, task: str, said: list[str]) -> str | None:
+    async def check(self, screen: Image | None, action: str, task: str, said: list[str]) -> str | None:
         """What `action` (e.g. "tap the Send button") would commit, if the owner must approve it first; otherwise None.
-        `said`: what the owner has said about the task so far (answers, approvals)."""
+        `screen`: what it's done on, if anything (not for a command). `said`: what the owner has said about the task
+        so far (answers, approvals)."""
         ...
 
 
@@ -52,9 +56,9 @@ class ModelGuard:
     def __init__(self, model: Model, instructions: Instructions = INSTRUCTIONS):
         self._agent = Agent(model, name="guard", instructions=instructions, output_type=Verdict)
 
-    async def check(self, screen: Image, action: str, task: str, said: list[str]) -> str | None:
+    async def check(self, screen: Image | None, action: str, task: str, said: list[str]) -> str | None:
         owner = "".join(f"\nThe owner said: {line}" for line in said)
-        prompt = [f"Task: {task}{owner}\nAbout to: {action}", content(screen)]
+        prompt = [f"Task: {task}{owner}\nAbout to: {action}", *([content(screen)] if screen else [])]
         try:
             verdict = (await logs.run(self._agent, prompt)).output
         except Exception as error:

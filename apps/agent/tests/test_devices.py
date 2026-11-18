@@ -184,6 +184,7 @@ def test_clicks_scrolls_and_unlock_go_in_pixels():
         await device.click(0.5, 0.25, double=True)
         await device.scroll(0.5, 0.5, dy=5)
         await device.unlock()
+        await device.powershell("Get-Date")
 
     asyncio.run(scenario())
     assert sent == [
@@ -191,6 +192,7 @@ def test_clicks_scrolls_and_unlock_go_in_pixels():
         {"type": "tap", "x": 1600, "y": 450, "button": "left", "count": 2},
         {"type": "scroll", "x": 1600, "y": 900, "dx": 0, "dy": 5},
         {"type": "unlock"},
+        {"type": "powershell", "script": "Get-Date"},
     ]
 
 

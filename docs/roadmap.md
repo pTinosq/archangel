@@ -90,7 +90,7 @@ Each milestone ships something usable and proves one idea.
 - **Sign-in:** a GitHub OAuth App used directly (`channels/login.py`), no auth platform. Only `ARCHANGEL_OWNER` gets in; a signed session cookie lasts 30 days. The panel only listens publicly when sign-in is configured, so it can't be public by mistake.
 - **Headless:** no terminal on Railway, so the panel is the only channel.
 - **Phone:** the bridge keeps a Dev and a Prod relay; one tap switches.
-- **Open:** the cockpit once went blank in the cloud after a phone task started; not reproduced locally.
+- **Closed (2026-11-18):** the cockpit once went blank in the cloud after a phone task started; never seen again.
 
 ## M6 (done)
 
@@ -152,7 +152,7 @@ The owner also tests across channels and reports changes.
 
 - **Locator fallback:** Jev first; if it can't find the target or fails, Luna (`openai/gpt-6-luna`) looks at the same screenshot.
 - **Investigator:** Luna again. When the pilot repeats a step 3 times in 6 (scrolling aside) or fails the same way twice, it reviews the recent steps and last 3 screenshots and says what's in the way. At most 2 per run. Stuck tasks report its diagnosis too. (Since M8: no loop rules; the pilot calls `second_opinion` when it judges it's going in circles, with 120 steps only as a backstop.)
-- **Still open:** a cheap text model (DeepSeek) for the orchestrator. DeepSeek can't see images, and the orchestrator gets approval screenshots, so it needs them stripped first.
+- **Done:** a cheap model. DeepSeek V4.1 Flash now sees images, so it runs everything in prod (`ARCHANGEL_MODEL`), the pilots and guard included.
 
 ## M5 (done)
 
@@ -160,7 +160,8 @@ The owner also tests across channels and reports changes.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M11).
+- **Images:** attached in the chat (chosen, pasted or dropped), up to 4 a message.
+- **Not yet:** connectors and MCP setup (M11).
 
 ## M5 requirements (from the owner)
 
@@ -232,7 +233,7 @@ The owner also tests across channels and reports changes.
 - **First four:** TfL (line status and why, journeys with unclear places resolved to the best match and said, next buses and trains at a stop), weather (Open-Meteo: now, by the hour, the days, sunrise and sunset), exchange rates (Frankfurter) and time and dates (the time anywhere, UK bank holidays, days between dates, exact arithmetic). All free and keyless: no new env vars. TfL takes an optional app key from the panel (rate limit only).
 - **Routing.** The orchestrator is told each turn which tools are on and the order to try things: a quick tool, `search_web`, research, and only then a device. A tool that's off, or lacks a setting it requires, isn't offered at all, so the model can't pick it. A tool whose source is down answers "isn't answering: try the web", and the conversation goes on.
 - **Where they are:** weather and journeys "from here" use `owner_location` first.
-- **Not yet:** flight status, markets, news, Wikipedia and dictionary, places (each needs a source chosen, some a paid key); the helper and device pilots don't get the quick tools (the orchestrator answers these itself).
+- **Not planned (2026-11-18):** flight status, markets, news, Wikipedia and dictionary. The helper and device pilots don't get the quick tools: the orchestrator answers these itself and puts what a task needs in its goal.
 
 ## M16 requirements (Pebble Time 2) (from the owner)
 
@@ -253,7 +254,7 @@ The owner also tests across channels and reports changes.
 - **M17a, PC hands.** A Windows bridge in C#/.NET (a tray app) dials the relay like the Android one: `SendInput` for clicks (right, double, drag) and hotkeys, UI Automation for the tree, Desktop Duplication for screenshots. `hello` gains a `platform`; the protocol grows only what a desktop needs. The PC signs in at boot (Sysinternals Autologon) and never locks, like the phone's no-lock setup. `start_task` names a device; one task per device at a time, so phone and PC tasks run side by side.
 - **M17b, unlock.** Windows walls off the lock screen, Ctrl+Alt+Del and UAC on a secure desktop no ordinary app can see or click, and blocks input to elevated windows. A service running as SYSTEM starts a helper on that desktop, as TeamViewer, AnyDesk and RustDesk (open source) do. An `unlock` command types the PIN, kept by the bridge on the PC: the model never sees it, as with the phone's `press unlock`.
 - **M17c, wake.** A sleeping PC can't dial the relay. The Android bridge, on the same Wi-Fi, sends a Wake-on-LAN packet; or the PC never sleeps.
-- **Later, maybe:** running commands (PowerShell, files) directly, far faster than clicking, far more dangerous; its own guard.
+- **Commands (2026-11-18).** A `powershell` command runs a script as the signed-in user (never SYSTEM), stopped with all it started after 10 s; the pilot's `run_command` opens apps, folders, files and pages, and finds and reads files, far faster than clicking. The guard checks each command by what it does, without the screen: reading and opening run at once; changing files, installing, settings, sending, paying or logging in wait for the owner, who sees the command.
 - **Built (2026-11-15), all three; proven on the owner's PC (2026-11-17).** One protocol for every bridge (`platform` in the hello; shared commands keep their names). The Windows bridge in Python rather than C#: the same stack as the relay and agent, most of it tested anywhere, and CI on a Windows runner tests the rest on a real desktop (capture, input, UI Automation, the Start menu) and the built exe as a real service. CI proves the service on a real Windows desktop: it starts the bridge as SYSTEM in the desktop's session, captures the lock screen, and unlocks it with the bridge's secret. Jev on desktop screens: not yet measured. M17a proven on the owner's PC (2026-11-17): Notepad, and Steam (find games, install them). M17b too: a task started on the locked PC unlocked it, ran, and locked it again. M17c too: a task sent to the sleeping PC had the phone wake it (back in 12 s), then unlocked it and ran.
 
 ## M18 requirements (threads) (from the owner)

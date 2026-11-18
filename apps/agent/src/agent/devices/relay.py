@@ -104,6 +104,11 @@ class Device:
         """Unlock the PC with the PIN its bridge keeps."""
         await self._command("unlock")
 
+    async def powershell(self, script: str) -> dict[str, Any]:
+        """Run a PowerShell script on the PC as its signed-in user: `exitCode` (None if stopped at the time limit),
+        `stdout`, `stderr`."""
+        return await self._command("powershell", script=script)
+
     async def location(self, lat: float | None = None, lon: float | None = None) -> None:
         """Fake GPS at `lat`, `lon`, for apps that only use where the phone is. Neither: where it really is."""
         await self._command("location", **({} if lat is None else {"lat": lat, "lon": lon}))
