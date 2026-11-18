@@ -138,8 +138,9 @@ class Scheduled(Event):
         elif job.every:  # the store has already moved it on
             due += (
                 f"; it repeats ({job.every}), run {job.runs} of {job.max_runs}, "
-                f"next {local(following(job.every, now))}. Once what it waits for has happened (or it's no longer wanted), stop it with cancel_later({job.id}) "
-                "and tell the owner it has stopped"
+                f"next {local(following(job.every, now))}. Nothing you say reaches the owner from this run unless it "
+                f"ends the repeat: once what it waits for has happened (or it's no longer wanted), stop it with "
+                f"cancel_later({job.id}) and say so, once; until then, show progress with note_progress"
             )
         said = f"[Scheduled #{job.id}, not from the owner now: at {local(job.created)} {asked}. {due}."
         return [f"{said} Your reply goes via {job.report_to.channel}.] Do it now: {job.what}"]

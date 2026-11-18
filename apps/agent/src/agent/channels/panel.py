@@ -412,6 +412,7 @@ def _job(job: Job) -> dict:
         "what": job.what,
         "said": job.said,
         "every": job.every,
+        "progress": job.progress,
         "reportTo": job.report_to.channel,
         "thread": job.thread,
     }

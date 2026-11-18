@@ -720,6 +720,50 @@ def test_a_repeat_that_finds_nothing_yet_tells_the_owner_nothing(store):
     assert owner.schedule.upcoming()  # it carries on
 
 
+def test_a_repeat_that_has_not_finished_is_silent_whatever_it_writes(store):
+    """Regression: "Still 3 of 7, next check 13:45" was texted to an owner who asked to hear only when done."""
+
+    def model(prompt: str) -> ModelResponse:
+        return say("Still 3 of 7, next check 13:45") if prompt.startswith("[Scheduled") else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("Order")))
+    owner.says(Text("hello"))
+    job = owner.schedule.add(time.time(), "Check the order", "", owner.cli.owner, 1, "*/15 * * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, runs=1))))
+    assert [m.text for m in owner.cli.sent] == ["ok"]
+    assert owner.schedule.upcoming()
+
+
+def test_a_repeat_reports_once_when_it_ends_itself_or_runs_out(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("cancel_later", id=1) if "Done now" in prompt else say("It's here.")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("Order")))
+    owner.says(Text("hello"))
+    job = owner.schedule.add(time.time(), "Done now: check the order", "", owner.cli.owner, 1, "*/15 * * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, runs=1))))
+    assert owner.cli.sent[-1].text.startswith("Cancelled #1")
+    last = replace(job, runs=job.max_runs, what="Check the order")
+    asyncio.run(owner.orchestrator.handle(Scheduled(last)))
+    assert owner.cli.sent[-1].text == "It's here."
+
+
+def test_a_run_notes_its_progress_for_the_panel(store):
+    def model(messages, info) -> ModelResponse:
+        if isinstance(messages[-1].parts[-1], ToolReturnPart):
+            return say("")
+        if prompt_of(messages).startswith("[Scheduled"):
+            return call("note_progress", progress="Still 3 of 7")
+        return say("ok")
+
+    owner = Owner(store, model, router=FakeRouter(new("Order")))
+    owner.says(Text("hello"))
+    job = owner.schedule.add(time.time(), "Check the order", "", owner.cli.owner, 1, "*/15 * * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, runs=1))))
+    assert owner.schedule.get(job.id).progress == "Still 3 of 7"
+    assert [m.text for m in owner.cli.sent] == ["ok"]
+
+
 def test_the_owner_always_gets_an_answer(store):
     def model(messages, info) -> ModelResponse:
         if isinstance(messages[-1].parts[-1], pydantic_ai.RetryPromptPart):
@@ -736,7 +780,7 @@ def test_the_agent_cannot_cancel_another_thread_s_schedule_on_its_own(store):
 
     owner = Owner(store, tool_result_or(model), router=FakeRouter(new("A"), new("B")))
     owner.says(Text("hello"))
-    job = owner.schedule.add(time.time(), "Check the email", "", owner.cli.owner, 2, "0 7 * * *")
+    job = owner.schedule.add(time.time(), "Check the email", "", owner.cli.owner, 2)
     asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, thread=1))))  # woken in 1, the job is 2's
     assert "only the owner can cancel it" in owner.cli.sent[-1].text and owner.schedule.get(1)
     assert owner.says(Text("stop it"))[-1].text.startswith("Cancelled #1")  # the owner may, from anywhere

@@ -55,6 +55,7 @@ function Scheduled() {
           <li key={job.id}>
             <time>{when(job.due)}</time>
             <div className="goal">{job.said ? `“${job.said}”` : job.what}</div>
+            {job.progress && <div className="quiet">{job.progress}</div>}
             <div className="meta">
               {job.every && <span className="status repeats" title={`cron: ${job.every}`}>repeats</span>}
               <span className="quiet">via {job.reportTo}</span>

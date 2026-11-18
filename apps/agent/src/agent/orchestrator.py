@@ -24,7 +24,7 @@ from agent import activity, history, logs
 from agent.coder import Coder
 from agent.connectors import Connectors
 from agent.devices.relay import Device, DeviceError
-from agent.events import Event, OwnerMessage
+from agent.events import Event, OwnerMessage, Scheduled
 from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
@@ -91,6 +91,7 @@ class Orchestrator:
         self._lock = asyncio.Lock()
         self._arrived_to = ""  # the situation as the event being handled arrived
         self._ends = False  # the reply being written is the last word on a call
+        self._stopped = False  # a scheduled repeat has ended itself in this run
         self._thread: Thread | None = None  # the thread of the event being handled
         tasks.notify = whereabouts.notify = self.handle
         self._agent = Agent(
@@ -275,7 +276,18 @@ class Orchestrator:
                     return f"#{id} was scheduled in another conversation: only the owner can cancel it."
                 if not job or not schedule.cancel(id):
                     return f"Nothing scheduled as #{id} (it has run, or was cancelled)."
+                if isinstance(ctx.deps, Scheduled) and ctx.deps.job.id == id:
+                    self._stopped = True  # it ends itself: this run's words are its one report
                 return f"Cancelled #{id}" + (f": no more of its {job.every} repeats." if job.every else ".")
+
+            @self._agent.tool
+            async def note_progress(ctx: RunContext[Event], progress: str) -> str:
+                """In a scheduled run: set the line the owner's panel shows beside it, live ("Still 3 of 7, next check
+                13:45"). Not a message: nothing is sent. Use it as a long run goes, and for a repeat's no-change runs."""
+                if not isinstance(ctx.deps, Scheduled):
+                    return "Only a scheduled run has an entry to note progress on."
+                schedule.note(ctx.deps.job.id, progress[:300])
+                return "Noted on the panel."
 
         if coder:
 
@@ -362,6 +374,7 @@ class Orchestrator:
                 if self._styles:  # the reply goes to the owner, on the channel it goes back by
                     self._arrived_to += "\n\n" + self._styles.guidance(Audience(True, via=event.reply_to.channel))
                 self._ends = False
+                self._stopped = False
                 try:
                     messages = self._threads.history(thread)
                     log.debug(
@@ -374,6 +387,10 @@ class Orchestrator:
                 except Exception as error:
                     log.exception("Failed to handle: %s", describe(event.prompt()))
                     parts = (Text(event.fallback(error)),)
+                # A repeat waiting for something reports once: when it ends (the condition met, or its last run). Any
+                # other run is silent, whatever the model wrote, so a "no change yet" never reaches the owner.
+                if isinstance(event, Scheduled) and event.job.every and not event.job.last and not self._stopped:
+                    parts = ()
                 reply = Message(event.reply_to, parts, answering=event.from_owner, ends=self._ends, thread=thread.id)
                 await self._gateway.send(reply)
 
