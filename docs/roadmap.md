@@ -27,6 +27,7 @@ Each milestone ships something usable and proves one idea.
 | M17c ✅ | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
 | M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
+| M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -278,3 +279,18 @@ Today Archangel has no place to keep a file: chat pictures and screens are short
 - **A `files` tool set for the orchestrator**, beside the quick tools, over a directory on the agent's volume; the store records each file's name, type, size, where it came from and the thread it belongs to.
 - **Tasks can be given files**, so a phone or PC task can be handed a document, and what a task produces is filed in the same place.
 - **Not decided:** whether the twin links to files, how long generated files are kept, and which image-generation model to use.
+
+## M20 requirements (flavour profiles) (from the owner)
+
+Today how Archangel writes lives in the orchestrator's prompt, one voice for everyone. This makes style a thing of its own: how it addresses the owner, and how it writes on the owner's behalf, differ by audience.
+
+- **Per audience, channel or app.** Short and polite when messaging the owner; more informal on Discord; semi-formal elsewhere. Writing for the owner (a message to Sam, a post, an email) is a different style from talking to the owner.
+- **Held as configuration, not in the prompt.** Each profile is its own file or entry, so it can be written, tuned and tested on its own, without touching the orchestrator's prompt or another profile.
+- **A shared base profile.** Anti-slop rules every profile inherits: plain words, no AI padding, say each thing once. A profile adds to the base and may relax a rule, never drops the base by accident.
+- **Picked by channel, person or app.** A message to the owner by text uses the owner's profile; to a named person, theirs; in an app, the app's. Nothing matches: a sensible default (semi-formal).
+- **Extensible.** A new profile is a small addition: a name, what it matches, a few lines of style. No code change to add one.
+
+**Plan (sketch, undecided)**
+- **A `styles` set beside the prompts:** profiles as data (name, matches, rules, an example or two), edited on the panel like prompts, kept in the store.
+- **Evals like the twin's and the router's:** a made-up owner, the same content in each profile, checked in code (length, banned phrases) and by a model judge otherwise.
+- **Not decided:** whether the twin holds who gets which profile, whether a profile can be set per message ("make it casual"), and how a person's profile is learned.
