@@ -223,6 +223,18 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 /* Which thread the chat shows: Main (everything, routed) or one open thread. */
 .chat-bar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
 .chat-bar select { flex: 1; min-width: 0; cursor: pointer; }
+/* Pictures attached to the next message: thumbnails, each with a way to take it off. */
+.attached { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.attached li { position: relative; }
+.attached img { display: block; height: 64px; max-width: 160px; object-fit: cover; border: 1px solid var(--line-strong); }
+.attached button {
+  position: absolute; top: 0; right: 0; width: 24px; height: 24px; padding: 0; border: none; box-shadow: none;
+  background: var(--bg); color: var(--quiet); font-size: 13px; line-height: 24px;
+}
+.attached button:hover:not(:disabled) { color: var(--bad); }
+.attached button:active:not(:disabled) { transform: none; }
+/* A file dragged over the chat: the box lights up, nothing moves. */
+.chat.dropping textarea { border-color: var(--accent); }
 
 /* Connectors */
 .connector-list h3 { font-size: 8px; line-height: 16px; color: var(--accent); margin: var(--s4) 0 var(--s2); }
@@ -442,6 +454,7 @@ button.to:hover:not(:disabled) { color: var(--accent); }
   .chat { padding-bottom: 0 !important; }
   .chat h2 { display: none; }
   .line img { max-height: 50dvh; }
+  .attached button { min-height: 32px; width: 32px; height: 32px; line-height: 32px; }
   .chat form {
     margin: var(--s2) calc(-1 * var(--s3)) 0; padding: var(--s2) var(--s3); border-top: 1px solid var(--line); background: var(--bg);
     padding-bottom: max(var(--s2), env(safe-area-inset-bottom));

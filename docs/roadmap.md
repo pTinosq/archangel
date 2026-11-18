@@ -160,7 +160,8 @@ The owner also tests across channels and reports changes.
 - **Monitoring:** every task with its live screen, steps (each with its screenshot) and report.
 - **Channel:** chat with Archangel; approve, decline, answer or cancel waiting tasks in one click.
 - **Prompts:** five named prompts, defaults in code, edits in SQLite, live from the next run.
-- **Not yet:** images from the panel chat; connectors and MCP setup (M11).
+- **Images:** attached in the chat (chosen, pasted or dropped), up to 4 a message.
+- **Not yet:** connectors and MCP setup (M11).
 
 ## M5 requirements (from the owner)
 
