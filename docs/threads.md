@@ -96,7 +96,7 @@ The prompts are editable on the panel like the rest ("thread router", "thread su
 
 The router is the default; the owner can also take the choice. The panel's chat has a dropdown: **Main**, the whole conversation as it is routed, or an open thread (the router opens and names them all).
 
-- **Saying something in a thread.** `POST /api/messages` takes a `thread`; the message carries it (`Message.thread`, so its transcript line is filed at once, and `OwnerMessage.thread` is set), and `Threads.route` takes it as the answer without asking the router, like a task's update. Its replies and tasks are filed there as always. If the thread was full or closed, the full one's continuation takes it, and a closed one reopens.
+- **Saying something in a thread.** `POST /api/messages` takes a `thread`; the message carries it (`Message.thread`, so its transcript line is filed at once, and `OwnerMessage.thread` is set), and `Threads.route` takes it as the answer, like a task's update. The router still sees it, shown only that thread, but only to tell whether it wraps the thread up ("no all good thx"): otherwise nothing would, and a thread chosen by hand stayed open until 3 quiet hours. Its replies and tasks are filed there as always. If the thread was full or closed, the full one's continuation takes it, and a closed one reopens.
 - **Closing** stays Archangel's (a wrap-up, or quiet for 3 hours): a closed thread leaves the dropdown, and the chat goes back to Main if it was chosen.
 - **Closed threads** are the Threads page (summary, tasks, everything said).
 

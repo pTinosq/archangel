@@ -155,13 +155,24 @@ class Threads:
                 if not thread.open:
                     self._store.reopen(thread.id)
                     thread = self._store.get(thread.id)
+            if isinstance(event, OwnerMessage):
+                return Route(thread, await self._wraps_up(event, thread))
             return Route(thread)
         if isinstance(event, OwnerMessage):
             return await self._choose(event)
         return Route(self._store.latest() or self._store.new(_title(event)))  # a notice, or a task from before threads
 
+    async def _wraps_up(self, event: OwnerMessage, thread: Thread) -> bool:
+        """Whether what the owner said in a thread they chose wraps it up. The thread's theirs to choose; the router,
+        shown only it, still judges a thanks, which nothing else would."""
+        try:
+            return (await self._router.choose(_said(event), [thread])).closes
+        except Exception:  # left open: three quiet hours close it anyway
+            log.exception("Couldn't tell whether this wraps #%d up", thread.id)
+            return False
+
     async def _choose(self, event: OwnerMessage) -> Route:
-        said = f"(via {event.message.address.channel}) {event.message.text}" + " [image]" * len(event.message.images)
+        said = _said(event)
         recent = self._store.recent(RECENT)
         with activity.call("thread router", "agent", said) as reply:
             try:
@@ -229,6 +240,10 @@ def _size(messages: list[ModelMessage]) -> int:
         if isinstance(message, ModelResponse) and message.usage.input_tokens:
             return message.usage.input_tokens
     return 0
+
+
+def _said(event: OwnerMessage) -> str:
+    return f"(via {event.message.address.channel}) {event.message.text}" + " [image]" * len(event.message.images)
 
 
 def _title(event: Event) -> str:

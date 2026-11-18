@@ -139,11 +139,27 @@ def said_in(thread_id: int, text: str) -> OwnerMessage:
     return OwnerMessage(Message(SMS, (Text(text),), thread=thread_id))
 
 
-def test_what_the_owner_says_in_a_chosen_thread_goes_there_without_the_router():
+def test_what_the_owner_says_in_a_chosen_thread_goes_there_whatever_the_router_thinks():
+    world = World(Choice(thread=None, title="Something else"))
+    thread, other = world.store.new("Flights"), world.store.new("Other")
+    route = world.route(said_in(thread.id, "can you look for flights to India?"))
+    assert route.thread.id == thread.id and not route.closes
+    assert world.router.heard == [("(via sms) can you look for flights to India?", [thread.id])]  # only it, shown
+
+
+def test_a_thanks_in_a_chosen_thread_wraps_it_up_too():
     world = World()
     thread = world.store.new("Flights")
-    route = world.route(said_in(thread.id, "can you look for flights to India?"))
-    assert route.thread.id == thread.id and world.router.heard == []
+    world.router.choices = [Choice(thread=thread.id, closes=True)]
+    assert world.route(said_in(thread.id, "no all good thx")).closes
+
+    class Broken:
+        async def choose(self, said, recent):
+            raise RuntimeError("model down")
+
+    world.threads._router = Broken()
+    route = world.route(said_in(thread.id, "thanks"))
+    assert route.thread.id == thread.id and not route.closes  # left open, for the quiet hours to close
 
 
 def test_saying_something_in_a_closed_thread_reopens_it():

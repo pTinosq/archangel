@@ -187,3 +187,11 @@ add = [["did it go through?", "Yes, delivered and read: Sam replied with a heart
 says = "great thanks"
 thread = "sam"
 closes = true
+
+[[case]]
+name = "turning down an offer with thanks wraps up"
+add_to = "uber"
+add = [["ended up getting a cab off the street lol", "Fair enough. Want me to book your ride back later too? Say the word."]]
+says = "no all good thx"
+thread = "uber"
+closes = true
