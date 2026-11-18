@@ -144,12 +144,15 @@ class FakeCoder:
     """Claude Code on GitHub: every request comes back as PR #12."""
 
     def __init__(self):
-        self.changes: list[tuple[str, str]] = []
+        self.changes: list[tuple[str, str, int | None]] = []
         self.merged: list[int] = []
 
-    async def change(self, request, branch, record) -> tuple[bool, str]:
-        self.changes.append((request, branch))
-        record("Claude Code is on it: https://github.com/runs/7")
+    async def change(self, request, branch, record, found=lambda run: None, run=None) -> tuple[bool, str]:
+        """`run`: picked up after a restart, so nothing new starts."""
+        self.changes.append((request, branch, run))
+        if run is None:
+            found(7)
+            record("Claude Code is on it: https://github.com/runs/7")
         return True, f"https://github.com/pull/12 (tests pass)\n{request}"
 
     async def branch(self, pr: int) -> str:

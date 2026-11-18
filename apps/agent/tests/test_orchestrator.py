@@ -359,13 +359,26 @@ def test_the_owner_can_have_archangel_improve_itself(store):
 
     owner = Owner(store, tool_result_or(respond))
     owner.says(Text("learn to use telegram"))
-    assert (store.task(1).kind, owner.coder.changes) == ("code", [("Add a Telegram channel", "archangel/task-1")])
+    assert (store.task(1).kind, owner.coder.changes) == ("code", [("Add a Telegram channel", "archangel/task-1", None)])
     assert owner.cli.sent[-1].text.endswith("done: https://github.com/pull/12 (tests pass)\nAdd a Telegram channel")
     assert store.steps(1)[0].text == "Claude Code is on it: https://github.com/runs/7"
     owner.says(Text("make it shorter"))
-    assert owner.coder.changes[-1] == ("Make it shorter", "archangel/pr-12")  # the same PR, carried on
+    assert store.task(1).github_run == 7  # kept, to pick it up after a restart
+    assert owner.coder.changes[-1] == ("Make it shorter", "archangel/pr-12", None)  # the same PR, carried on
     owner.says(Text("merge it"))
     assert (owner.cli.sent[-1].text, owner.coder.merged) == ("Merged PR #12.", [12])
+
+
+def test_merging_says_what_the_deploy_cuts_off(store):
+    owner = Owner(store, tool_result_or(lambda prompt: call("merge", pr=12)))
+    store.add_task("Book a table", owner.cli.owner, "phone")
+    store.add_task("Add a Telegram channel", owner.cli.owner, "code")
+    owner.says(Text("merge it"))
+    assert owner.cli.sent[-1].text == (
+        "Merged PR #12."
+        "\nRunning now, so cut off by the deploy (reported interrupted):\n#1 (phone): Book a table"
+        "\nCode tasks running now; their GitHub runs carry on, and are picked up after:\n#2: Add a Telegram channel"
+    )
 
 
 def test_archangel_s_own_repo_is_never_a_device_task(store):

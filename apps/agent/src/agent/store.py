@@ -69,6 +69,8 @@ class Task:
     """Its report opens for anyone with the link; otherwise only for the owner, signed in."""
     thread: int | None = None
     """The conversation thread that started it, where its updates go; None for tasks from before threads."""
+    github_run: int | None = None
+    """A code task's GitHub Actions run, once started: it carries on through Archangel's restarts, so the task does."""
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,8 @@ class Store:
                 self._db.execute("ALTER TABLE tasks ADD COLUMN public INTEGER NOT NULL DEFAULT 0")
             if "thread" not in columns:  # added with threads (M18)
                 self._db.execute("ALTER TABLE tasks ADD COLUMN thread INTEGER")
+            if "github_run" not in columns:  # added so code tasks survive a deploy
+                self._db.execute("ALTER TABLE tasks ADD COLUMN github_run INTEGER")
             if "thread" not in lines:
                 self._db.execute("ALTER TABLE transcript ADD COLUMN thread INTEGER")
         self.forget_old_images()
@@ -214,6 +218,10 @@ class Store:
                 "UPDATE tasks SET status = ?, report = ?, run = ? WHERE id = ?",
                 (task.status, task.report, run and ConversationTypeAdapter.dump_json(run), task.id),
             )
+
+    def set_github_run(self, id: int, run: int) -> None:
+        with self._db:
+            self._db.execute("UPDATE tasks SET github_run = ? WHERE id = ?", (run, id))
 
     def report_task_to(self, id: int, to: Address) -> None:
         with self._db:
@@ -363,11 +371,11 @@ class Store:
         return json.loads(row[0]) if row else None
 
 
-_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public, thread"
+_TASK_COLUMNS = "id, goal, channel, address, status, report, run, kind, public, thread, github_run"
 
 
 def _task(row: tuple) -> Task:
-    id, goal, channel, address, status, report, run, kind, public, thread = row
+    id, goal, channel, address, status, report, run, kind, public, thread, github_run = row
     return Task(
         id,
         goal,
@@ -378,4 +386,5 @@ def _task(row: tuple) -> Task:
         kind,
         bool(public),
         thread,
+        github_run,
     )

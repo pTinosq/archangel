@@ -324,10 +324,20 @@ class Orchestrator:
                 if not ctx.deps.from_owner:
                     return "Only the owner can merge a change. Ask them."
                 try:
-                    return await coder.merge(pr)
+                    merged = await coder.merge(pr)
                 except Exception as error:  # GitHub; the conversation goes on
                     log.exception("Merge failed")
                     return f"Couldn't merge it: {error}"
+                # The deploy restarts Archangel: the owner should know what it cuts off.
+                running = [t for t in self._tasks.list() if t.status in (Status.QUEUED, Status.RUNNING)]
+                cut = [f"#{t.id} ({t.kind}): {t.goal}" for t in running if t.kind != "code"]
+                kept = [f"#{t.id}: {t.goal}" for t in running if t.kind == "code"]
+                if cut:
+                    merged += "\nRunning now, so cut off by the deploy (reported interrupted):\n" + "\n".join(cut)
+                if kept:
+                    merged += "\nCode tasks running now; their GitHub runs carry on, and are picked up after:\n"
+                    merged += "\n".join(kept)
+                return merged
 
         @self._agent.tool_plain
         async def hang_up() -> str:

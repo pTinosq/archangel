@@ -142,7 +142,7 @@ def main() -> None:
     )
     twin.notify = orchestrator.handle
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(web, gateway, orchestrator, twin, threads, schedule, interrupted))
+        asyncio.run(_run(web, gateway, orchestrator, twin, threads, schedule, tasks, interrupted))
     print()
 
 
@@ -153,6 +153,7 @@ async def _run(
     twin: Twin,
     threads: Threads,
     schedule: Schedule,
+    tasks: Tasks,
     interrupted: list[Task],
 ) -> None:
     async with asyncio.TaskGroup() as group:
@@ -161,7 +162,7 @@ async def _run(
         group.create_task(twin.watch())
         group.create_task(threads.watch())
         group.create_task(schedule.watch(orchestrator.wake))
-        for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
+        for task in tasks.pick_up(interrupted):  # a deploy mid-task: whoever's waiting on it hears; it may be retried
             group.create_task(orchestrator.handle(TaskUpdate(task)))
 
 

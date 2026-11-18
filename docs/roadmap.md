@@ -207,6 +207,8 @@ The owner also tests across channels and reports changes.
 - **The token stays put.** The Claude token is a repo secret, only in the job that makes the change, which can't write to the repo (its subprocesses don't see the token). A second job refuses a change or summary containing it, then tests, pushes and opens the PR. Archangel holds only a GitHub token for this repo.
 - **Only the owner.** `improve` and `merge` refuse anything not from the owner's own message (a web page, an email, a task's update), in code. Merging to `main` deploys, so the owner always says when.
 - **Public.** The request, the run and the PR are public: the orchestrator words the request with nothing personal, and the coding agent follows `CLAUDE.md`. So no prod logs or twin go to it yet: investigating is from the code only.
+- **Survives its own deploy (2026-11-18).** Merging redeploys Archangel and cuts off what's running, so `merge` lists those tasks for the owner. A code task keeps its GitHub run's id and, after a restart, follows that run to its result rather than being reported interrupted (which had the owner ask again, for a duplicate PR).
+- **Says why a run failed.** The workflow always leaves a `result`, with Claude's error when it failed. A run Claude never started in (zero turns: a usage limit or an outage) is tried once more a minute later.
 - **Working on the code, not healing (2026-11-17).** M14 is the owner changing Archangel from inside it. Nothing watches for failures and proposes fixes on its own, and that isn't wanted.
 
 ## M15 requirements (intelligent tools) (from the owner)
