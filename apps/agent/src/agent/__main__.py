@@ -74,7 +74,7 @@ def main() -> None:
     # they find their way through screens and judge risk.
     quick = openrouter(config.model(), think=False)
     graph = Graph(store.db)
-    styles = Styles(own=DATA / "styles", twin=graph)  # the twin knows who's in which of the owner's groups
+    styles = Styles(own=DATA / "styles", twin=graph, prompts=prompts)  # the twin knows who's in which group
     thread_store = ThreadStore(store.db)
     threads = Threads(
         thread_store,

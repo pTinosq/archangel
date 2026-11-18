@@ -299,7 +299,7 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 - **Extensible.** A new profile is a small addition: a name, what it matches, a few lines of style. No code change to add one.
 
 **Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). Live; the starter wording is still to be tuned against real replies.
-- **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").
+- **Finished (2026-11-18).** Each style's text is edited on the Prompts tab ("Writing styles"), its file the default; `just styles-eval` drafts for made-up people and checks them (41/45 first run); the owner can ask for one message to sound different ("make it casual"), passed to `writing_style` as `asked`, for that message only.
 
 ## M21 requirements (email gateway) (from the owner)
 

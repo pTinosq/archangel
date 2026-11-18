@@ -16,15 +16,23 @@ refused at start, so the choice never depends on file order.
 Who's in which group is the owner's life, so it's the context twin's, not a file's: a person's node linked (either way)
 to a node named for the group. The twin also gives a person's aliases, so "Sam Taylor" finds a profile for "Sam". The
 lookup is code, not a model call. Someone in two groups whose profiles tie gets the first by file name.
+
+Each style's text is also a prompt ("style discord"), edited on the panel's Prompts tab: an edit wins from the next
+message, the file (the owner's, else the built-in) stays the default, and who it's for stays in the file. The owner
+can also ask for one message to sound different ("make it casual"): `asked`, for that message only.
 """
 
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
 from agent.twin.graph import Graph
+
+if TYPE_CHECKING:
+    from agent.prompts import Prompts
 
 FOLDER = Path(__file__).parent
 BASE, DEFAULT = "base", "default"
@@ -137,9 +145,16 @@ def parse(name: str, source: str) -> Style:
 class Styles:
     """The profiles in a folder: pick one for an audience, and say how to write for it."""
 
-    def __init__(self, folder: Path = FOLDER, own: Path | None = None, twin: Graph | None = None):
+    def __init__(
+        self,
+        folder: Path = FOLDER,
+        own: Path | None = None,
+        twin: Graph | None = None,
+        prompts: "Prompts | None" = None,
+    ):
         """`own`: the owner's folder (on the volume, never in the repo), for styles that name real people or accounts.
-        A file there adds a style, or replaces the built-in one of its name. `twin`: who's in which group."""
+        A file there adds a style, or replaces the built-in one of its name. `twin`: who's in which group. `prompts`:
+        where each style's text can be edited, its file the default."""
         self._twin = twin
         found = {
             path.stem: parse(path.stem, path.read_text())
@@ -164,6 +179,21 @@ class Styles:
             for other in self.profiles[i + 1 :]:
                 if style.clashes(other):
                     raise ValueError(f"{style.name} and {other.name} could both be chosen for one audience")
+        self._prompts = prompts
+        for style in self.all if prompts is not None else []:
+            prompts.add(prompt(style.name), style.text, f"{style.about} ({self._applies(style)})")
+
+    @property
+    def all(self) -> list[Style]:
+        """The base, the profiles, then the default."""
+        return [self.base, *self.profiles, self.default]
+
+    def text(self, style: Style) -> str:
+        """Its text as edited on the panel, else its file's."""
+        return self._prompts[prompt(style.name)] if self._prompts else style.text
+
+    def _applies(self, style: Style) -> str:
+        return "under all of them" if style is self.base else style.applies
 
     def choose(self, audience: Audience) -> Style:
         """The most specific profile that fits, else the default."""
@@ -182,26 +212,33 @@ class Styles:
         groups = {_clean(n) for other in nodes for n in (other.name, *other.aliases)}
         return frozenset(_clean(n) for n in (person, node.name, *node.aliases)), frozenset(groups)
 
-    def guidance(self, audience: Audience) -> str:
-        """How to write for them: the base, then the profile chosen."""
+    def guidance(self, audience: Audience, asked: str = "") -> str:
+        """How to write for them: the base, then the profile chosen, then what the owner asked of this one message."""
         style = self.choose(audience)
-        return f'Writing style "{style.name}", for {audience}:\n\n{self.base.text}\n\n{style.text}'
+        text = f'Writing style "{style.name}", for {audience}:\n\n{self.text(self.base)}\n\n{self.text(style)}'
+        if asked.strip():
+            text += f'\n\nFor this message only, the owner asked: "{asked.strip()}". Where that differs, do as asked.'
+        return text
 
     def describe(self) -> str:
         """Every profile and who it's for, for whoever tunes them."""
-        lines = [f"{self.base.name}: {self.base.about} (under all of them)"]
-        lines += [f"{style.name}: {style.about} ({style.applies})" for style in [*self.profiles, self.default]]
-        return "\n".join(lines)
+        return "\n".join(f"{style.name}: {style.about} ({self._applies(style)})" for style in self.all)
 
     @property
     def tools(self) -> FunctionToolset:
         """`writing_style`, for any agent that writes to someone for the owner."""
 
-        async def writing_style(to: str = "", via: str = "") -> str:
+        async def writing_style(to: str = "", via: str = "", asked: str = "") -> str:
             """How to write a message, email or post for someone: call it before you write one, then write as it
             says. `to`: "owner" for the owner, else the person's name (blank if you don't know); `via`: the app or
-            channel it goes through ("Discord", "email", "Slack", "sms"). Not for your own replies in this
-            conversation, which come with their style."""
-            return self.guidance(Audience.of(to, via))
+            channel it goes through ("Discord", "email", "Slack", "sms"); `asked`: the owner's words on how this one
+            should sound ("make it casual"), if they said. Not for your own replies in this conversation, which come
+            with their style."""
+            return self.guidance(Audience.of(to, via), asked)
 
         return FunctionToolset([writing_style])
+
+
+def prompt(name: str) -> str:
+    """A style's name among the prompts."""
+    return f"style {name}"

@@ -46,6 +46,7 @@ just style owner sms  # which writing style an audience gets, and its text (no a
 just twin alex        # the context twin on a real model, in a terminal, from a made-up graph
 just twin-eval        # the twin's evals on a real model (pass rates; costs a little)
 just threads-eval     # the thread router's evals on a real model (pass rates; costs a little)
+just styles-eval      # the writing styles' evals on a real model (pass rates; costs a little)
 just logs             # bridge logcat
 ```
 
@@ -68,7 +69,7 @@ One owner, one conversation, any channel, kept as threads (one per topic, `docs/
 | `orchestrator.py` | The agent the owner talks to; never acts on a device itself. Handles one event at a time, in its thread, seeing that thread's history only. Tools and rules: below. |
 | `tasks.py` | Runs pilots in the background, one task per device (phone, PC) at a time, the rest queued; research, connector and code tasks run beside them. Briefs each device or connectors task from the twin first (not research). Resumes waiting tasks with the owner's answer; passes what the owner says to a running one (read on its next step); cancels. Records each step; a `TaskUpdate` when a task finishes or needs the owner, to the thread that started it (`Task.thread`). |
 | `store.py` | `data/archangel.db`: transcript, tasks (`report_to`, `kind`, `public`, `thread`, a code task's `github_run`) and their steps, research pages (`data/pages/`), edited prompts, connectors and quick tools (as JSON), the owner's last location, each device's latest hello (a sleeping PC is woken by the card it named). Threads, the schedule and the twin own their tables (`threads/store.py`, `schedule.py`, `twin/graph.py`). Images are files in `data/images/`, deleted after 3 days; paused runs keep only their latest screen. |
-| `prompts.py` | Every prompt by name ("phone pilot", "pc pilot", "thread router"…). Defaults in code beside their agents; panel edits in the store win from the next run (`Prompts.live(name)`). |
+| `prompts.py` | Every prompt by name ("phone pilot", "pc pilot", "thread router"…), and the writing styles' texts (`Prompts.add`). Defaults in code beside their agents (a style's in its file); panel edits in the store win from the next run (`Prompts.live(name)`). |
 | `schedule.py` | Later (M13): one-offs and cron repeats as rows and a sleeping loop (no Temporal). Marked fired, or moved on, before firing, so a crash never fires twice; repeats end after `max_runs` (default 50, at most 200); what came due while down fires once on start. |
 | `coder.py` | Self-improvement (M14): runs `.github/workflows/improve.yml` (Claude Code in Actions; its token a repo secret, never here), follows the run, reads its `result` artifact (PR and summary, an answer, or Claude's error); a code task keeps its run's id, so it outlives a deploy; `merge(pr)` squashes. The request, run and PR are public. |
 | `history.py` | Context trimming: last 2 screenshots; 100 messages (cut at turn starts) only as a backstop: a full thread is carried on in a new one first. |
@@ -80,7 +81,7 @@ One owner, one conversation, any channel, kept as threads (one per topic, `docs/
 | `reports.py` | Topic and material in, `Report(tldr, title, pages)` out; fixed phone-shaped layout, saved as finished HTML. Served at `/reports/{id}`, behind sign-in unless `Task.public`, under a CSP that lets nothing in it run or load. |
 | `connectors.py` | The owner's services as MCP servers (`MCPToolset`), signed in to from the panel: hosted ones by OAuth, Gmail and Calendar by `workspace-mcp` per Google account, only for a run. Tools prefixed with the connector's name; read-only ones (`readOnlyHint`) run at once, the rest raise `ApprovalRequired`. One per account, grouped by profile ("work", "personal"). `gmail.py` tidies messages. |
 | `tools/` | Quick tools (M15): live data answered inline, no device (TfL, weather, currency, dates, places; all keyless). Add one: subclass `Tool`, list it in `BUILT_IN`. Function names and docstrings are what the orchestrator sees. A failing source is answered, never raised. |
-| `styles/` | How it writes (M20, `docs/styles.md`): a markdown profile per audience over `base.md`; `writing_style(to, via)` for the agents. The owner's own (naming real people) go in `data/styles/`, never the repo. |
+| `styles/` | How it writes (M20, `docs/styles.md`): a markdown profile per audience over `base.md`; `writing_style(to, via, asked)` for the agents (`asked`: the owner's words for this one message). Each text is also a prompt (`style discord`), edited on the Prompts tab; who it's for stays in the file. The owner's own (naming real people) go in `data/styles/`, never the repo. |
 | `twin/` | The context twin (M12, `docs/twin.md`). `graph.py`: nodes with markdown pages, linked with a relation and a preview; keeps the invariants (unique names and aliases, every edit recorded with its source, stale previews found). `reader.py` (quick model, read-only), `writer.py` (an episode in, edits out). `Twin`: `root()`, `hear(said)`, `brief(goal)`, `tools`; reads each conversation after 10 quiet minutes, `remember` at once. |
 | `evals_tab.py` | The panel's Evals tab: lists, shows and starts the twin's eval runs. Local agent only, never public. |
 | `helper.py` | Sub-agent for connector tasks: goal and tools in, a short answer out. Pauses for approvals and `ask_owner`, resumably, like the pilot. |
@@ -124,7 +125,7 @@ Human-in-the-loop: the pilot pauses via Pydantic AI deferred tools (`ApprovalReq
 
 **Investigating a run:** the task's steps and screens in the control panel, then `tail -100 apps/agent/logs/latest/agent.log`. `jev` lines show Jev's raw answers (noul, box, confidence).
 
-Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. Shared fakes in `tests/fakes.py` (`fakes.threads(store)`: real threads with a router that carries on the latest, as one conversation did); the `store` fixture is a fresh store in a temp dir. The twin and the thread router also have evals on a real model, against a made-up owner, never the real one (`apps/agent/evals/twin/`, `apps/agent/evals/threads/`; `docs/twin.md#evals`, `docs/threads.md#evals`).
+Tests use `FunctionModel` and `httpx.MockTransport`; no API calls. Shared fakes in `tests/fakes.py` (`fakes.threads(store)`: real threads with a router that carries on the latest, as one conversation did); the `store` fixture is a fresh store in a temp dir. The twin, the thread router and the writing styles also have evals on a real model, against a made-up owner, never the real one (`apps/agent/evals/twin/`, `apps/agent/evals/threads/`, `apps/agent/evals/styles/`; `docs/twin.md#evals`, `docs/threads.md#evals`, `docs/styles.md#evals`).
 
 Jev gotcha: through OpenRouter, images must be `{"type": "image_url", "image_url": {"url": "data:…"}}` in `state`; TypeSafe's `assets` format is silently ignored.
 

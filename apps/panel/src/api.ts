@@ -58,7 +58,8 @@ export type Thread = {
   continues: number | null;
 };
 export type ThreadDetail = Thread & { lines: Line[]; tasks: Task[] };
-export type Prompt = { name: string; text: string; default: string; edited: boolean };
+// Writing styles are prompts too ("style discord"); `about` says who one is for, which only its file sets.
+export type Prompt = { name: string; text: string; default: string; edited: boolean; about: string };
 /** One the Connectors page offers: what the owner enters to set it up, and where to get it. */
 export type Service = { kind: string; title: string; needs: string[]; help: string };
 export type Connector = {

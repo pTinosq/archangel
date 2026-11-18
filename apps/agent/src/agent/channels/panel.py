@@ -33,7 +33,7 @@ from agent import activity, evals_tab
 from agent.channels import Channel, Deliver
 from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Image, Message, Part, Text
-from agent.prompts import DEFAULTS, Prompt, Prompts
+from agent.prompts import Prompt, Prompts
 from agent.schedule import Job, Schedule
 from agent.store import Line, Step, Store, Task
 from agent.threads import FULL, Threads
@@ -459,11 +459,18 @@ def _done(text: str, status: int = 200) -> HTMLResponse:
 
 
 def _prompt(prompt: Prompt) -> dict:
-    return {"name": prompt.name, "text": prompt.text, "default": prompt.default, "edited": prompt.edited}
+    return {
+        "name": prompt.name,
+        "text": prompt.text,
+        "default": prompt.default,
+        "edited": prompt.edited,
+        "about": prompt.about,
+    }
 
 
 def _edit(prompts: Prompts, name: str, text: str | None) -> Prompt:
-    if name not in DEFAULTS:
-        raise HTTPException(404, f"No prompt called {name!r}")
-    prompts.edit(name, text)
+    try:
+        prompts.edit(name, text)
+    except KeyError:
+        raise HTTPException(404, f"No prompt called {name!r}") from None
     return prompts.get(name)

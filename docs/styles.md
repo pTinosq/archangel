@@ -56,7 +56,8 @@ Two profiles that could win the same audience (both for the owner, both for Disc
 ## Where it is applied
 
 - **The orchestrator's own replies.** Each turn, the style for the owner on the channel the reply goes back by (`sms`, `voice`, `panel`…) is added to the situation. Chosen in code, no model decision. `send` to another channel says to ask `writing_style` first.
-- **Anything written to someone else.** `writing_style(to, via)`, a tool given to the orchestrator, both pilots and the connectors helper (as `ask_twin` is). `to` is `owner` or a name, `via` the app. It returns the base and the chosen profile. The orchestrator's instructions say to name who and where in a task's goal; the pilots' and helper's prompts say to call it before typing a message, post or email. The model chooses to ask, so a task that skips it gets no style: the cost of keeping tone out of every prompt.
+- **Anything written to someone else.** `writing_style(to, via, asked)`, a tool given to the orchestrator, both pilots and the connectors helper (as `ask_twin` is). `to` is `owner` or a name, `via` the app. It returns the base and the chosen profile. The orchestrator's instructions say to name who and where in a task's goal; the pilots' and helper's prompts say to call it before typing a message, post or email. The model chooses to ask, so a task that skips it gets no style: the cost of keeping tone out of every prompt.
+- **One message, another way.** The owner says "make it casual" or "a bit more formal" for one message: the orchestrator puts their words in the task's goal (its instructions say so), and whoever writes passes them to `writing_style` as `asked`, which adds them after the style: "For this message only, the owner asked: "make it casual". Where that differs, do as asked." No keywords, no named tones: the model judges what they meant against the style it was given. Nothing is saved, so the next message gets the style as it was; a lasting change is an edit to the style. The orchestrator's own replies need nothing: it reads the owner's words itself.
 - **Not styled:** reports (the reporter's own layout and prose), summaries, and the twin's pages.
 
 ## Adding one
@@ -65,15 +66,22 @@ Two profiles that could win the same audience (both for the owner, both for Disc
 2. `just style Sam bluesky` shows the one chosen and the text a model would get; `just style` lists them all.
 3. Run the tests (`tests/test_styles.py` covers the selection rules, and the starter profiles' routing; add a line for the new one).
 
-No code changes. To tune one, edit its file and look again.
+No code changes. To tune one, edit its file and look again, or edit its text on the Prompts tab (below).
 
 The owner's own styles (naming real people or accounts, which can't go in this public repo) go the same way into `apps/agent/data/styles/` on the volume (Railway: `/app/apps/agent/data/styles/`). A file there adds a style or replaces the built-in of its name; a style for one person is `people = ["Sam"]`; for a group, `groups = ["uni friends"]`, no names needed, so a group's style can live in the repo. Read at start.
 
-## Files or the panel's Prompts tab?
+## Editing from the panel
 
-The built-in profiles live as files, with the Prompts tab left for later. The files hold more than text: who each profile is for is structure the selection and its start-up checks depend on, and it belongs in version control with the tests that pin it. The tab's store can hold a prompt's text only. Files also get reviewed in PRs, and Archangel's `improve` can change them. But the tab's strength is tuning live: an edit applies from the next run, with a restore-default button, no deploy. The right end state is both: the file is the default and its settings, and the tab edits only the prose (`DEFAULTS["style discord"]`, read through `Prompts.live`), as it does for every other prompt. That is a small change on top of this one, not built here: it needs a decision on the owner's own folder (a file there and a tab edit both replace a built-in), and on listing a dozen styles among the twelve prompts. Until then, `data/styles/` is the way to tune without a PR.
+Each style's text is a prompt too, `style <name>` (`style discord`, `style base`), listed under "Writing styles" on the Prompts tab and edited like any prompt: an edit is kept in the store and wins from the next message, no deploy; Reset brings back the file's. `Styles(prompts=…)` adds each one to `Prompts` at start (`Prompts.add`) and reads its text through it on every message.
 
-## Later
+Only the prose is edited there. Who a style is for (`owner`, `people`, `groups`, `via`) stays in its file, with the start-up checks and tests that depend on it; the tab shows it above the text. Adding or removing a style is still a file.
 
-- A real-model eval, like the twin's and router's: drafts for a made-up audience, checked in code for what the style forbids (openers, closers, emoji, length) and by a judge for the rest.
-- The Prompts tab, as above.
+The owner's own folder: a file in `data/styles/` replaces the built-in of its name and becomes the default the tab resets to; an edit on the tab wins over either. So the order is: the tab's edit, then the owner's file, then the built-in. An edit to a style whose file is later removed is kept in the store, unused.
+
+Why both: files hold structure and get reviewed in PRs (and `improve` can change them); the tab tunes live. `just style` shows the text as edited.
+
+## Evals
+
+`just styles-eval [filter] [--runs N]` gives a writer the pilots' line about `writing_style` and a task's goal for a made-up audience (`apps/agent/evals/styles/cases.toml`; never the real owner's people): Sam on Discord, Tom on WhatsApp, Priya by email and Alex on Slack, the owner by text, a stranger on Vinted, the owner's dictated words, and one message asked to be casual, another more formal. Each runs 3 times on the built-in styles. Checks in code: it asked for the right style, passed on `asked` when there was one, no stock openers, closers or AI words (from `base.md`), no emoji, a word limit, a greeting only where the style has one, the facts kept exact; a model judge for the rest (casual enough, the purpose first). Every run is saved to `results/` (ignored).
+
+First run, 2026-11-18, on `deepseek/deepseek-v4.1-flash`: 41/45 (9 cases × 5). What failed is style, not plumbing: "hey tom," opening a WhatsApp text and "Hi Alex," on Slack, where the styles say no greeting (3); and a formal note that said sorry twice (1). Every run asked for the right style and passed `asked` on.
