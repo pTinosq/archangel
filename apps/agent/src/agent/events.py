@@ -46,6 +46,11 @@ class OwnerMessage(Event):
     def reply_to(self) -> Address:
         return self.message.address
 
+    @property
+    def thread(self) -> int | None:
+        """Set when the owner chose the thread (said it with that thread chosen): then nothing routes it."""
+        return self.message.thread
+
     def prompt(self) -> list[Part | str]:
         return [f"(via {self.message.address.channel})", *self.message.parts]
 

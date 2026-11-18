@@ -25,7 +25,7 @@ To use another model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Othe
 
 It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask.
 
-The conversation is kept as threads, one per topic. Each message goes to the thread it carries on, or to a new one, so Archangel answers with that topic in mind ("how much were those flights again?" a week later finds them). A thread you wrap up, or leave for a few hours, is summarised ([docs/threads.md](docs/threads.md)).
+The conversation is kept as threads, one per topic. Each message goes to the thread it carries on, or to a new one, so Archangel answers with that topic in mind ("how much were those flights again?" a week later finds them). A thread you wrap up, or leave for a few hours, is summarised ([docs/threads.md](docs/threads.md)). You can also open a thread yourself from the panel's chat and keep a topic apart from the rest.
 
 ### Tasks
 
@@ -77,6 +77,7 @@ The panel is local until you deploy it. In it you can:
 - Watch tasks live (screen, steps, report), and approve or answer waiting tasks.
 - Chat with Archangel.
 - Look back through its threads (Threads: each topic's summary, tasks and what was said; the chat marks where it moves thread).
+- Keep concurrent work apart: the chat's dropdown switches between Main (everything, as Archangel sorts it) and the open threads. Archangel opens a thread for each new topic; what you say in one you've chosen stays in it, and Close summarises it and files it under Threads (say something in it again and it reopens).
 - Edit the prompts.
 - See and shape what Archangel has learned about you (Context twin: a graph of linked pages; add nodes, drag to link them, edit any of it).
 - Connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires), and switch the quick tools on and off.

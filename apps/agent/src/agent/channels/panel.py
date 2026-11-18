@@ -35,9 +35,9 @@ from agent.messages import Address, Message, Text
 from agent.prompts import DEFAULTS, Prompt, Prompts
 from agent.schedule import Job, Schedule
 from agent.store import Line, Step, Store, Task
-from agent.threads import FULL
+from agent.threads import FULL, Threads
 from agent.tools import Tools
-from agent.threads.store import Thread, ThreadStore
+from agent.threads.store import Thread
 from agent.twin.graph import Graph, Link
 from agent.web import Web
 
@@ -59,13 +59,13 @@ class PanelChannel(Channel):
         connectors: Connectors,
         tools: Tools,
         graph: Graph,
-        threads: ThreadStore,
+        threads: Threads,
         schedule: Schedule,
         web: Web,
     ):
         self._deliver: Deliver | None = None
         self._web = web
-        _routes(web.app, self, store, prompts)
+        _routes(web.app, self, store, prompts, threads)
         _connector_routes(web.app, connectors)
         _tool_routes(web.app, tools)
         _twin_routes(web.app, graph)
@@ -90,13 +90,16 @@ class PanelChannel(Channel):
     def stopping(self) -> bool:
         return self._web.stopping
 
-    async def receive(self, text: str) -> None:
+    async def receive(self, text: str, thread: int | None = None) -> None:
+        """What the owner typed; in `thread` if they chose one, otherwise for the router to place."""
         if self._deliver:
-            await self._deliver(Message(self.owner, (Text(text),)))
+            await self._deliver(Message(self.owner, (Text(text),), thread=thread))
 
 
 class Said(BaseModel):
     text: str
+    thread: int | None = None
+    """The thread chosen when it was typed; none: the main conversation."""
 
 
 class Visibility(BaseModel):
@@ -118,7 +121,7 @@ class NewConnector(BaseModel):
     profile: str = ""
 
 
-def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts) -> None:
+def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts, threads: Threads) -> None:
     # Every route is async: sync ones run on a thread pool, and the store's SQLite connection belongs to this thread.
 
     @app.get("/api/transcript")
@@ -127,7 +130,9 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts)
 
     @app.post("/api/messages")
     async def say(said: Said) -> None:
-        await channel.receive(said.text)
+        if said.thread is not None and not threads.store.get(said.thread):
+            raise HTTPException(404, f"No thread #{said.thread}")
+        await channel.receive(said.text, said.thread)
 
     @app.get("/api/version")
     async def version() -> dict:
@@ -332,14 +337,21 @@ def _twin_routes(app: FastAPI, graph: Graph) -> None:
 THREADS_LISTED = 200
 
 
-def _thread_routes(app: FastAPI, threads: ThreadStore, store: Store) -> None:
+def _thread_routes(app: FastAPI, threads: Threads, store: Store) -> None:
     @app.get("/api/threads")
     async def listed() -> list[dict]:
-        return [_thread(thread) for thread in threads.recent(THREADS_LISTED)]
+        return [_thread(thread) for thread in threads.store.recent(THREADS_LISTED)]
+
+    @app.post("/api/threads/{id}/close")
+    async def close(id: int) -> dict:
+        """Wraps it up: closed now, summarised in the background; said in again, it reopens."""
+        if not (thread := threads.close(id)):
+            raise HTTPException(404, f"No thread #{id}")
+        return _thread(thread)
 
     @app.get("/api/threads/{id}")
     async def one(id: int) -> dict:
-        if not (thread := threads.get(id)):
+        if not (thread := threads.store.get(id)):
             raise HTTPException(404, f"No thread #{id}")
         return {
             **_thread(thread),

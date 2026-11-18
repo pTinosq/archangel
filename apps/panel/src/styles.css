@@ -77,12 +77,12 @@ button.approve { color: #000; background: var(--accent); border-color: var(--acc
 button.approve:hover:not(:disabled) { color: #000; background: #d9ff85; }
 button.approve:disabled { background: var(--raised); color: var(--quiet); border-color: var(--line); }
 
-input, textarea {
+input, textarea, select {
   font: inherit; color: var(--text); background: var(--bg); caret-color: var(--accent);
   border: 1px solid var(--line-strong); border-radius: 0; padding: 7px 10px;
 }
 input::placeholder, textarea::placeholder { color: var(--quiet); }
-input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
 
 /* Frame: a header bar, then panes side by side. */
 .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
@@ -217,6 +217,10 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .thread-mark::before, .thread-mark::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
 .thread-mark:hover { color: var(--accent); }
 .chat input { flex: 1; min-width: 0; }
+/* Which thread the chat shows: Main (everything, routed) or one thread, and closing one. */
+.chat-bar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
+.chat-bar select { flex: 1; min-width: 0; cursor: pointer; }
+.chat-bar button { padding: var(--s1) var(--s3); }
 
 /* Connectors */
 .connector-list h3 { font-size: 8px; line-height: 16px; color: var(--accent); margin: var(--s4) 0 var(--s2); }
@@ -411,7 +415,7 @@ button.to:hover:not(:disabled) { color: var(--accent); }
   nav a { flex: 1 0 auto; justify-content: center; padding: 0 var(--s3); font-size: 8px; white-space: nowrap; }
 
   button { min-height: 44px; padding: var(--s2) var(--s4); }
-  input, textarea { font-size: 16px; min-height: 44px; }
+  input, textarea, select { font-size: 16px; min-height: 44px; }
 
   main, main.tasks, main.threads, main.prompts, main.cockpit, main.connectors, main.twin, main.evals { display: flex; flex-direction: column; padding: 0; gap: 0; }
   .connector-list, .add-connector { flex: none !important; }
