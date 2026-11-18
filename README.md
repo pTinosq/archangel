@@ -122,7 +122,7 @@ The app keeps two relays, **Dev** (this laptop) and **Prod** (deployed); one tap
 
 Download `archangel-bridge.zip` from the [Windows bridge release](https://github.com/pTinosq/archangel/releases/tag/bridge-windows), unzip it, run `archangel-bridge.exe`, and enter the relay's URL and token, a name, and the PC's PIN (so it can unlock the lock screen). **Save and start** installs it as a service, running from boot. Details, and waking a sleeping PC from the phone: [apps/bridge-windows/README.md](apps/bridge-windows/README.md).
 
-Then ask Archangel to do something "on my PC", or run `just pc-send '{"type":"key","key":"win"}'` and `just pc-screenshot`. The protocol is the same as the phone's, with a few commands of its own (mouse wheel, unlock).
+Then ask Archangel to do something "on my PC", or run `just pc-send '{"type":"key","key":"win"}'` and `just pc-screenshot`. The protocol is the same as the phone's, with a few commands of its own (mouse wheel, unlock, PowerShell).
 
 ## Deploy
 

@@ -119,3 +119,43 @@ def test_unlocking_an_unlocked_pc_does_nothing(device):
 def test_the_network_card_is_found(device):
     mac = device.mac()
     assert mac is None or len(mac.split(":")) == 6
+
+
+def test_powershell_says_what_it_printed_and_how_it_ended(device):
+    ran = run(device.powershell('Write-Output "it\'s ""quoted"" é"; Write-Error \'oops\'; exit 3'))
+    assert ran.code == 3
+    assert ran.stdout.strip() == 'it\'s "quoted" é'
+    assert "oops" in ran.stderr
+
+
+def test_powershell_runs_as_this_user_in_their_home(device):
+    ran = run(device.powershell("[Environment]::UserName; (Get-Location).Path"))
+    user, where = ran.stdout.split()
+    assert user.lower() == os.environ["USERNAME"].lower()
+    assert where.lower() == str(Path.home()).lower()
+
+
+def running(image: str) -> bool:
+    found = subprocess.run(["tasklist", "/fi", f"imagename eq {image}"], capture_output=True, text=True).stdout
+    return image.lower() in found.lower()
+
+
+def test_powershell_is_stopped_at_its_time_limit_with_all_it_started():
+    started = time.monotonic()
+    script = "Start-Process ping.exe -ArgumentList '-n 60 127.0.0.1' -WindowStyle Hidden; Start-Sleep 60"
+    ran = win32.powershell(script, 3)
+    assert ran.code is None
+    assert time.monotonic() - started < 10
+    time.sleep(0.5)
+    assert not running("PING.EXE"), "what the command started outlived it"
+
+
+def test_what_powershell_opens_stays_open_and_doesnt_hold_it_up():
+    started = time.monotonic()
+    try:
+        ran = win32.powershell("Start-Process notepad.exe", 10)
+        assert ran.code == 0 and time.monotonic() - started < 8
+        time.sleep(1)
+        assert running("notepad.exe")
+    finally:
+        subprocess.run(["taskkill", "/im", "notepad.exe", "/f"], capture_output=True)

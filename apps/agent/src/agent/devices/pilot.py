@@ -302,12 +302,15 @@ async def ask_owner(ctx: RunContext[Session], question: str) -> str:
     raise CallDeferred(metadata={"question": question})
 
 
-async def check(ctx: RunContext[Session], action: str) -> None:
-    """Pause for the owner's approval if the guard says `action` commits something. Runs before the tool."""
+async def check(ctx: RunContext[Session], action: str, command: str = "") -> None:
+    """Pause for the owner's approval if the guard says `action` commits something. Runs before the tool.
+
+    A `command` is judged without the screen, and shown to the owner as it is."""
     if ctx.tool_call_approved:
         return
+    screen = None if command else ctx.deps.screen
     with activity.call("guard", "agent", action) as reply:
-        consequence = await ctx.deps.kit.guard.check(ctx.deps.screen, action, ctx.deps.goal, ctx.deps.said)
+        consequence = await ctx.deps.kit.guard.check(screen, action, ctx.deps.goal, ctx.deps.said)
         reply(f"needs approval: {consequence}" if consequence else "fine")
     if consequence:
-        raise ApprovalRequired(metadata={"action": consequence})
+        raise ApprovalRequired(metadata={"action": f"{consequence}, running `{command}`" if command else consequence})

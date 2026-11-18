@@ -55,6 +55,7 @@ Error codes: `invalid_command` (malformed, or not a command this platform has), 
 | `apps`       |                                              | `{"apps": [{"label", "package"}]}`         | all |
 | `ui_tree`    |                                              | `{"windows": [Node]}`                        | all |
 | `unlock`     |                                              |                                              | windows |
+| `powershell` | `script`: PowerShell, 1–6,000 characters     | `{"exitCode", "stdout", "stderr"}`           | windows |
 | `location`   | `lat`, `lon` (degrees) to fake GPS there, until the next `location`; neither to stop | | android |
 | `wake`       | `mac`: `aa:bb:cc:dd:ee:ff` (or with `-`)     |                                              | android |
 
@@ -69,6 +70,8 @@ Error codes: `invalid_command` (malformed, or not a command this platform has), 
 `Node`: `{"class", "text"?, "desc"?, "id"?, "bounds": [left, top, right, bottom], "flags"?: ["clickable", "editable", "scrollable", "focused"], "children"?: [Node]}`. Empty fields are omitted. On Windows `class` is the control type (`Button`, `Edit`), `text` its name, `desc` its help text, `id` its automation id.
 
 **`unlock` (Windows).** Types the PIN or password kept in the bridge's own settings on the lock screen (the caller never sees it), and succeeds once the desktop is back. `failed` when none is set, when the bridge isn't running as its service (only the service can reach the lock screen), on an administrator (UAC) prompt rather than the lock screen, or when it's still locked afterwards. Already unlocked: succeeds at once.
+
+**`powershell` (Windows).** Runs `script` in Windows PowerShell as the user signed in at the screen (never as the service's SYSTEM), without administrator rights, in their home folder; what it opens appears on their desktop. It runs while the PC is locked too (what it opens is behind the lock screen until it's unlocked); `failed` when nobody is signed in. After 10 s it's stopped, with everything it started, and `exitCode` is `null`; otherwise it's the script's exit code. A failing script is still `ok`: its exit code and `stderr` say so. Each of `stdout` and `stderr` is cut after 32,000 bytes. Not resent after a lost connection: it may have changed something.
 
 **Locked (Windows).** While the PC is locked, or an administrator prompt is up, the service sees and works that screen like any other. Run outside the service, the bridge can't, and answers `failed` saying so.
 

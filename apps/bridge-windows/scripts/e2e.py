@@ -104,6 +104,16 @@ def exercise(http: httpx.Client, name: str, label: str) -> None:
     assert tree["ok"], tree
     assert command(http, name, {"type": "key", "key": "esc"})["ok"]
     assert not command(http, name, {"type": "location", "lat": 1, "lon": 2})["ok"]
+    ran = as_user(http, name)
+    print("powershell:", ran)
+    assert ran["data"]["exitCode"] == 2, ran
+
+
+def as_user(http: httpx.Client, name: str) -> dict:
+    """A powershell command, which must run as the signed-in user: never as SYSTEM, the service's bridge."""
+    ran = command(http, name, {"type": "powershell", "script": "[Environment]::UserName; exit 2"})
+    assert ran["ok"] and ran["data"]["stdout"].strip().lower() == getpass.getuser().lower(), ran
+    return ran
 
 
 def lockable() -> str:
@@ -132,6 +142,7 @@ def lock_and_unlock(http: httpx.Client, name: str) -> None:
     assert locked.status_code == 200, locked.text  # the service sees the lock screen
     (ARTIFACTS / "locked.jpg").write_bytes(locked.content)
     print("the lock screen, as the service saw it:", describe(locked.content))
+    print("powershell while locked:", as_user(http, name))
     unlocked = command(http, name, {"type": "unlock"})
     print("unlock on the lock screen:", unlocked)
     assert unlocked["ok"], unlocked

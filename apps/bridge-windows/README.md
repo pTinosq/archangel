@@ -21,7 +21,7 @@ For the PC to be reachable, in Settings: never sleep (or set up waking, below), 
 | `protocol.py` | Wire types, the contract in `docs/protocol.md`. |
 | `executor.py` | Decode, run serially, never raise. Replays replies for repeated ids (last 64). |
 | `device.py` / `windows.py` | The PC behind an interface (tests use a fake); `WindowsDevice` does each command. |
-| `win32.py` | The Windows calls: GDI capture, `SendInput`, following the input desktop, processes as the signed-in user. |
+| `win32.py` | The Windows calls: GDI capture, `SendInput`, following the input desktop, processes as the signed-in user (with a time limit, for `powershell`). |
 | `keys.py` | Key names and chords to virtual-key codes. |
 | `uia.py` | The foreground window's UI Automation tree. |
 | `connection.py` | WebSocket to the relay: 15 s pings, 1–30 s jittered backoff. |
@@ -29,7 +29,7 @@ For the PC to be reachable, in Settings: never sleep (or set up waking, below), 
 | `service.py` | The service: starts the bridge as SYSTEM in the session at the screen and keeps it there; install and remove. |
 | `settings.py` | The settings window. |
 
-The lock screen and administrator (UAC) prompts are a separate desktop, `Winlogon`, that only SYSTEM can open. A service has no screen (session 0), so it starts the bridge as SYSTEM in the console session, where it switches its input thread onto whichever desktop has input before each command. Apps it opens and the Start menu it lists are the signed-in user's (their token, from the session), never SYSTEM's.
+The lock screen and administrator (UAC) prompts are a separate desktop, `Winlogon`, that only SYSTEM can open. A service has no screen (session 0), so it starts the bridge as SYSTEM in the console session, where it switches its input thread onto whichever desktop has input before each command. Apps it opens, the Start menu it lists and `powershell` commands are the signed-in user's (their token, from the session), never SYSTEM's. A command runs in a job object, so at its 10 s limit everything it started is stopped; its output goes through temporary files rather than pipes, since an app it opens would hold a pipe open.
 
 ## Develop
 

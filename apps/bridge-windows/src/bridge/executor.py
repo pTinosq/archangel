@@ -86,4 +86,7 @@ class Executor:
                 return {"windows": await device.ui_tree()}
             case protocol.Unlock():
                 await device.unlock()
+            case protocol.PowerShell(script=script):
+                ran = await device.powershell(script)
+                return {"exitCode": ran.code, "stdout": ran.stdout, "stderr": ran.stderr}
         return None
