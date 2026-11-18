@@ -16,8 +16,8 @@ INSTRUCTIONS = """You read the owner's context twin for another agent: a graph o
 node is a markdown page; each link has a few-word preview of what's at its end. Open only what the task needs, \
 following previews: usually two or three nodes. Then answer with only what bears on it, in a few short lines: \
 concrete (names, addresses, rules, limits), nothing they'd have to second-guess, no padding. It's what's known about \
-them, not what Archangel can do or reach: say what's there, never what isn't or what that rules out. Nothing bears on \
-it, by the root's previews? Open nothing, and say only "Nothing relevant." """
+them, not what Archangel can do or reach: say what's there, never what isn't (no "nothing on file about…") or \
+what that rules out. Nothing bears on it, by the root's previews? Open nothing, and say only "Nothing relevant." """
 
 
 class Reader:
@@ -43,7 +43,11 @@ class Reader:
 
     async def brief(self, goal: str) -> str:
         """What an agent about to do `goal` should know about the owner; "" if nothing."""
-        return await self._read(f"An agent is about to do this for the owner: {goal}\nWhat should it know?")
+        # Only facts for the goal: a style note in a brief once sent a read-only PC task off to message the owner.
+        return await self._read(
+            f"An agent is about to do this for the owner: {goal}\nWhat facts does it need for it, in a sentence or two? "
+            "Not how to write or report, or whom to tell: it has its own tools for those."
+        )
 
     async def hear(self, said: str) -> str:
         """What Archangel should know about the owner to answer what they just said; "" if nothing."""
