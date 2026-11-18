@@ -1,5 +1,6 @@
 import asyncio
 import time
+from dataclasses import replace
 
 import httpx
 import pydantic_ai
@@ -695,12 +696,37 @@ def test_something_scheduled_can_be_cancelled(store):
     assert not owner.schedule.upcoming()
 
 
+def test_a_repeat_wakes_the_agent_which_stops_it_itself_in_its_own_thread(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("cancel_later", id=1) if prompt.startswith("[Scheduled") else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("Email")))
+    owner.says(Text("hello"))  # thread 1
+    job = owner.schedule.add(time.time(), "Check the email", "", owner.cli.owner, 1, "*/30 * * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, runs=1))))
+    assert owner.cli.sent[-1].text == "Cancelled #1: no more of its */30 * * * * repeats."
+    assert not owner.schedule.upcoming()
+
+
+def test_the_agent_cannot_cancel_another_thread_s_schedule_on_its_own(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("cancel_later", id=1) if prompt.startswith("[Scheduled") or "stop" in prompt else say("ok")
+
+    owner = Owner(store, tool_result_or(model), router=FakeRouter(new("A"), new("B")))
+    owner.says(Text("hello"))
+    job = owner.schedule.add(time.time(), "Check the email", "", owner.cli.owner, 2, "0 7 * * *")
+    asyncio.run(owner.orchestrator.handle(Scheduled(replace(job, thread=1))))  # woken in 1, the job is 2's
+    assert "only the owner can cancel it" in owner.cli.sent[-1].text and owner.schedule.get(1)
+    assert owner.says(Text("stop it"))[-1].text.startswith("Cancelled #1")  # the owner may, from anywhere
+    assert owner.says(Text("stop it"))[-1].text.startswith("Nothing scheduled as #1")
+
+
 def test_repeating_is_scheduled_with_its_cron(store):
     def model(prompt: str) -> ModelResponse:
         return call("do_later", what="Ring them with today's weather", every="0 7 * * 1-5", report_via="email")
 
     owner = Owner(store, tool_result_or(model))
     [reply] = owner.says(Text("every weekday at 7 call me with the weather"))
-    assert reply.text.startswith("Scheduled #1 for ") and reply.text.endswith(", then 0 7 * * 1-5 (cron), via email.")
+    assert reply.text.startswith("Scheduled #1 for ") and reply.text.endswith(", then 0 7 * * 1-5 (cron), at most 50 runs, via email.")
     [job] = owner.schedule.upcoming()
     assert job.every == "0 7 * * 1-5" and job.said == "every weekday at 7 call me with the weather"

@@ -130,8 +130,17 @@ class Scheduled(Event):
                 f"It was due at {local(job.due)}, but Archangel was down: it's {local(now)}. Do it only if it still "
                 "makes sense; else tell them"
             )
-        if job.every:  # the store has already moved it on
-            due += f"; it repeats ({job.every}): next {local(following(job.every, now))}"
+        if job.every and job.last:  # the store has already ended it
+            due += (
+                f"; it repeats ({job.every}) but this was its last run, {job.runs} of {job.max_runs}: "
+                "it has stopped, so tell the owner, whatever the outcome"
+            )
+        elif job.every:  # the store has already moved it on
+            due += (
+                f"; it repeats ({job.every}), run {job.runs} of {job.max_runs}, "
+                f"next {local(following(job.every, now))}. Once what it waits for has happened (or it's no longer wanted), stop it with cancel_later({job.id}) "
+                "and tell the owner it has stopped"
+            )
         said = f"[Scheduled #{job.id}, not from the owner now: at {local(job.created)} {asked}. {due}."
         return [f"{said} Your reply goes via {job.report_to.channel}.] Do it now: {job.what}"]
 
