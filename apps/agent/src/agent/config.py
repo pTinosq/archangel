@@ -1,5 +1,6 @@
 import os
 
+from agent.channels import email
 from agent.channels.login import GitHub
 from agent.channels.twilio import Account
 
@@ -43,6 +44,15 @@ def twilio() -> Account | None:
     if not (sid := os.environ.get("TWILIO_ACCOUNT_SID")):
         return None
     return Account(sid, _required("TWILIO_AUTH_TOKEN"), _required("TWILIO_NUMBER"), _required("ARCHANGEL_PHONE"))
+
+
+def email_account() -> email.Account | None:
+    """Archangel's own address, through Resend, and the owner's (comma-separated; the first is where Archangel writes
+    to them). None: no email."""
+    if not (key := os.environ.get("RESEND_API_KEY")):
+        return None
+    owner = tuple(a.strip().lower() for a in _required("ARCHANGEL_OWNER_EMAIL").split(",") if a.strip())
+    return email.Account(key, _required("RESEND_WEBHOOK_SECRET"), _required("ARCHANGEL_EMAIL"), owner)
 
 
 def public_url() -> str | None:

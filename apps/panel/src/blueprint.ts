@@ -12,10 +12,10 @@ export type Diagram = { parts: Part[]; wires: Wire[] };
 export const FLOW: Diagram = {
   parts: [
     // What wakes it
-    { id: "s_owner", label: "The owner says something", kind: "channel", shape: "start", what: "By text, call, the panel or the terminal. Every channel delivers the same OwnerMessage." },
+    { id: "s_owner", label: "The owner says something", kind: "channel", shape: "start", what: "By text, call, email, the panel or the terminal. Every channel delivers the same OwnerMessage." },
     { id: "s_task", label: "A task finishes or needs the owner", kind: "logic", shape: "start", what: "A TaskUpdate: done, gave up, needs approval, or has a question." },
     { id: "s_due", label: "Something scheduled comes due", kind: "logic", shape: "start", what: "Scheduled: the owner's words, and how late if Archangel was down. Fires once, even after a crash." },
-    { id: "s_notice", label: "A channel notices something", kind: "channel", shape: "start", what: "A Notice: a call went to voicemail, the twin noted something, a location came in." },
+    { id: "s_notice", label: "A channel notices something", kind: "channel", shape: "start", what: "A Notice: a call went to voicemail, the twin noted something, a location came in, someone else emailed." },
     { id: "s_quiet", label: "A thread is quiet for 3 hours", kind: "logic", shape: "start", what: "Nothing said in it for 3 hours closes it, whatever the router thought." },
     // Routing
     { id: "gw", label: "Gateway records the line", kind: "logic", what: "The owner's line is recorded with its event and filed under its thread once routed.", file: "gateway.py" },
