@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 import httpx
-from fakes import FakeHelper, FakePilot, FakeReporter, FakeResearcher
+from fakes import FakeHelper, FakePilot, FakeReporter, FakeResearcher, FakeSummariser, threads
 
 from agent import activity, web
 from agent.channels import panel
@@ -17,7 +17,6 @@ from agent.prompts import Prompts
 from agent.schedule import Schedule
 from agent.store import Store
 from agent.tasks import Tasks
-from agent.threads.store import ThreadStore
 from agent.tools import Tools
 from agent.twin.graph import ROOT, Graph
 from agent.web import Web
@@ -29,11 +28,13 @@ class Panel:
         self.prompts = Prompts(store)
         self.web = Web(github, address=address)
         self.connectors = Connectors(store, "http://localhost", Path(tempfile.mkdtemp()))
-        self.threads = ThreadStore(store.db)
+        self.summariser = FakeSummariser()
+        self.control = threads(store, summariser=self.summariser)
+        self.threads = self.control.store
         self.schedule = Schedule(store.db)
         self.tools = Tools(store, httpx.AsyncClient())
         self.channel = PanelChannel(
-            store, self.prompts, self.connectors, self.tools, Graph(store.db), self.threads, self.schedule, self.web
+            store, self.prompts, self.connectors, self.tools, Graph(store.db), self.control, self.schedule, self.web
         )
         self.delivered: list[Message] = []
 
@@ -317,6 +318,26 @@ def test_threads_with_what_was_said_in_them_and_their_tasks(store):
     assert [line["text"] for line in one["lines"]] == ["flights to Delhi?"]
     assert [(task["goal"], task["thread"]) for task in one["tasks"]] == [("Find flights to Delhi", flights.id)]
     assert panel.call("GET", "/api/threads/99").status_code == 404
+
+
+def test_a_thread_opened_by_hand_takes_what_is_said_in_it_unrouted(store):
+    panel = Panel(store)
+    opened = panel.call("POST", "/api/threads", json={"title": "Flights"}).json()
+    assert (opened["title"], opened["open"]) == ("Flights", True)
+    assert panel.call("POST", "/api/threads", json={}).json()["title"] == "New thread"
+
+    assert panel.call("POST", "/api/messages", json={"text": "hi", "thread": opened["id"]}).status_code == 200
+    assert panel.call("POST", "/api/messages", json={"text": "elsewhere"}).status_code == 200
+    assert [(m.text, m.thread) for m in panel.delivered] == [("hi", opened["id"]), ("elsewhere", None)]
+    assert panel.call("POST", "/api/messages", json={"text": "x", "thread": 99}).status_code == 404
+
+
+def test_closing_an_empty_thread_needs_no_model(store):
+    panel = Panel(store)
+    thread = panel.threads.new("Flights")
+    closed = panel.call("POST", f"/api/threads/{thread.id}/close").json()
+    assert not closed["open"] and closed["summary"] == "Nothing was said in it."
+    assert panel.call("POST", "/api/threads/99/close").status_code == 404
 
 
 def test_what_s_scheduled_soonest_first(store):

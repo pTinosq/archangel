@@ -92,10 +92,22 @@ Storage, in `data/archangel.db`: `threads`, `thread_history`, `thread_text` (FTS
 
 The prompts are editable on the panel like the rest ("thread router", "thread summariser").
 
+## Opening and closing by hand (M18a)
+
+The router is the default; the owner can also take the choice. The panel's chat has tabs: **Main**, the whole conversation as it is routed, and a tab for each open thread (what the router opened or the owner did).
+
+- **Branching.** `+` makes an empty thread (`POST /api/threads`, `Threads.start`), named "New thread" until something is said in it, then by its first words (the summary retitles it when it closes). It's a sibling of the routed threads, not a child: nothing is copied into it, so it starts clean. Main stays the owner's global conversation; the orchestrator never sees one thread's history in another.
+- **Saying something in a tab.** `POST /api/messages` takes a `thread`; the message carries it (`Message.thread`, so its transcript line is filed at once, and `OwnerMessage.thread` is set), and `Threads.route` takes it as the answer without asking the router, like a task's update. Its replies and tasks are filed there as always. If the thread was full or closed, the full one's continuation takes it, and a closed one reopens.
+- **Closing.** `Close` (`POST /api/threads/{id}/close`, `Threads.close`) does what the router's wrap-up does: closed now, summarised in the background (`summariser`), kept under Threads with its history. A thread nothing was said in gets "Nothing was said in it." with no model call. Threads the router or the quiet timer closes disappear from the tabs the same way.
+- **Closed threads** are the Threads page (summary, tasks, everything said); the tab bar links to it.
+
+Trade-off: the router still files what's said in Main, so a topic can land in a thread the owner didn't open. Tabs are the way to say "this stays apart" without waiting for the router to agree.
+
 ## Panel
 
 - **Threads** tab (`/threads`, `/threads/{id}`): the threads, newest first, each open or closed, how long ago, and a bar for how full it is (amber when nearly). One opened: its summary (or when it'll get one), size, what it carries on from, its tasks (links), and everything said in it.
-- **Chat**: a quiet rule with the thread's name where the conversation moves to another thread; click it to open the thread.
+- **Chat tabs**: Main and one per open thread, `+` and Close (above).
+- **Chat**: in Main, a quiet rule with the thread's name where the conversation moves to another thread; click it to open the thread.
 - **Tasks**: each links to its thread.
 - **Cockpit**: the thread router and summariser are parts of their own, called by the orchestrator (or, for quiet threads, by `threads`).
 

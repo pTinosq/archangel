@@ -217,6 +217,19 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .thread-mark::before, .thread-mark::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
 .thread-mark:hover { color: var(--accent); }
 .chat input { flex: 1; min-width: 0; }
+/* The conversation's tabs: Main (everything, routed) and a tab for each open thread; the current one lit, none resize. */
+.chat-tabs { display: flex; align-items: stretch; gap: var(--s1); margin-bottom: var(--s3); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.chat-tabs button, .chat-tabs a {
+  flex: none; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: var(--s1) var(--s3); border: none; box-shadow: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font: 8px/16px var(--pixel); text-transform: uppercase; letter-spacing: 0.04em; color: var(--quiet); text-decoration: none;
+}
+.chat-tabs button:hover, .chat-tabs a:hover { color: var(--text); }
+.chat-tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.chat-tabs .spacer { flex: 1; }
+.thread-head { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s2); color: var(--quiet); }
+.thread-head .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-head button { padding: var(--s1) var(--s3); }
 
 /* Connectors */
 .connector-list h3 { font-size: 8px; line-height: 16px; color: var(--accent); margin: var(--s4) 0 var(--s2); }

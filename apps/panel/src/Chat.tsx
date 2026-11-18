@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { api, hideExpired, imageUrl, type Line } from "./api";
+import { api, hideExpired, imageUrl, type Line, type Thread } from "./api";
 import { useFeed, usePoll } from "./poll";
 import { Linked } from "./linked";
 import { Link } from "./route";
@@ -10,13 +10,26 @@ export function Chat({ visible }: { visible: boolean }) {
   const lines = useFeed(api.transcript);
   const threads = usePoll(api.threads);
   const titles = new Map(threads?.map((t) => [t.id, t.title]));
-  const marks = threadMarks(lines);
+  const threadOf = threadsOf(lines);
+  // Main is the whole conversation, the router placing each message; a tab is one open thread, and what's said in it
+  // stays there. A thread just opened isn't in the poll yet: kept here until it is.
+  const [tab, setTab] = useState<number | null>(null);
+  const [made, setMade] = useState<Thread[]>([]);
+  const open = [...(threads?.filter((t) => t.open) ?? []), ...made.filter((m) => !threads?.some((t) => t.id === m.id))].sort(
+    (a, b) => a.id - b.id,
+  );
+  const current = open.find((t) => t.id === tab);
+  useEffect(() => {
+    if (tab !== null && threads && !current) setTab(null); // closed meanwhile (wrapped up, or quiet for hours)
+  }, [tab, threads, current]);
+  const shown = current ? lines.filter((_, i) => threadOf[i] === current.id) : lines;
+  const marks = current ? new Map<number, number>() : threadMarks(lines, threadOf);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
-  }, [lines.length, visible]); // a hidden list loses its scroll: back to the end when shown
+  }, [lines.length, visible, tab]); // a hidden list loses its scroll: back to the end when shown
   const heard = useRef<number>(undefined);
   useEffect(() => {
     const last = lines.at(-1);
@@ -29,7 +42,7 @@ export function Chat({ visible }: { visible: boolean }) {
     const text = draft.trim();
     if (!text) return;
     try {
-      await api.say(text);
+      await api.say(text, current?.id);
       play("send");
       setDraft("");
       setError("");
@@ -39,11 +52,60 @@ export function Chat({ visible }: { visible: boolean }) {
     }
   };
 
+  const branch = async () => {
+    try {
+      const thread = await api.newThread();
+      setMade((old) => [...old, thread]);
+      setTab(thread.id);
+      setError("");
+    } catch {
+      play("error");
+      setError("Couldn't open a thread.");
+    }
+  };
+  const close = async (thread: Thread) => {
+    try {
+      await api.closeThread(thread.id);
+      setMade((old) => old.filter((m) => m.id !== thread.id));
+      setTab(null);
+      setError("");
+    } catch {
+      play("error");
+      setError("Couldn't close the thread.");
+    }
+  };
+
   return (
     <section className="chat" hidden={!visible}>
       <h2>Conversation</h2>
+      <div className="chat-tabs" role="tablist">
+        <button role="tab" aria-selected={!current} onClick={() => setTab(null)}>
+          Main
+        </button>
+        {open.map((thread) => (
+          <button key={thread.id} role="tab" aria-selected={thread.id === current?.id} title={thread.title} onClick={() => setTab(thread.id)}>
+            {thread.title}
+          </button>
+        ))}
+        <button onClick={branch} title="Open a thread: what you say in it stays in it" aria-label="Open a thread">
+          +
+        </button>
+        <span className="spacer" />
+        <Link to="/threads">Closed</Link>
+      </div>
+      {current && (
+        <div className="thread-head">
+          <Link to={`/threads/${current.id}`} className="title">
+            #{current.id} {current.title}
+          </Link>
+          <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
+            Close
+          </button>
+        </div>
+      )}
       <div className="lines">
-        {lines.map((line) => (
+        {current && !shown.length && <p className="quiet">Nothing said here yet. What you say in this tab stays in it.</p>}
+        {shown.map((line) => (
           <Fragment key={line.id}>
             {marks.has(line.id) && (
               <Link to={`/threads/${marks.get(line.id)}`} className="thread-mark">
@@ -65,7 +127,7 @@ export function Chat({ visible }: { visible: boolean }) {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Message Archangel"
+          placeholder={current ? `Message in #${current.id}` : "Message Archangel"}
           enterKeyHint="send"
         />
         <button type="submit" data-sound="">
@@ -93,16 +155,20 @@ export function Said({ line }: { line: Line }) {
   );
 }
 
-/** Where the conversation moves to another thread: the line that starts each stretch, and that thread.
- * The owner's newest lines may not be filed yet (they are once Archangel reads them, after this list fetched them),
- * so one without a thread is taken to be in the thread of what follows it: its answer. */
-function threadMarks(lines: Line[]): Map<number, number> {
+/** The thread each line is in. The owner's newest lines may not be filed yet (they are once Archangel reads them,
+ * after this list fetched them), so one without a thread is taken to be in the thread of what follows it: its answer. */
+function threadsOf(lines: Line[]): (number | null)[] {
   const threads: (number | null)[] = [];
   let next: number | null = null;
   for (let i = lines.length - 1; i >= 0; i--) {
     next = lines[i].thread ?? (lines[i].sender === "owner" ? next : null);
     threads[i] = next;
   }
+  return threads;
+}
+
+/** Where the conversation moves to another thread: the line that starts each stretch, and that thread. */
+function threadMarks(lines: Line[], threads: (number | null)[]): Map<number, number> {
   const marks = new Map<number, number>();
   let current: number | null = null;
   lines.forEach((line, i) => {

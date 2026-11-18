@@ -33,6 +33,8 @@ QUIET = timedelta(hours=3)
 CHECK = timedelta(minutes=1)
 RETRY = timedelta(hours=1)
 """A summary that failed is tried again after this, not every minute: a model that refuses keeps refusing."""
+NEW = "New thread"
+"""What a thread the owner opens by hand is called until they say something in it: then its first words."""
 RECENT = 10
 """Threads the router reads; older ones it finds by searching."""
 OTHERS_SHOWN = 5
@@ -61,6 +63,27 @@ class Threads:
         self._summarising = asyncio.Lock()  # one at a time: they're background work, never urgent
         self._pending: set[asyncio.Task] = set()
         self._failed: dict[int, float] = {}  # threads whose summary failed, and when
+
+    @property
+    def store(self) -> ThreadStore:
+        return self._store
+
+    def start(self, title: str = "") -> Thread:
+        """A thread the owner opens by hand (a tab on the panel), empty: what they say in it goes there, unrouted."""
+        return self._store.new(title.strip() or NEW)
+
+    def close(self, id: int) -> Thread | None:
+        """Wraps a thread up at the owner's word, as if the router had judged it: closed now, summarised in the
+        background (a thread nothing was said in has nothing to summarise). None if there's no such thread."""
+        if not (thread := self._store.get(id)):
+            return None
+        if thread.open:
+            self._store.close(id)
+            if self._store.history(id):
+                self._in_background(self._summarise(self._store.get(id)))
+            else:
+                self._store.summarise(id, thread.title, "Nothing was said in it.", thread.updated)
+        return self._store.get(id)
 
     async def route(self, event: Event) -> Route:
         """The thread `event` belongs in, made or reopened as needed, and marked as said in now. Never fails: if
@@ -144,7 +167,16 @@ class Threads:
 
     async def _route(self, event: Event) -> Route:
         if event.thread and (thread := self._store.get(event.thread)):
-            return Route(self._current(thread))  # back where it was asked for, however the conversation has moved on
+            # Back where it was asked for, however the conversation has moved on; what the owner says in a closed
+            # thread reopens it, and the first thing said in one they opened by hand names it.
+            thread = self._current(thread)
+            if event.from_owner:
+                if not thread.open:
+                    self._store.reopen(thread.id)
+                if thread.title == NEW and not self._store.history(thread.id):
+                    self._store.rename(thread.id, _title(event))
+                thread = self._store.get(thread.id)
+            return Route(thread)
         if isinstance(event, OwnerMessage):
             return await self._choose(event)
         return Route(self._store.latest() or self._store.new(_title(event)))  # a notice, or a task from before threads

@@ -172,7 +172,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   transcript: (after: number) => call<Line[]>("GET", `/transcript?after=${after}`),
   /** Everything the owner does here, buttons included, is a message in the one conversation. */
-  say: (text: string) => call<null>("POST", "/messages", { text }),
+  say: (text: string, thread?: number) => call<null>("POST", "/messages", { text, thread }),
   tasks: () => call<Task[]>("GET", "/tasks"),
   version: () => call<Version>("GET", "/version"),
   /** Not a message: who can open a report is the owner's own setting. */
@@ -181,6 +181,10 @@ export const api = {
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
   threads: () => call<Thread[]>("GET", "/threads"),
   thread: (id: number) => call<ThreadDetail>("GET", `/threads/${id}`),
+  /** A thread opened by hand: what's said in its tab goes there, not through the router. */
+  newThread: (title = "") => call<Thread>("POST", "/threads", { title }),
+  /** Wraps it up: closed now, summarised in the background. */
+  closeThread: (id: number) => call<Thread>("POST", `/threads/${id}/close`),
   prompts: () => call<Prompt[]>("GET", "/prompts"),
   editPrompt: (name: string, text: string) => call<Prompt>("PUT", `/prompts/${name}`, { text }),
   resetPrompt: (name: string) => call<Prompt>("DELETE", `/prompts/${name}`),
