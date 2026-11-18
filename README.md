@@ -25,6 +25,8 @@ To use another model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Othe
 
 It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask.
 
+Planned: an email channel, an inbox of Archangel's own to forward things to and send mail from (M21 in the [roadmap](docs/roadmap.md)).
+
 The conversation is kept as threads, one per topic. Each message goes to the thread it carries on, or to a new one, so Archangel answers with that topic in mind ("how much were those flights again?" a week later finds them). A thread you wrap up, or leave for a few hours, is summarised ([docs/threads.md](docs/threads.md)). You can also open a thread yourself from the panel's chat and keep a topic apart from the rest.
 
 ### Tasks
