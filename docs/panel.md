@@ -30,7 +30,7 @@ Hovering the name in the header shows the commit running and how long ago it was
 
 ## Chat
 
-Enter sends, Shift+Enter is a new line. The dropdown chooses what it shows:
+Enter sends, Shift+Enter is a new line. Pictures are attached with +, pasted, or dropped on the chat; each shows as a thumbnail (× takes it off) and goes with the text, or alone. Up to 4 a message, 5 MB each (the agent's cap): a bigger photo, or a type models don't read, is redrawn as a JPEG at most 2048px a side first. The dropdown chooses what it shows:
 
 - **Main**: the whole conversation. Where it moves to another thread there's a rule with the thread's name, a link to it. The owner's newest line isn't filed yet when it arrives, so it's taken to be in its answer's thread.
 - **An open thread**: only that thread's lines. What's said here is sent with the thread, so the router doesn't choose (it only judges a wrap-up), and a closed one reopens. Closed threads are on the Threads page.
