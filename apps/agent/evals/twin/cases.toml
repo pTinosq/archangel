@@ -50,6 +50,12 @@ nothing = true
 opens_at_most = 1  # a glance (Travel, for Tokyo: a trip?) is fair; more is waste
 
 [[case]]
+name = "read-only brief is facts only"  # the root holds a note on messaging Alex; a pilot once took one as a cue to send
+brief = "Open https://example.com/track/4821 on the PC and report where the driver is now"
+exclude = ["WhatsApp", "email", "formal", "send", "message"]
+judge = ["Says nothing about how to report, whom to tell, which app to use for it, or how to write."]
+
+[[case]]
 name = "work sign-in"
 ask = "A Figma sign-in page offers Continue with Google. Which account?"
 include = ["alex@fernhill.example"]
