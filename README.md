@@ -90,6 +90,8 @@ Each page has its own address (`/tasks/12`, `/connectors`). Small sounds play fo
 
 The Cockpit shows requests travelling between the parts of Archangel as it works: which agent is busy, which model it's asking, what the phone is doing, and which pages of your context twin it reads or edits.
 
+The Architecture tab is a flowchart of how Archangel handles anything it's told, every decision on the way; click a part for what it does, or play a scenario (a thanks in a thread, a question on a call, an Uber in 15 minutes) through it a step at a time.
+
 The twin has its own evals on a real model: `just twin-eval`, or the panel's Evals tab when running locally, to run them and see each run's graph (and `just twin` to try it by hand). The thread router's evals are `just threads-eval`.
 
 ## Drive the phone
