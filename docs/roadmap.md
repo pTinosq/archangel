@@ -26,7 +26,7 @@ Each milestone ships something usable and proves one idea.
 | M17b ✅ | Unlock | tasks on a locked PC, through UAC prompts | a SYSTEM service reaches the secure desktop; the PIN stays on the PC |
 | M17c ✅ | Wake | tasks on a sleeping PC | the phone on the home Wi-Fi sends Wake-on-LAN |
 | M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
-| M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or any thread; "+" opens a thread, what's said in one goes to it unrouted, Close summarises and archives it |
+| M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or any thread; what's said in one goes to it unrouted, Close summarises and archives it |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |

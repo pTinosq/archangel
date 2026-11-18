@@ -102,10 +102,6 @@ class Said(BaseModel):
     """The thread chosen when it was typed; none: the main conversation."""
 
 
-class NewThread(BaseModel):
-    title: str = ""
-
-
 class Visibility(BaseModel):
     public: bool
 
@@ -345,11 +341,6 @@ def _thread_routes(app: FastAPI, threads: Threads, store: Store) -> None:
     @app.get("/api/threads")
     async def listed() -> list[dict]:
         return [_thread(thread) for thread in threads.store.recent(THREADS_LISTED)]
-
-    @app.post("/api/threads")
-    async def start(new: NewThread) -> dict:
-        """A thread opened by hand on the panel, for work that shouldn't tangle with the rest."""
-        return _thread(threads.start(new.title))
 
     @app.post("/api/threads/{id}/close")
     async def close(id: int) -> dict:

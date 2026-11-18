@@ -217,7 +217,7 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .thread-mark::before, .thread-mark::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
 .thread-mark:hover { color: var(--accent); }
 .chat input { flex: 1; min-width: 0; }
-/* Which thread the chat shows: Main (everything, routed) or one thread, beside opening and closing one. */
+/* Which thread the chat shows: Main (everything, routed) or one thread, and closing one. */
 .chat-bar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
 .chat-bar select { flex: 1; min-width: 0; cursor: pointer; }
 .chat-bar button { padding: var(--s1) var(--s3); }

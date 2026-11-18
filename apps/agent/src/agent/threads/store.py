@@ -109,11 +109,6 @@ class ThreadStore:
         with self._db:
             self._db.execute("UPDATE threads SET updated = ? WHERE id = ?", (self._clock(), id))
 
-    def rename(self, id: int, title: str) -> None:
-        with self._db:
-            self._db.execute("UPDATE threads SET title = ? WHERE id = ?", (title, id))
-        self._index(id)
-
     def reopen(self, id: int) -> None:
         with self._db:
             self._db.execute("UPDATE threads SET open = 1, updated = ? WHERE id = ?", (self._clock(), id))

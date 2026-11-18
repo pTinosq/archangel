@@ -320,15 +320,12 @@ def test_threads_with_what_was_said_in_them_and_their_tasks(store):
     assert panel.call("GET", "/api/threads/99").status_code == 404
 
 
-def test_a_thread_opened_by_hand_takes_what_is_said_in_it_unrouted(store):
+def test_what_is_said_in_a_chosen_thread_goes_there_unrouted(store):
     panel = Panel(store)
-    opened = panel.call("POST", "/api/threads", json={"title": "Flights"}).json()
-    assert (opened["title"], opened["open"]) == ("Flights", True)
-    assert panel.call("POST", "/api/threads", json={}).json()["title"] == "New thread"
-
-    assert panel.call("POST", "/api/messages", json={"text": "hi", "thread": opened["id"]}).status_code == 200
+    flights = panel.threads.new("Flights")
+    assert panel.call("POST", "/api/messages", json={"text": "hi", "thread": flights.id}).status_code == 200
     assert panel.call("POST", "/api/messages", json={"text": "elsewhere"}).status_code == 200
-    assert [(m.text, m.thread) for m in panel.delivered] == [("hi", opened["id"]), ("elsewhere", None)]
+    assert [(m.text, m.thread) for m in panel.delivered] == [("hi", flights.id), ("elsewhere", None)]
     assert panel.call("POST", "/api/messages", json={"text": "x", "thread": 99}).status_code == 404
 
 

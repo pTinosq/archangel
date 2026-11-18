@@ -77,7 +77,7 @@ The panel is local until you deploy it. In it you can:
 - Watch tasks live (screen, steps, report), and approve or answer waiting tasks.
 - Chat with Archangel.
 - Look back through its threads (Threads: each topic's summary, tasks and what was said; the chat marks where it moves thread).
-- Keep concurrent work apart: the chat's dropdown switches between Main (everything, as Archangel sorts it) and any thread. **+** opens a thread; what you say in it stays in it, and Close summarises it and files it under Threads (say something in it again and it reopens).
+- Keep concurrent work apart: the chat's dropdown switches between Main (everything, as Archangel sorts it) and any thread. Archangel opens a thread for each new topic; what you say in one you've chosen stays in it, and Close summarises it and files it under Threads (say something in it again and it reopens).
 - Edit the prompts.
 - See and shape what Archangel has learned about you (Context twin: a graph of linked pages; add nodes, drag to link them, edit any of it).
 - Connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires), and switch the quick tools on and off.

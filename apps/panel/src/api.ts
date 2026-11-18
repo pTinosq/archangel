@@ -181,8 +181,6 @@ export const api = {
   steps: (task: number, after: number) => call<Step[]>("GET", `/tasks/${task}/steps?after=${after}`),
   threads: () => call<Thread[]>("GET", "/threads"),
   thread: (id: number) => call<ThreadDetail>("GET", `/threads/${id}`),
-  /** A thread opened by hand: what's said in it goes there, not through the router. */
-  newThread: (title = "") => call<Thread>("POST", "/threads", { title }),
   /** Wraps it up: closed now, summarised in the background. */
   closeThread: (id: number) => call<Thread>("POST", `/threads/${id}/close`),
   prompts: () => call<Prompt[]>("GET", "/prompts"),

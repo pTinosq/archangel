@@ -12,10 +12,9 @@ export function Chat({ visible }: { visible: boolean }) {
   const titles = new Map(threads?.map((t) => [t.id, t.title]));
   const threadOf = threadsOf(lines);
   // Main is the whole conversation, the router placing each message; choosing a thread shows only it, and what's said
-  // there stays there (a closed one reopens). A thread just opened isn't in the poll yet: kept here until it is.
+  // there stays there (a closed one reopens).
   const [tab, setTab] = useState<number | null>(null);
-  const [made, setMade] = useState<Thread[]>([]);
-  const all = [...(threads ?? []), ...made.filter((m) => !threads?.some((t) => t.id === m.id))];
+  const all = threads ?? [];
   const open = all.filter((t) => t.open).sort((a, b) => b.id - a.id);
   const closed = all.filter((t) => !t.open).sort((a, b) => b.id - a.id);
   const current = all.find((t) => t.id === tab);
@@ -49,21 +48,9 @@ export function Chat({ visible }: { visible: boolean }) {
     }
   };
 
-  const branch = async () => {
-    try {
-      const thread = await api.newThread();
-      setMade((old) => [...old, thread]);
-      setTab(thread.id);
-      setError("");
-    } catch {
-      play("error");
-      setError("Couldn't open a thread.");
-    }
-  };
   const close = async (thread: Thread) => {
     try {
       await api.closeThread(thread.id);
-      setMade((old) => old.filter((m) => m.id !== thread.id));
       setTab(null);
       setError("");
     } catch {
@@ -97,9 +84,6 @@ export function Chat({ visible }: { visible: boolean }) {
             </optgroup>
           )}
         </select>
-        <button onClick={branch} title="Open a thread: what you say in it stays in it" aria-label="Open a thread">
-          +
-        </button>
         {current?.open && (
           <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
             Close
@@ -107,7 +91,7 @@ export function Chat({ visible }: { visible: boolean }) {
         )}
       </div>
       <div className="lines">
-        {current && !shown.length && <p className="quiet">Nothing said here yet. What you say here stays in it.</p>}
+        {current && !shown.length && <p className="quiet">Nothing said here yet.</p>}
         {shown.map((line) => (
           <Fragment key={line.id}>
             {marks.has(line.id) && (

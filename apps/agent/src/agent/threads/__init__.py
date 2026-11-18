@@ -33,8 +33,6 @@ QUIET = timedelta(hours=3)
 CHECK = timedelta(minutes=1)
 RETRY = timedelta(hours=1)
 """A summary that failed is tried again after this, not every minute: a model that refuses keeps refusing."""
-NEW = "New thread"
-"""What a thread the owner opens by hand is called until they say something in it: then its first words."""
 RECENT = 10
 """Threads the router reads; older ones it finds by searching."""
 OTHERS_SHOWN = 5
@@ -67,10 +65,6 @@ class Threads:
     @property
     def store(self) -> ThreadStore:
         return self._store
-
-    def start(self, title: str = "") -> Thread:
-        """A thread the owner opens by hand (the panel chat's dropdown), empty: what they say in it goes there, unrouted."""
-        return self._store.new(title.strip() or NEW)
 
     def close(self, id: int) -> Thread | None:
         """Wraps a thread up at the owner's word, as if the router had judged it: closed now, summarised in the
@@ -168,14 +162,12 @@ class Threads:
     async def _route(self, event: Event) -> Route:
         if event.thread and (thread := self._store.get(event.thread)):
             # Back where it was asked for, however the conversation has moved on; what the owner says in a closed
-            # thread reopens it, and the first thing said in one they opened by hand names it.
+            # thread reopens it.
             thread = self._current(thread)
             if event.from_owner:
                 if not thread.open:
                     self._store.reopen(thread.id)
-                if thread.title == NEW and not self._store.history(thread.id):
-                    self._store.rename(thread.id, _title(event))
-                thread = self._store.get(thread.id)
+                    thread = self._store.get(thread.id)
             return Route(thread)
         if isinstance(event, OwnerMessage):
             return await self._choose(event)
