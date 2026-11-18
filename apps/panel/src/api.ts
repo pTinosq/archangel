@@ -26,6 +26,8 @@ export type Job = {
   said: string;
   /** Cron, in the owner's time, if it repeats; else "". */
   every: string;
+  /** What its run last noted ("Still 3 of 7"); "" if nothing. */
+  progress: string;
   reportTo: string;
   thread: number | null;
 };

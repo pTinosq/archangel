@@ -28,8 +28,8 @@ Each milestone ships something usable and proves one idea.
 | M18 ✅ | Threads | "how much were those India flights again?" a week later, and it picks up that conversation; unrelated asks start clean | one conversation for the owner, many threads inside: a small quick model routes each message to a thread, so the orchestrator carries only what's relevant |
 | M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or an open thread; what's said in one goes to it unrouted |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
-| M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
-| M21 | Email | email Archangel, or forward it a message, and it's read; it emails people for you, from an address of its own | a channel with its own inbox: mail in reaches the owner's thread, mail out goes under the same approvals ([requirements](#m21-requirements-email-gateway-from-the-owner)) |
+| M20 ✅ | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
+| M21 | Email gateway | email Archangel at its own address, or forward it a message, and it reads it; "email Sam the details" sends from that address | email as a channel: a dedicated inbox in, outbound mail out, one conversation with the owner's other channels |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -192,6 +192,7 @@ The owner also tests across channels and reports changes.
 - **Repeating** ("every weekday at 7"): a cron expression in the owner's time (models write cron well; cronsim gets daylight saving right). Missed while down: fires once, not once per miss.
 - **Seen on the panel:** what's scheduled, soonest first, above the tasks; Cancel sends a message like the task buttons.
 - **The agent ends its own loops (2026-11-18).** "Check my email every 30 minutes until it changes, then text me": a repeat's wake-up tells the orchestrator its run number and that `cancel_later` stops it for good once what it waited for has happened. On its own it may cancel only what was scheduled in its own thread; the owner may cancel anything. Every repeat has a cap on runs (`max_runs`, default 50, at most 200: each run is a model call); the run that uses the last is told it was the last, so the owner hears it stopped. Until then its runs, and the tasks they start, tell the owner nothing (`stay_quiet`): asked to check every 15 minutes, it texts once, when there's news. Not its own milestone: a part of M13.
+- **Silent until done, with progress (2026-11-18).** A repeat's runs say nothing to the owner, in code, whatever the model writes (a "still 3 of 7" had been texted); only the run that ends it (`cancel_later` on its own job) and its last run reach them. `note_progress` in a run sets a line the Scheduled list shows.
 - **Done (2026-11-17):** scheduled, repeating, on the panel.
 - **Notification triggers, parked (2026-11-17)** as their own "Later" milestone: the owner judged them not worth it for now: watching for "when my Uber arrives" means a loop and model calls on every notification.
 
@@ -293,19 +294,19 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 - **Picked by channel, person or app.** A message to the owner by text uses the owner's profile; to a named person, theirs; in an app, the app's. Nothing matches: a sensible default (semi-formal).
 - **Extensible.** A new profile is a small addition: a name, what it matches, a few lines of style. No code change to add one.
 
-**Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
+**Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). Live; the starter wording is still to be tuned against real replies.
 - **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").
 
 ## M21 requirements (email gateway) (from the owner)
 
-A new channel: email. Archangel gets an inbox and an address of its own, separate from the owner's mailboxes (the Gmail connector in M11 reads the owner's own mail; this is Archangel's).
+A new channel, email, with an inbox and address of its own. Not the owner's Gmail connector (M11): that is the owner's mail, reached by tools; this is Archangel's.
 
-- **Its own address.** A dedicated inbox, provisioned once; the address is configuration, never in the repo.
-- **Mail in.** What the owner sends or forwards to it is read and handed to the orchestrator as an owner message, routed to a thread like any other. A forward ("can you deal with this?") arrives with its original text.
-- **Mail out.** It can email people on the owner's behalf, written in the right style (M20) and only after the owner approves, like any send; a reply threads with the mail it answers.
-- **Only the owner commands it.** Mail from anyone else is not an instruction: it's ignored, or shown to the owner as a notice, never obeyed.
+- **Its own address.** People can write to it, and the owner can forward things to it.
+- **Sends.** It emails people from that address when asked ("email Sam the details"), in the style for that audience (M20).
+- **Reads.** Mail the owner sends or forwards to it arrives as an event and is routed into the owner's conversation, in the right thread, like a text.
 
-**Plan (sketch, undecided)**
-- **A `Channel` subclass** (`channels/email.py`) registered in `__main__.py`, with `shows` listing what email can carry; inbound mail arrives as `OwnerMessage` (from the owner) or `Notice` (from anyone else), outbound goes through the gateway to an `Address("email", …)`. No orchestrator change.
-- **Not decided:** the inbox provider (a transactional service with inbound webhooks, or an IMAP mailbox polled); the address and domain; how inbound is delivered (a webhook signed like Twilio's, or polling); how the owner's mail is told apart from a forgery (the sender address alone is spoofable: SPF/DKIM results, a secret in the address, or an allow-list); attachments (waits on M19); whether replies go by email or to the channel the owner is on.
-- **The owner must:** choose a provider and address, set up its DNS records, and add its credentials as variables on Railway. Nothing is built or set yet.
+**Plan (sketch, undecided; not built)**
+- **A `Channel` subclass** registered in `__main__.py`: `send` out, inbound mail through `start(deliver)`, with its own `Address` kind; `shows` says what an email can carry.
+- **Only the owner's mail is a message.** Mail proved to be from the owner becomes an `OwnerMessage`; anything else is a `Notice` the orchestrator judges, never an instruction: an email can't approve, `improve` or `merge`.
+- **Outbound is consequential.** Mail to someone else goes through the owner's approval, unless they've said otherwise for that person.
+- **Not decided:** the inbox provider and the address (a domain it can use, set up by the owner), how inbound arrives (webhook or polling), how the sender is proved (SPF/DKIM results, a signed token, an allow-list), how replies thread, attachments, and cost. Credentials will be env vars on Railway, never in the repo.

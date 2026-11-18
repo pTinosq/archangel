@@ -53,6 +53,10 @@ Reports are private (you, signed in) until you make one public to share it: ask 
 
 Your email, calendar, Notion and Slack (several accounts each, in profiles like work and personal), once connected, are reached directly (by a helper agent, beside phone tasks) rather than through the phone.
 
+### Email (planned, M21)
+
+Archangel will get an email address of its own: write to it or forward it something and it reads it, and it can email people from there. Not built yet; see [docs/roadmap.md](docs/roadmap.md).
+
 ### Approvals and history
 
 Before anything that sends, pays, logs in, deletes or changes a setting, it asks you and prints a screenshot path; reply yes or no.
