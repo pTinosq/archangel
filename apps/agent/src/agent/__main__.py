@@ -11,7 +11,7 @@ from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.coder import Coder, github
 from agent.connectors import Connectors
-from agent.events import Scheduled, TaskUpdate
+from agent.events import TaskUpdate
 from agent.gateway import Gateway
 from agent.helper import Helper
 from agent.links import Links
@@ -160,7 +160,7 @@ async def _run(
         group.create_task(gateway.run(orchestrator.handle))
         group.create_task(twin.watch())
         group.create_task(threads.watch())
-        group.create_task(schedule.watch(lambda job: orchestrator.handle(Scheduled(job))))
+        group.create_task(schedule.watch(orchestrator.wake))
         for task in interrupted:  # a deploy mid-task: whoever's waiting on it hears, and it may be retried
             group.create_task(orchestrator.handle(TaskUpdate(task)))
 

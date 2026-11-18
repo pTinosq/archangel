@@ -764,6 +764,45 @@ def test_a_run_notes_its_progress_for_the_panel(store):
     assert [m.text for m in owner.cli.sent] == ["ok"]
 
 
+def test_a_repeat_s_next_run_is_shown_what_the_last_one_s_task_found(store):
+    """Regression: every run of a tracking-page check sent a fresh pilot to work the same route out again."""
+
+    def model(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Scheduled"):
+            return call("stay_quiet") if "Last run's task" in prompt else call("start_task", goal="Read the tracker")
+        return say("ok")
+
+    found = "Out for delivery. The way: open the tracking URL, click Track Job."
+    owner = Owner(store, tool_result_or(model), Outcome("done", found), router=FakeRouter(new("Parcel")))
+    owner.says(Text("hello"))
+    owner.schedule.add(time.time(), "Check the parcel", "", owner.cli.owner, 1, "*/15 * * * *")
+
+    async def first_run():
+        await owner.orchestrator.wake(replace(owner.schedule.get(1), runs=1))
+        await owner.tasks.idle()
+
+    asyncio.run(first_run())
+    assert owner.schedule.get(1).last_task == 1
+    owner.schedule.note(1, "Out for delivery")
+    asyncio.run(owner.orchestrator.wake(replace(owner.schedule.get(1), runs=2)))
+    second = prompt_of(owner.requests[-1])
+    assert f"Last run's task #1 [done] Read the tracker → {found}. A new task should be told the way" in second
+    assert 'Last noted: "Out for delivery".' in second
+    assert len(owner.store.tasks()) == 1  # it knew there was nothing new to fetch
+
+
+def test_scheduling_the_same_thing_twice_in_a_thread_is_pointed_out(store):
+    def model(prompt: str) -> ModelResponse:
+        return call("do_later", what="Check the parcel", every="*/15 * * * *")
+
+    owner = Owner(store, tool_result_or(model))
+    first = owner.says(Text("check my parcel every 15 minutes"))[-1].text
+    assert "already" not in first
+    second = owner.says(Text("check my parcel every 15 minutes"))[-1].text
+    assert second.startswith("Scheduled #2 ") and second.endswith(" #1 here already does the same: cancel_later one?")
+    assert len(owner.schedule.upcoming()) == 2  # said, not refused
+
+
 def test_the_owner_always_gets_an_answer(store):
     def model(messages, info) -> ModelResponse:
         if isinstance(messages[-1].parts[-1], pydantic_ai.RetryPromptPart):
