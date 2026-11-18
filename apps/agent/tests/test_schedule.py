@@ -4,9 +4,10 @@ from datetime import datetime
 
 import pytest
 
-from agent.events import Scheduled
+from agent.events import LAST_REPORT, Scheduled
 from agent.messages import Address
 from agent.schedule import DEFAULT_RUNS, MAX_RUNS, TIMEZONE, Schedule, following, local, parse, when
+from agent.store import Status, Task
 
 SMS = Address("sms", "owner")
 NOW = datetime(2026, 11, 17, 20, 10, tzinfo=TIMEZONE).timestamp()
@@ -188,4 +189,16 @@ def test_an_old_schedule_table_gains_the_run_columns(store):
     )
     store.db.execute("INSERT INTO schedule (due, what, said, channel, address, created) VALUES (1,'x','','sms','o',0)")
     [job] = Schedule(store.db).upcoming()
-    assert (job.runs, job.max_runs) == (0, 0)
+    assert (job.runs, job.max_runs, job.last_task) == (0, 0, None)
+
+
+def test_a_repeat_keeps_the_task_its_last_run_started_and_its_wake_up_shows_its_report_trimmed(store):
+    schedule = Schedule(store.db, lambda: NOW)
+    job = schedule.add(NOW, "Check the parcel", "", SMS, None, "*/15 * * * *")
+    schedule.started(job.id, 7)
+    job = replace(schedule.get(job.id), runs=2)
+    assert job.last_task == 7
+    long = Task(7, "Read the tracker", SMS, Status.DONE, "x" * (LAST_REPORT + 50))
+    prompt = Scheduled(job, long).prompt()[0]
+    assert f"Last run's task #7 [done] Read the tracker → {'x' * LAST_REPORT}…. " in prompt
+    assert "Last run" not in Scheduled(replace(job, every=""), long).prompt()[0]  # a one-off has no runs before it

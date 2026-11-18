@@ -31,7 +31,7 @@ from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.research import Researcher
 from agent.runs import Answer
-from agent.schedule import DEFAULT_RUNS, TIMEZONE, Schedule, parse, when
+from agent.schedule import DEFAULT_RUNS, TIMEZONE, Job, Schedule, parse, when
 from agent.store import Kind, Status, Store
 from agent.styles import Audience, Styles
 from agent.tasks import Tasks
@@ -53,6 +53,11 @@ def _own_code(goal: str) -> bool:
     so in that thread whatever its prompt said."""
     goal = goal.lower()
     return "archangel" in goal and any(word in goal for word in ("repo", "readme", "github", "pull request"))
+
+
+def _same(a: str, b: str) -> bool:
+    """The same thing to do, said the same way but for case and spacing."""
+    return " ".join(a.lower().split()) == " ".join(b.lower().split())
 
 
 def stay_quiet(ctx: RunContext[Event]) -> str:
@@ -157,7 +162,10 @@ class Orchestrator:
             report_to = ctx.deps.reply_to
             if report_via and not (report_to := gateway.owner(report_via)):
                 return no_channel(report_via)
-            return f"Started task #{tasks.start(goal, report_to, kind, self._thread.id, pr).id}."
+            task = tasks.start(goal, report_to, kind, self._thread.id, pr)
+            if schedule and isinstance(ctx.deps, Scheduled):
+                schedule.started(ctx.deps.job.id, task.id)
+            return f"Started task #{task.id}."
 
         def no_channel(name: str) -> str:
             return f"No channel {name!r}. Channels: {', '.join(gateway.channels)}."
@@ -263,9 +271,14 @@ class Orchestrator:
                 except ValueError as error:
                     return str(error)
                 said = ctx.deps.message.text if isinstance(ctx.deps, OwnerMessage) else ""
+                # Said, not refused: the same thing set up twice fired twice in the same minute.
+                twins = [j.id for j in schedule.upcoming() if j.thread == self._thread.id and _same(j.what, what)]
                 job = schedule.add(due, what, said, report_to, self._thread.id, every or "", max_runs)
                 repeats = f", then {every} (cron), at most {job.max_runs} runs" if every else ""
-                return f"Scheduled #{job.id} for {when(due, now)}{repeats}, via {report_to.channel}."
+                done = f"Scheduled #{job.id} for {when(due, now)}{repeats}, via {report_to.channel}."
+                if twins:
+                    done += f" {', '.join(f'#{id}' for id in twins)} here already does the same: cancel_later one?"
+                return done
 
             @self._agent.tool
             async def cancel_later(ctx: RunContext[Event], id: int) -> str:
@@ -354,6 +367,10 @@ class Orchestrator:
                 """The owner asked you to forget something you'd kept about them: their words."""
                 twin.remember(f"forget {what}")
                 return "Forgetting it."
+
+    async def wake(self, job: Job) -> None:
+        """Something scheduled is due: handled with the task its previous run started, to carry on from."""
+        await self.handle(Scheduled(job, self._store.task(job.last_task) if job.last_task else None))
 
     async def handle(self, event: Event) -> None:
         async with self._lock:

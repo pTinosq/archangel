@@ -104,6 +104,8 @@ class Notice(Event):
 
 LATE = 120
 """Seconds past due after which it's said to be late (Archangel was down): it may no longer make sense."""
+LAST_REPORT = 1500
+"""Characters of the last run's task report a repeat's wake-up shows: enough for the answer and the way to it."""
 
 
 @dataclass(frozen=True)
@@ -111,6 +113,8 @@ class Scheduled(Event):
     """Something the orchestrator scheduled, now due. Not the owner speaking now, though they asked for it."""
 
     job: Job
+    last_task: Task | None = None
+    """The task the repeat's previous run started (`Job.last_task`), as it stands now."""
     from_owner = False
 
     @property
@@ -143,6 +147,15 @@ class Scheduled(Event):
                 f"cancel_later({job.id}) and say so, once; until then, show progress with note_progress"
             )
         said = f"[Scheduled #{job.id}, not from the owner now: at {local(job.created)} {asked}. {due}."
+        if job.every:  # without it, each run works the same route out again and can't tell nothing has changed
+            if task := self.last_task:
+                report = task.report if len(task.report) <= LAST_REPORT else task.report[:LAST_REPORT] + "…"
+                said += (
+                    f" Last run's task #{task.id} [{task.status}] {task.goal} → {report or '(no report yet)'}. "
+                    "A new task should be told the way that one got there."
+                )
+            if job.progress:
+                said += f' Last noted: "{job.progress}".'
         return [f"{said} Your reply goes via {job.report_to.channel}.] Do it now: {job.what}"]
 
     def fallback(self, error: Exception) -> str:

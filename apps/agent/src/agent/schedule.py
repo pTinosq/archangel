@@ -12,6 +12,9 @@ judges whether it still makes sense.
 A repeat can't run forever or pile up cost unseen: it has a number of runs (`DEFAULT_RUNS`, at most `MAX_RUNS`), and
 the run that uses the last one is said to be the last, so the orchestrator tells the owner it has stopped. The
 orchestrator can stop one itself (`cancel_later`) once what it was waiting for has happened.
+
+A repeat remembers the task its latest run started (`last_task`), so the next run is shown what it found and how: it
+can tell nothing's new, and hand the pilot the way there instead of having it work it out again.
 """
 
 import asyncio
@@ -60,6 +63,8 @@ class Job:
     """How many times a repeat may fire in all (0 if it doesn't repeat)."""
     progress: str = ""
     """What its running (or latest) run last noted for the owner's panel ("Still 3 of 7"); "" if nothing yet."""
+    last_task: int | None = None
+    """The task its latest run started, if any."""
 
     @property
     def last(self) -> bool:
@@ -81,14 +86,15 @@ class Schedule:
         )
         have = {column for _, column, *_ in db.execute("PRAGMA table_info(schedule)")}
         with db:
-            for column, kind, default in (
-                ("every", "TEXT", "''"),
-                ("runs", "INTEGER", "0"),
-                ("max_runs", "INTEGER", "0"),
-                ("progress", "TEXT", "''"),
+            for column, kind in (
+                ("every", "TEXT NOT NULL DEFAULT ''"),
+                ("runs", "INTEGER NOT NULL DEFAULT 0"),
+                ("max_runs", "INTEGER NOT NULL DEFAULT 0"),
+                ("progress", "TEXT NOT NULL DEFAULT ''"),
+                ("last_task", "INTEGER"),
             ):
                 if column not in have:  # added as it grew
-                    db.execute(f"ALTER TABLE schedule ADD COLUMN {column} {kind} NOT NULL DEFAULT {default}")
+                    db.execute(f"ALTER TABLE schedule ADD COLUMN {column} {kind}")
 
     def add(
         self,
@@ -120,6 +126,11 @@ class Schedule:
         """What the panel shows beside a job while it runs. A job that has gone (cancelled) isn't brought back."""
         with self._db:
             return bool(self._db.execute("UPDATE schedule SET progress = ? WHERE id = ?", (progress, id)).rowcount)
+
+    def started(self, id: int, task: int) -> None:
+        """A run of the job started this task: the next run is shown how it went."""
+        with self._db:
+            self._db.execute("UPDATE schedule SET last_task = ? WHERE id = ?", (task, id))
 
     def get(self, id: int) -> Job | None:
         """A job still to come (not one already run out or cancelled)."""
@@ -181,12 +192,14 @@ class Schedule:
         return _job(self._db.execute(f"SELECT {_COLUMNS} FROM schedule WHERE id = ?", (id,)).fetchone())
 
 
-_COLUMNS = "id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress"
+_COLUMNS = "id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress, last_task"
 
 
 def _job(row: tuple) -> Job:
-    id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress = row
-    return Job(id, due, what, said, Address(channel, address), thread, created, every, runs, max_runs, progress)
+    id, due, what, said, channel, address, thread, created, every, runs, max_runs, progress, last_task = row
+    return Job(
+        id, due, what, said, Address(channel, address), thread, created, every, runs, max_runs, progress, last_task
+    )
 
 
 def repeats(job: Job) -> str:
