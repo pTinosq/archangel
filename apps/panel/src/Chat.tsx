@@ -11,13 +11,11 @@ export function Chat({ visible }: { visible: boolean }) {
   const threads = usePoll(api.threads);
   const titles = new Map(threads?.map((t) => [t.id, t.title]));
   const threadOf = threadsOf(lines);
-  // Main is the whole conversation, the router placing each message; choosing a thread shows only it, and what's said
-  // there stays there (a closed one reopens).
+  // Main is the whole conversation, the router placing each message; choosing an open thread shows only it, and what's
+  // said there stays there. Closed ones are the Threads page; the one chosen stays listed if it closes meanwhile.
   const [tab, setTab] = useState<number | null>(null);
-  const all = threads ?? [];
-  const open = all.filter((t) => t.open).sort((a, b) => b.id - a.id);
-  const closed = all.filter((t) => !t.open).sort((a, b) => b.id - a.id);
-  const current = all.find((t) => t.id === tab);
+  const current = threads?.find((t) => t.id === tab);
+  const listed = (threads ?? []).filter((t) => t.open || t.id === tab).sort((a, b) => b.id - a.id);
   const shown = current ? lines.filter((_, i) => threadOf[i] === current.id) : lines;
   const marks = current ? new Map<number, number>() : threadMarks(lines, threadOf);
   const [draft, setDraft] = useState("");
@@ -65,24 +63,12 @@ export function Chat({ visible }: { visible: boolean }) {
       <div className="chat-bar">
         <select value={current?.id ?? ""} onChange={(e) => setTab(e.target.value ? Number(e.target.value) : null)} aria-label="Thread">
           <option value="">Main: everything</option>
-          {open.length > 0 && (
-            <optgroup label="Open">
-              {open.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  #{thread.id} {thread.title}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {closed.length > 0 && (
-            <optgroup label="Closed">
-              {closed.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  #{thread.id} {thread.title}
-                </option>
-              ))}
-            </optgroup>
-          )}
+          {listed.map((thread) => (
+            <option key={thread.id} value={thread.id}>
+              #{thread.id} {thread.title}
+              {thread.open ? "" : " (closed)"}
+            </option>
+          ))}
         </select>
         {current?.open && (
           <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
