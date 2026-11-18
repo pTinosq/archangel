@@ -309,7 +309,14 @@ A new channel, email, with an inbox and address of its own. Not the owner's Gmai
 - **Sends.** It emails people from that address when asked ("email Sam the details"), in the style for that audience (M20).
 - **Reads.** Mail the owner sends or forwards to it arrives as an event and is routed into the owner's conversation, in the right thread, like a text.
 
-**Plan (sketch, undecided; not built)**
+**Built (2026-11-18), not yet tried live.** Resend for both ways (free: 3,000 emails a month, 100 a day, received ones included), at `archangel@tinos.xyz` (the domain receives no other mail). Detail: `docs/agent.md#channels`.
+
+- **In:** Resend's webhook, then its API for the email. The owner's mail is proved by Resend's DKIM or DMARC result on receipt; anything else is a `Notice`.
+- **Threads:** each email kept by its Message-ID; a reply in the chain goes back to its thread, and the answer goes back in the chain.
+- **Out to others:** the helper's `send_email`, after the owner's OK with the draft; the orchestrator uses `use_connectors`. Always asked for now: no one is exempt.
+- **Attachments:** the owner's pictures to the model; other files named (M19 reads them).
+
+**Plan (as sketched before it was built)**
 - **A `Channel` subclass** registered in `__main__.py`: `send` out, inbound mail through `start(deliver)`, with its own `Address` kind; `shows` says what an email can carry.
 - **Only the owner's mail is a message.** Mail proved to be from the owner becomes an `OwnerMessage`; anything else is a `Notice` the orchestrator judges, never an instruction: an email can't approve, `improve` or `merge`.
 - **Outbound is consequential.** Mail to someone else goes through the owner's approval, unless they've said otherwise for that person.

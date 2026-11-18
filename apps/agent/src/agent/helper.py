@@ -31,9 +31,12 @@ class Helper:
         connectors: Connectors,
         instructions: Instructions = INSTRUCTIONS,
         toolsets: Sequence[AbstractToolset] = (),
+        own: str = "",
     ):
-        """`toolsets`: more tools beside the connectors', e.g. asking the context twin."""
+        """`toolsets`: more tools beside the connectors', e.g. asking the context twin. `own`: Archangel's own
+        services among them (its email), said beside what's connected."""
         self._connectors = connectors
+        self._own = own
         self._agent = Agent(
             model,
             name="helper",
@@ -47,7 +50,7 @@ class Helper:
         self, goal: str, record: Record, paused: pydantic_ai.Conversation | None = None, answer: Answer | None = None
     ) -> Outcome:
         """Do `goal`, or continue a `paused` run with the owner's `answer`. Each call to a service goes to `record`."""
-        if not self._connectors.connected():
+        if not self._connectors.connected() and not self._own:
             return Outcome("failed", "Nothing's connected: add services on the panel's Connectors page.")
         record(f"Continuing. {answered(answer)}" if paused else "Started.", None)
         resume = {"conversation": paused, "deferred_tool_results": results(paused, answer)} if paused else {}
@@ -67,7 +70,9 @@ class Helper:
         return Outcome("done", output)
 
     async def _connected(self) -> str:  # async: sync ones run on a thread, away from SQLite
-        return f"Connected, by profile: {self._connectors.describe(prefixes=True)}. Use the profile the task means."
+        connected = self._connectors.describe(prefixes=True) or "nothing"
+        own = f" Archangel's own: {self._own}." if self._own else ""
+        return f"Connected, by profile: {connected}. Use the profile the task means.{own}"
 
 
 async def ask_owner(ctx: RunContext, question: str) -> str:

@@ -7,6 +7,7 @@ import pydantic_ai
 
 from agent import config, logs
 from agent.channels.cli import CliChannel
+from agent.channels.email import EmailChannel, Resend, outbox
 from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.coder import Coder, github
@@ -89,6 +90,9 @@ def main() -> None:
         lambda channel: gateway.owner(channel),  # the gateway comes later, with the channels
     )
     coder = Coder(github(token)) if (token := config.github_token()) else None
+    resend = Resend(account) if (account := config.email_account()) else None
+    # The helper writes as Archangel too, from its own address.
+    mail, own = ([outbox(resend)], f"email from {resend.account.address} (send_email)") if resend else ([], "")
     pilots = {
         kind: Pilot(
             model,
@@ -104,7 +108,7 @@ def main() -> None:
         pilots,
         researcher,
         Reporter(model, prompts.live("reporter")),
-        Helper(model, connectors, prompts.live("helper"), [twin.tools, styles.tools]),
+        Helper(model, connectors, prompts.live("helper"), [twin.tools, styles.tools, *mail], own),
         site,
         twin.brief,
         coder,
@@ -120,6 +124,8 @@ def main() -> None:
         channels.append(SmsChannel(twilio, web, links))
         if public_url:
             channels.append(VoiceChannel(twilio, web, public_url, links))
+    if resend:
+        channels.append(EmailChannel(resend, web, store.db))
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)
