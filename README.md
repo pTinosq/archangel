@@ -61,6 +61,10 @@ History and tasks live in `apps/agent/data/` and survive restarts. Screenshots a
 
 Archangel learns what lasts about you ("I hate morning flights", "Mum is Helen"), not one-offs. Its context twin reads each conversation once it's gone quiet and tells you what it noted. It also briefs each task with what bears on it ("Uber home": cheapest, 5 stars, no tip). "Remember…" and "forget…" work too ([docs/twin.md](docs/twin.md)).
 
+### How it writes
+
+Short and polite to you, informal on Discord and WhatsApp, semi-formal in email and work chat, plain anywhere else. Each is a small file in `apps/agent/src/agent/styles/` (who it is for, then the style in prose) over a shared base: plain words, no padding, each thing said once. A style can be for a group of your people (`groups = ["uni friends"]`): tell Archangel "Sam and Priya are my uni lot" and the twin remembers who's in it, so they get that style wherever you message them. Adding one is adding a file; `just style Sam discord` shows which one an audience gets. Styles that name real people go in `apps/agent/data/styles/` on the volume, not the repo ([docs/styles.md](docs/styles.md)).
+
 ### Improving itself
 
 "Add a Telegram channel" or "why does the weather call ramble?" goes to Claude Code in GitHub Actions, on your Claude subscription. It comes back as a PR to merge ("merge it" deploys it) or as an answer. Only you can ask, or merge.

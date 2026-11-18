@@ -33,6 +33,7 @@ from agent.research import Researcher
 from agent.runs import Answer
 from agent.schedule import TIMEZONE, Schedule, parse, when
 from agent.store import Kind, Status, Store
+from agent.styles import Audience, Styles
 from agent.tasks import Tasks
 from agent.threads import Threads
 from agent.threads.store import Thread
@@ -71,6 +72,7 @@ class Orchestrator:
         schedule: Schedule | None = None,
         coder: Coder | None = None,
         tools: Tools | None = None,
+        styles: Styles | None = None,
     ):
         self._store = store
         self._tasks = tasks
@@ -90,9 +92,15 @@ class Orchestrator:
             instructions=[instructions, lambda: self._arrived_to],
             retries=TOOL_RETRIES,
             capabilities=[ProcessHistory(history.recent), ProcessHistory(history.forget_old_screenshots)],
-            toolsets=[threads.tools, *([twin.tools] if twin else []), *([tools.toolset] if tools else [])],
+            toolsets=[
+                threads.tools,
+                *([twin.tools] if twin else []),
+                *([tools.toolset] if tools else []),
+                *([styles.tools] if styles else []),
+            ],
         )
         self._twin = twin
+        self._styles = styles
         self._quick = tools
         self._schedule = schedule
 
@@ -289,7 +297,8 @@ class Orchestrator:
             """Message the owner on another channel, e.g. results they asked to get by email.
 
             Your reply goes where you're talking now regardless; use this only for elsewhere. `screenshot` attaches
-            the screen you were just shown, e.g. texting it to the owner while on a call.
+            the screen you were just shown, e.g. texting it to the owner while on a call. Write it as
+            `writing_style` says for that channel: the style above is for where you're talking now.
             """
             if not (to := gateway.owner(channel)):
                 return no_channel(channel)
@@ -332,6 +341,8 @@ class Orchestrator:
                         "\n\nFrom the context twin (what's known about the owner, not what you can do), on what "
                         f"the owner just said:\n{found}"
                     )
+                if self._styles:  # the reply goes to the owner, on the channel it goes back by
+                    self._arrived_to += "\n\n" + self._styles.guidance(Audience(True, via=event.reply_to.channel))
                 self._ends = False
                 try:
                     messages = self._threads.history(thread)

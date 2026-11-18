@@ -26,6 +26,7 @@ change nothing.
 
 One node per thing, linked from every area it touches (Uber from Travel and Work): look before adding. Shallow: \
 everything about two links from {ROOT}, through routers like People, Travel, Work; link sideways rather than nest. \
+A group the owner puts people in ("my uni lot"): its own node, linked from each person in it. \
 Put a fact as high as it holds (morning flights on Flights; on Travel once it holds for trains too). Write what \
 won't go stale: a date of birth, not an age (nor anything that follows from it, like a next birthday); absolute \
 dates; an end date on anything temporary. When something changes, write what holds now: the history keeps the old. \

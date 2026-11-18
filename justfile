@@ -72,6 +72,10 @@ _device platform:
     @curl -sf localhost:{{port}}/devices -H "Authorization: Bearer $ARCHANGEL_TOKEN" | python3 -c \
         'import json, sys; p = [d for d in json.load(sys.stdin) if d.get("platform", "android") == sys.argv[1]]; print(p[0]["device"]) if len(p) == 1 else sys.exit(f"{len(p)} {sys.argv[1]} devices connected; name one")' {{platform}}
 
+# Which writing style an audience gets, and its text: `just style owner sms`, `just style Sam discord`; none lists them
+style *audience:
+    cd {{agent}} && uv run python -m agent.styles {{audience}}
+
 # The context twin on a real model, in a terminal: `just twin alex` starts from that graph (apps/agent/evals/twin)
 twin *graph:
     cd {{agent}} && uv run python -m evals.twin.sandbox {{graph}}
