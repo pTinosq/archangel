@@ -29,7 +29,7 @@ Each milestone ships something usable and proves one idea.
 | M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or an open thread; what's said in one goes to it unrouted |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
 | M20 ✅ | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
-| M21 | Email gateway | email Archangel at its own address, or forward it a message, and it reads it; "email Sam the details" sends from that address | email as a channel: a dedicated inbox in, outbound mail out, one conversation with the owner's other channels |
+| M21 ✅ | Email gateway | email Archangel at its own address, or forward it a message, and it reads it; "email Sam the details" sends from that address | email as a channel: a dedicated inbox in, outbound mail out, one conversation with the owner's other channels |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -309,7 +309,7 @@ A new channel, email, with an inbox and address of its own. Not the owner's Gmai
 - **Sends.** It emails people from that address when asked ("email Sam the details"), in the style for that audience (M20).
 - **Reads.** Mail the owner sends or forwards to it arrives as an event and is routed into the owner's conversation, in the right thread, like a text.
 
-**Built (2026-11-18), not yet tried live.** Resend for both ways (free: 3,000 emails a month, 100 a day, received ones included), at `archangel@tinos.xyz` (the domain receives no other mail). Detail: `docs/agent.md#channels`.
+**Done (2026-11-18): built, and tried live by the owner.** Resend for both ways (free: 3,000 emails a month, 100 a day, received ones included), at `archangel@tinos.xyz` (the domain receives no other mail). Detail: `docs/agent.md#channels`.
 
 - **In:** Resend's webhook, then its API for the email. The owner's mail is proved by Resend's DKIM or DMARC result on receipt; anything else is a `Notice`.
 - **Threads:** each email kept by its Message-ID; a reply in the chain goes back to its thread, and the answer goes back in the chain.
