@@ -26,7 +26,7 @@ from agent.threads.text import ago, lines
 
 log = logging.getLogger(__name__)
 
-FULL = 30_000
+FULL = 200_000
 """Tokens of context past which a thread is carried on in a new one: well inside the model's window, and cheap."""
 QUIET = timedelta(hours=3)
 """An open thread nothing's been said in for this long is finished: summarised and closed."""

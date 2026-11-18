@@ -48,7 +48,7 @@ stateDiagram-v2
     open --> closed: quiet 3 h
     closed --> open: the owner comes back to it
     closed --> closed: a late task update (summarised again)
-    open --> carried_on: full (30k tokens)
+    open --> carried_on: full (200k tokens)
     carried_on: closed, carried on in a new thread
     carried_on --> [*]
     note right of closed
@@ -61,7 +61,7 @@ stateDiagram-v2
 - **Quiet threads** (nothing said for 3 hours) are summarised and closed too, so every finished thread has a summary for the router and for search.
 - **Summaries** are a few lines keeping the concrete facts (prices, names, times, links, task numbers) and what's left open, and they retitle the thread. Written by the main model (in the background, so it can think). A thread said more in after its summary (a task update arriving late) is summarised again.
 - **Reopening.** A closed thread the owner comes back to opens again with its whole history.
-- **Full.** Each thread records how big the orchestrator's last call in it was, in tokens (its `size`). At 30,000 (`FULL`) the next message (or task update) carries on in a new thread at once; the full one's summary, which the new one starts from, follows in the background, and until it does the orchestrator is told to read the full one if it needs to. Nothing silently falls out of the context. The old 40-message trim stays only as a backstop, at 100 messages.
+- **Full.** Each thread records how big the orchestrator's last call in it was, in tokens (its `size`). At 200,000 (`FULL`) the next message (or task update) carries on in a new thread at once; the full one's summary, which the new one starts from, follows in the background, and until it does the orchestrator is told to read the full one if it needs to. Nothing silently falls out of the context. The old 40-message trim stays only as a backstop, at 100 messages.
 - **Said in counts from the moment it's routed**, so a summary being written as the owner comes back can't close the thread under them: a summary only closes a thread nothing was said in since it was read. A summary that fails is tried again an hour later, not every minute.
 
 ## What the orchestrator sees
