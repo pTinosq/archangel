@@ -29,6 +29,7 @@ Each milestone ships something usable and proves one idea.
 | M18a ✅ | Choosing threads | two unrelated pieces of work side by side without tangling one feed | the panel's chat gets a dropdown: Main or an open thread; what's said in one goes to it unrouted |
 | M19 | Files | hand it a PDF, an image or a document and have it kept, read and worked on; "draw me a logo" and the picture is saved; "write a script that…" and the file is on disk | a scoped filesystem for the agent: the owner's files in, its own outputs and code out, never outside its folder |
 | M20 | Flavour profiles | "text Sam like I would" comes out in the owner's voice; the same news reads short and polite to the owner, looser on Discord, semi-formal to a stranger | writing styles as configuration: one profile per audience, channel or app, each written and tested on its own, over a shared no-slop base ([design](styles.md)) |
+| M21 | Email | email Archangel, or forward it a message, and it's read; it emails people for you, from an address of its own | a channel with its own inbox: mail in reaches the owner's thread, mail out goes under the same approvals ([requirements](#m21-requirements-email-gateway-from-the-owner)) |
 | Later | Twin upkeep | the twin tidies itself overnight and keeps how-tos | nightly tidying (merges, tendencies, fading), skills, search as an entry point |
 | Later | Telegram | message Archangel from Telegram | another channel |
 | Later | Notification triggers | "when my Uber arrives, text me" | phone notifications as triggers (allow-listed apps only); parked from M13 for the loop and model calls it costs |
@@ -294,3 +295,17 @@ Today how Archangel writes lives in the orchestrator's prompt, one voice for eve
 
 **Built (2026-11-18, PR #11).** As files: `agent/styles/*.md`, TOML settings saying who each is for (the owner, people, groups, an app), then the style as prose; chosen in code. Who's in which of the owner's groups is the twin's: a person linked to the group's node. Design, selection rules and how to add one: [styles.md](styles.md). To tick: used for a while, and the starter wording tuned against real replies.
 - **Not yet:** editing style text from the panel (recommendation in styles.md); a real-model eval of whether a draft obeys its style; a style set per message ("make it casual").
+
+## M21 requirements (email gateway) (from the owner)
+
+A new channel: email. Archangel gets an inbox and an address of its own, separate from the owner's mailboxes (the Gmail connector in M11 reads the owner's own mail; this is Archangel's).
+
+- **Its own address.** A dedicated inbox, provisioned once; the address is configuration, never in the repo.
+- **Mail in.** What the owner sends or forwards to it is read and handed to the orchestrator as an owner message, routed to a thread like any other. A forward ("can you deal with this?") arrives with its original text.
+- **Mail out.** It can email people on the owner's behalf, written in the right style (M20) and only after the owner approves, like any send; a reply threads with the mail it answers.
+- **Only the owner commands it.** Mail from anyone else is not an instruction: it's ignored, or shown to the owner as a notice, never obeyed.
+
+**Plan (sketch, undecided)**
+- **A `Channel` subclass** (`channels/email.py`) registered in `__main__.py`, with `shows` listing what email can carry; inbound mail arrives as `OwnerMessage` (from the owner) or `Notice` (from anyone else), outbound goes through the gateway to an `Address("email", …)`. No orchestrator change.
+- **Not decided:** the inbox provider (a transactional service with inbound webhooks, or an IMAP mailbox polled); the address and domain; how inbound is delivered (a webhook signed like Twilio's, or polling); how the owner's mail is told apart from a forgery (the sender address alone is spoofable: SPF/DKIM results, a secret in the address, or an allow-list); attachments (waits on M19); whether replies go by email or to the channel the owner is on.
+- **The owner must:** choose a provider and address, set up its DNS records, and add its credentials as variables on Railway. Nothing is built or set yet.
