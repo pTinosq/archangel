@@ -270,7 +270,7 @@ The owner also tests across channels and reports changes.
 - **One owner, any channel:** a thread spans channels (asked by text, answered on the panel); a call is usually its own thread.
 - **Tasks belong to the thread that started them**, so their updates come back into it.
 - **Beside the twin, not instead of it:** the twin keeps what's lasting about the owner; threads keep what was said and done.
-- **Built and live (2026-11-17).** As planned, with: the thread the conversation is in shown to the router apart from the rest; a thread full at 30k tokens carried on in a new one from its summary; quiet threads (3 h) summarised too; the old single history adopted as the first thread. Router eval 85/85 on the real model. Design: [threads.md](threads.md). To tick: used for a while.
+- **Built and live (2026-11-17).** As planned, with: the thread the conversation is in shown to the router apart from the rest; a thread full at 30k tokens (since raised to 200k) carried on in a new one from its summary; quiet threads (3 h) summarised too; the old single history adopted as the first thread. Router eval 85/85 on the real model. Design: [threads.md](threads.md). To tick: used for a while.
 
 ## M19 requirements (files and storage) (from the owner)
 

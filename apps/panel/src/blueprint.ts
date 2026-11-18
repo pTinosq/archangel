@@ -68,7 +68,7 @@ export const FLOW: Diagram = {
     { id: "reply", label: "Reply in the owner's style for this channel", kind: "agent", what: "A text reads differently from a call. The style is chosen in code each turn.", file: "styles/" },
     { id: "d_wrap", label: "Has the thread been wrapped up?", kind: "logic", shape: "decision", what: "The router said so when the owner's message came in." },
     { id: "close", label: "Close and summarise", kind: "model", what: "In the background. Saying more later reopens the thread and summarises it again.", file: "threads/summariser.py" },
-    { id: "d_full", label: "Context at 30k tokens?", kind: "logic", shape: "decision", what: "Measured from the last call's usage." },
+    { id: "d_full", label: "Context at 200k tokens?", kind: "logic", shape: "decision", what: "Measured from the last call's usage." },
     { id: "carry", label: "Carry on in a new thread", kind: "logic", what: "It starts from the old thread's summary, written in the background." },
     { id: "out", label: "Gateway sends it to the channel in reply_to", kind: "logic", what: "A failing channel is logged, not raised.", file: "gateway.py" },
     { id: "d_call", label: "On a live call?", kind: "channel", shape: "decision", what: "On a call, everything is said on it." },
@@ -179,7 +179,7 @@ const answered = (wrapped: boolean, call: boolean): Step[] => [
   { at: "d_wrap", say: wrapped ? "The router flagged a wrap-up." : "Nothing wrapped the thread up." },
   ...(wrapped
     ? [{ at: "close", say: "The thread closes once answered, and its summary is written in the background." }]
-    : [{ at: "d_full", say: "The thread's context is well under 30k tokens, so it stays where it is." }]),
+    : [{ at: "d_full", say: "The thread's context is well under 200k tokens, so it stays where it is." }]),
   { at: "out", say: "The gateway sends the reply to the channel it came from." },
   { at: "d_call", say: call ? "The owner is on a live call." : "It's not a call." },
   call ? { at: "speak", say: "It's spoken back to them." } : { at: "text", say: "It goes out as a text, or a line in the panel." },
