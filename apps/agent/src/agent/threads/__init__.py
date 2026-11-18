@@ -69,7 +69,7 @@ class Threads:
         return self._store
 
     def start(self, title: str = "") -> Thread:
-        """A thread the owner opens by hand (a tab on the panel), empty: what they say in it goes there, unrouted."""
+        """A thread the owner opens by hand (the panel chat's dropdown), empty: what they say in it goes there, unrouted."""
         return self._store.new(title.strip() or NEW)
 
     def close(self, id: int) -> Thread | None:

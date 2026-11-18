@@ -11,17 +11,14 @@ export function Chat({ visible }: { visible: boolean }) {
   const threads = usePoll(api.threads);
   const titles = new Map(threads?.map((t) => [t.id, t.title]));
   const threadOf = threadsOf(lines);
-  // Main is the whole conversation, the router placing each message; a tab is one open thread, and what's said in it
-  // stays there. A thread just opened isn't in the poll yet: kept here until it is.
+  // Main is the whole conversation, the router placing each message; choosing a thread shows only it, and what's said
+  // there stays there (a closed one reopens). A thread just opened isn't in the poll yet: kept here until it is.
   const [tab, setTab] = useState<number | null>(null);
   const [made, setMade] = useState<Thread[]>([]);
-  const open = [...(threads?.filter((t) => t.open) ?? []), ...made.filter((m) => !threads?.some((t) => t.id === m.id))].sort(
-    (a, b) => a.id - b.id,
-  );
-  const current = open.find((t) => t.id === tab);
-  useEffect(() => {
-    if (tab !== null && threads && !current) setTab(null); // closed meanwhile (wrapped up, or quiet for hours)
-  }, [tab, threads, current]);
+  const all = [...(threads ?? []), ...made.filter((m) => !threads?.some((t) => t.id === m.id))];
+  const open = all.filter((t) => t.open).sort((a, b) => b.id - a.id);
+  const closed = all.filter((t) => !t.open).sort((a, b) => b.id - a.id);
+  const current = all.find((t) => t.id === tab);
   const shown = current ? lines.filter((_, i) => threadOf[i] === current.id) : lines;
   const marks = current ? new Map<number, number>() : threadMarks(lines, threadOf);
   const [draft, setDraft] = useState("");
@@ -78,33 +75,39 @@ export function Chat({ visible }: { visible: boolean }) {
   return (
     <section className="chat" hidden={!visible}>
       <h2>Conversation</h2>
-      <div className="chat-tabs" role="tablist">
-        <button role="tab" aria-selected={!current} onClick={() => setTab(null)}>
-          Main
-        </button>
-        {open.map((thread) => (
-          <button key={thread.id} role="tab" aria-selected={thread.id === current?.id} title={thread.title} onClick={() => setTab(thread.id)}>
-            {thread.title}
-          </button>
-        ))}
+      <div className="chat-bar">
+        <select value={current?.id ?? ""} onChange={(e) => setTab(e.target.value ? Number(e.target.value) : null)} aria-label="Thread">
+          <option value="">Main: everything</option>
+          {open.length > 0 && (
+            <optgroup label="Open">
+              {open.map((thread) => (
+                <option key={thread.id} value={thread.id}>
+                  #{thread.id} {thread.title}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {closed.length > 0 && (
+            <optgroup label="Closed">
+              {closed.map((thread) => (
+                <option key={thread.id} value={thread.id}>
+                  #{thread.id} {thread.title}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
         <button onClick={branch} title="Open a thread: what you say in it stays in it" aria-label="Open a thread">
           +
         </button>
-        <span className="spacer" />
-        <Link to="/threads">Closed</Link>
-      </div>
-      {current && (
-        <div className="thread-head">
-          <Link to={`/threads/${current.id}`} className="title">
-            #{current.id} {current.title}
-          </Link>
+        {current?.open && (
           <button onClick={() => close(current)} title="Close it: summarised and filed under Threads">
             Close
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <div className="lines">
-        {current && !shown.length && <p className="quiet">Nothing said here yet. What you say in this tab stays in it.</p>}
+        {current && !shown.length && <p className="quiet">Nothing said here yet. What you say here stays in it.</p>}
         {shown.map((line) => (
           <Fragment key={line.id}>
             {marks.has(line.id) && (

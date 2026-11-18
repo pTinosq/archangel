@@ -91,7 +91,7 @@ class PanelChannel(Channel):
         return self._web.stopping
 
     async def receive(self, text: str, thread: int | None = None) -> None:
-        """What the owner typed; in `thread` if they chose one (its tab), otherwise for the router to place."""
+        """What the owner typed; in `thread` if they chose one, otherwise for the router to place."""
         if self._deliver:
             await self._deliver(Message(self.owner, (Text(text),), thread=thread))
 
@@ -99,7 +99,7 @@ class PanelChannel(Channel):
 class Said(BaseModel):
     text: str
     thread: int | None = None
-    """The thread whose tab it was typed in; none: the main conversation."""
+    """The thread chosen when it was typed; none: the main conversation."""
 
 
 class NewThread(BaseModel):
@@ -348,7 +348,7 @@ def _thread_routes(app: FastAPI, threads: Threads, store: Store) -> None:
 
     @app.post("/api/threads")
     async def start(new: NewThread) -> dict:
-        """A thread opened by hand: a tab on the panel, for work that shouldn't tangle with the rest."""
+        """A thread opened by hand on the panel, for work that shouldn't tangle with the rest."""
         return _thread(threads.start(new.title))
 
     @app.post("/api/threads/{id}/close")

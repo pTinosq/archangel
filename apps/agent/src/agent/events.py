@@ -48,7 +48,7 @@ class OwnerMessage(Event):
 
     @property
     def thread(self) -> int | None:
-        """Set when the owner chose the thread (said it in that thread's tab): then nothing routes it."""
+        """Set when the owner chose the thread (said it with that thread chosen): then nothing routes it."""
         return self.message.thread
 
     def prompt(self) -> list[Part | str]:
