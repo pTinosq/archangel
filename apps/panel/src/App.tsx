@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api } from "./api";
+import { Architecture } from "./Architecture";
 import { Chat } from "./Chat";
 import { Cockpit } from "./Cockpit";
 import { Evals } from "./Evals";
@@ -27,7 +28,7 @@ export function App() {
   // Evals only locally: they're for working on the twin, run on this machine, and the agent serves them nowhere else.
   const pages: Page[] = [
     ...(narrow ? ["chat" as Page] : []),
-    ...(["tasks", "threads", "cockpit", "twin"] as Page[]),
+    ...(["tasks", "threads", "cockpit", "twin", "architecture"] as Page[]),
     ...(PUBLIC ? [] : ["evals" as Page]),
     ...(["prompts", "connectors"] as Page[]),
   ];
@@ -64,6 +65,7 @@ export function App() {
             threads: <Threads selected={route.id} select={(id) => go(id ? `/threads/${id}` : "/threads")} />,
             cockpit: <Cockpit />,
             twin: <Twin />,
+            architecture: <Architecture />,
             evals: <Evals />,
             prompts: <Prompts />,
             connectors: <Connectors />,
