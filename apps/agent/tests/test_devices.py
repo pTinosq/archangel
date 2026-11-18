@@ -155,20 +155,23 @@ def pc(handler, devices=(PC_HELLO,), memory=None, wake=None) -> Device:
     return Device(relay_client(route), "windows", memory=memory, wake=wake)
 
 
-def test_a_pc_screenshot_is_shrunk_to_a_readable_width_not_halved():
+def test_a_pc_screenshot_is_shrunk_to_a_size_jev_takes_not_halved():
     sent = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         sent.append(json.loads(request.content))
-        data = {"width": 1600, "height": 900, "jpeg": ""}
+        data = {"width": 1536, "height": 864, "jpeg": ""}
         return httpx.Response(200, json={"id": "1", "ok": True, "data": data})
 
     asyncio.run(pc(handler).screenshot())
     small = {**PC_HELLO, "screen": {"width": 1280, "height": 720}}
     asyncio.run(pc(handler, [small]).screenshot())
+    portrait = {**PC_HELLO, "screen": {"width": 1080, "height": 1920}}
+    asyncio.run(pc(handler, [portrait]).screenshot())
     assert sent == [
-        {"type": "screenshot", "scale": 0.5, "quality": 60},
+        {"type": "screenshot", "scale": 0.48, "quality": 60},
         {"type": "screenshot", "scale": 1.0, "quality": 60},
+        {"type": "screenshot", "scale": 0.8, "quality": 60},
     ]
 
 

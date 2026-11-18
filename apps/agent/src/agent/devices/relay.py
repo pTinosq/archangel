@@ -17,8 +17,9 @@ PHONE_SCREENSHOT = (
     0.5,
     30,
 )  # scale, quality: half the bytes of 80; Jev and Luna locate just as well (tested on Settings)
-PC_SCREENSHOT_WIDTH = 1600
-"""A desktop's text is small: shrunk to about this wide, not halved (a 4K screen would still be 1920 wide)."""
+PC_SCREENSHOT_SIDE = 1536
+"""A desktop's text is small: its longer side shrunk to this, not halved (a 4K screen would still be 1920 wide).
+Jev rejects an image whose longer side is over about 1568 ("Invalid image dimensions")."""
 PC_SCREENSHOT_QUALITY = 60
 OFFLINE_WAIT_SECONDS = 60
 WAKE_WAIT_SECONDS = 150
@@ -132,8 +133,8 @@ class Device:
     async def _screenshot_size(self) -> tuple[float, int]:
         if self.platform != "windows":
             return PHONE_SCREENSHOT
-        width = self._size[0] if self._size else (await self._screen())[0]
-        return min(1.0, PC_SCREENSHOT_WIDTH / width), PC_SCREENSHOT_QUALITY
+        side = max(self._size or await self._screen())
+        return min(1.0, PC_SCREENSHOT_SIDE / side), PC_SCREENSHOT_QUALITY
 
     async def _pixels(self, x: float, y: float) -> tuple[int, int]:
         width, height = self._size or await self._screen()
