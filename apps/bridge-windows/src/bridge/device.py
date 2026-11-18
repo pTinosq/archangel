@@ -18,6 +18,15 @@ class Shot:
     jpeg: bytes
 
 
+@dataclass(frozen=True)
+class Ran:
+    """A finished command: its exit code (None if it was stopped at the time limit), and what it printed."""
+
+    code: int | None
+    stdout: str
+    stderr: str
+
+
 class Device(Protocol):
     """What the bridge can do to the PC. Coordinates are physical pixels of the primary display."""
 
@@ -37,6 +46,10 @@ class Device(Protocol):
     async def apps(self) -> list[Message]: ...
     async def ui_tree(self) -> list[Message]: ...
     async def unlock(self) -> None: ...
+
+    async def powershell(self, script: str) -> Ran:
+        """Runs `script` as the signed-in user, stopped (with all it started) after a few seconds."""
+        ...
 
 
 class CommandError(Exception):

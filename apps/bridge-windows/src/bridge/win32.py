@@ -4,17 +4,19 @@
 Every handle-returning function has its types declared: ctypes' default int would cut 64-bit handles in half.
 """
 
+import base64
 import ctypes
+import msvcrt
+import os
 import subprocess
-import threading
+import tempfile
 from ctypes import wintypes
 
 import pywintypes
 import win32api
 import win32con
 import win32event
-import win32file
-import win32pipe
+import win32job
 import win32process
 import win32profile
 import win32security
@@ -22,7 +24,7 @@ import win32ts
 from PIL import Image
 
 from bridge import config
-from bridge.device import CommandError
+from bridge.device import CommandError, Ran
 from bridge.protocol import ErrorCode
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -367,77 +369,118 @@ def lock_screen_up(in_session: int) -> bool:
     return any(sid == in_session and name.lower() == "logonui.exe" for sid, _, name, _ in processes)
 
 
-def run_as_user(args: list[str], capture: bool = False, timeout: float = 30) -> str:
-    """Runs `args` as the user signed in to this session, not as the bridge (SYSTEM, under the service): apps it
-    opens are theirs, and their Start menu is the one listed. Returns stdout when `capture`."""
+def run_as_user(args: list[str]) -> None:
+    """Starts `args`, without waiting, as the user signed in to this session, not as the bridge (SYSTEM, under the
+    service): apps it opens are theirs."""
     if not is_system():
-        if not capture:
-            subprocess.Popen(args, creationflags=subprocess.CREATE_NO_WINDOW)
-            return ""
-        done = subprocess.run(
-            args, capture_output=True, timeout=timeout, creationflags=subprocess.CREATE_NO_WINDOW, check=False
-        )
-        return done.stdout.decode("utf-8", errors="replace")
+        subprocess.Popen(args, creationflags=subprocess.CREATE_NO_WINDOW)
+        return
+    user = _user_token()
     try:
-        user = win32ts.WTSQueryUserToken(session())
+        process, thread, _, _ = win32process.CreateProcessAsUser(
+            user, None, subprocess.list2cmdline(args), None, None, False, *_as_user(user, win32con.CREATE_NO_WINDOW)
+        )
+    finally:
+        user.Close()
+    thread.Close()
+    process.Close()
+
+
+OUTPUT_BYTES = 32_000
+"""Of each of stdout and stderr; the rest is cut."""
+
+
+def run(args: list[str], timeout: float, as_user: bool = True) -> Ran:
+    """Runs `args` until it exits, or for `timeout` seconds and then stops it and everything it started. As the user
+    signed in to this session (when the bridge is SYSTEM, under the service) unless not `as_user`, in their home.
+
+    Output goes to files, not pipes: an app it opens inherits them, and a pipe would stay open as long as the app.
+    """
+    user = _user_token() if as_user and is_system() else None
+    flags = win32con.CREATE_NO_WINDOW | win32con.CREATE_SUSPENDED  # suspended until it's in the job
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        startup = win32process.STARTUPINFO()
+        startup.dwFlags = win32con.STARTF_USESTDHANDLES
+        startup.hStdOutput, startup.hStdError = _inheritable(out), _inheritable(err)
+        command = subprocess.list2cmdline(args)
+        try:
+            if user:
+                process, thread, _, _ = win32process.CreateProcessAsUser(
+                    user, None, command, None, None, True, *_as_user(user, flags, startup)
+                )
+            else:
+                home = os.path.expanduser("~") if as_user else None
+                process, thread, _, _ = win32process.CreateProcess(
+                    None, command, None, None, True, flags, None, home, startup
+                )
+        except pywintypes.error as error:
+            raise CommandError(ErrorCode.FAILED, f"Couldn't start {args[0]}: {error.strerror}") from error
+        finally:
+            if user:
+                user.Close()
+        # A job holds it and all it starts, so a timeout stops the lot. Not killed when the job closes: what it
+        # opened (an app, a folder) stays open.
+        job = win32job.CreateJobObject(None, "")
+        try:
+            try:
+                win32job.AssignProcessToJobObject(job, process)
+                win32process.ResumeThread(thread)
+            except pywintypes.error:
+                win32process.TerminateProcess(process, 1)
+                raise
+            exited = win32event.WaitForSingleObject(process, int(timeout * 1000)) == win32event.WAIT_OBJECT_0
+            if not exited:
+                win32job.TerminateJobObject(job, 1)
+                win32event.WaitForSingleObject(process, 5000)
+            code = win32process.GetExitCodeProcess(process) if exited else None
+        finally:
+            job.Close()
+            thread.Close()
+            process.Close()
+        return Ran(code, _read(out), _read(err))
+
+
+def _user_token():
+    try:
+        return win32ts.WTSQueryUserToken(session())
     except pywintypes.error as error:
         if error.winerror == 1008:  # ERROR_NO_TOKEN
             raise CommandError(ErrorCode.FAILED, "Nobody is signed in to the PC: unlock it first") from error
         raise
-    environment = win32profile.CreateEnvironmentBlock(user, False)
-    startup = win32process.STARTUPINFO()
+
+
+def _as_user(user, flags: int, startup=None) -> tuple:
+    """The rest of CreateProcessAsUser's arguments for `user`: their environment, home, and desktop."""
+    startup = startup or win32process.STARTUPINFO()
     startup.lpDesktop = "winsta0\\default"
-    read = write = None
-    if capture:
-        inherit = pywintypes.SECURITY_ATTRIBUTES()
-        inherit.bInheritHandle = True
-        read, write = win32pipe.CreatePipe(inherit, 0)
-        win32api.SetHandleInformation(read, win32con.HANDLE_FLAG_INHERIT, 0)
-        startup.dwFlags = win32con.STARTF_USESTDHANDLES
-        startup.hStdOutput = startup.hStdError = write
-    flags = win32con.CREATE_NO_WINDOW | win32con.CREATE_UNICODE_ENVIRONMENT
-    try:
-        process, thread, _, _ = win32process.CreateProcessAsUser(
-            user, None, subprocess.list2cmdline(args), None, None, capture, flags, environment, None, startup
-        )
-    finally:
-        if write:
-            write.Close()  # ours; the child has its own copy
-        user.Close()
-    thread.Close()
-    if not capture:
-        process.Close()
-        return ""
-    chunks: list[bytes] = []
-
-    def drain() -> None:
-        while True:
-            try:
-                _, data = win32file.ReadFile(read, 65536)
-            except pywintypes.error:  # broken pipe: it exited
-                return
-            chunks.append(data)
-
-    reader = threading.Thread(target=drain, daemon=True)
-    reader.start()
-    if win32event.WaitForSingleObject(process, int(timeout * 1000)) != win32event.WAIT_OBJECT_0:
-        win32process.TerminateProcess(process, 1)
-    reader.join(5)
-    process.Close()
-    read.Close()
-    return b"".join(chunks).decode("utf-8", errors="replace")
+    environment = win32profile.CreateEnvironmentBlock(user, False)
+    home = win32profile.GetUserProfileDirectory(user)
+    return flags | win32con.CREATE_UNICODE_ENVIRONMENT, environment, home, startup
 
 
-def powershell(script: str, as_user: bool = True, timeout: float = 30) -> str:
-    """Runs a PowerShell `script`, as the signed-in user unless not `as_user`; returns what it printed."""
-    script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " + script
-    args = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]
-    if as_user:
-        return run_as_user(args, capture=True, timeout=timeout)
-    done = subprocess.run(
-        args, capture_output=True, timeout=timeout, creationflags=subprocess.CREATE_NO_WINDOW, check=False
+def _inheritable(file) -> int:
+    handle = msvcrt.get_osfhandle(file.fileno())
+    os.set_handle_inheritable(handle, True)
+    return handle
+
+
+def _read(file) -> str:
+    size = os.fstat(file.fileno()).st_size
+    file.seek(0)
+    text = file.read(OUTPUT_BYTES).decode("utf-8", errors="replace")
+    return text + (f"\n… ({size - OUTPUT_BYTES} more bytes cut)" if size > OUTPUT_BYTES else "")
+
+
+def powershell(script: str, timeout: float = 30, as_user: bool = True) -> Ran:
+    """Runs a PowerShell `script`, as the signed-in user unless not `as_user`."""
+    # Passed encoded, so no quote in it can break the command line; UTF-8 out, and no progress bars in it.
+    encoded = base64.b64encode(script.encode()).decode()
+    wrapper = (
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; "
+        f"& ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))))"
     )
-    return done.stdout.decode("utf-8", errors="replace")
+    args = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", wrapper]
+    return run(args, timeout, as_user)
 
 
 def _failed(what: str) -> CommandError:

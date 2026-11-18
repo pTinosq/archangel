@@ -49,6 +49,8 @@ def test_screenshot_returns_its_scaled_size_and_base64():
         {"type": "tap", "x": 1, "y": 2, "count": 3},
         {"type": "scroll", "x": 1, "y": 2, "dy": 500},
         {"type": "type"},
+        {"type": "powershell", "script": ""},
+        {"type": "powershell", "script": "x" * 6_001},
         {"type": "location", "lat": 1, "lon": 2},  # Android's
         {"type": "wake", "mac": "aa:bb:cc:dd:ee:ff"},  # Android's
         {"type": "teleport"},
@@ -110,6 +112,18 @@ def test_apps_and_ui_tree_return_data():
     apps, tree = run(FakeDevice(), {"id": "1", "type": "apps"}, {"id": "2", "type": "ui_tree"})
     assert apps["data"] == {"apps": [{"label": "Notepad", "package": "notepad"}]}
     assert tree["data"]["windows"][0]["class"] == "Window"
+
+
+def test_powershell_returns_the_exit_code_and_output():
+    device = FakeDevice()
+    done, stopped = run(
+        device,
+        {"id": "1", "type": "powershell", "script": "echo hello"},
+        {"id": "2", "type": "powershell", "script": "Start-Sleep 60"},
+    )
+    assert done["data"] == {"exitCode": 0, "stdout": "hello\n", "stderr": ""}
+    assert stopped["data"]["exitCode"] is None  # stopped at the time limit
+    assert device.calls == ["powershell echo hello", "powershell Start-Sleep 60"]
 
 
 def test_commands_run_one_at_a_time():

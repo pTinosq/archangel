@@ -51,7 +51,7 @@ export const FLOW: Diagram = {
     { id: "pilot", label: "Pilot: screenshot, decide", kind: "agent", what: "Sees the screen and its notes, then chooses the next step. Judges its own progress; 120 steps is only a backstop.", file: "devices/pilot.py" },
     { id: "d_act", label: "Next step?", kind: "agent", shape: "decision", what: "Tap, type, scroll, open an app, ask, get a second opinion, or finish." },
     { id: "find", label: "Vision finds the box", kind: "model", what: "The pilot described the target; vision returns its box and the centre gets tapped.", file: "devices/vision.py" },
-    { id: "d_guard", label: "Guard: does it send, pay, log in, delete?", kind: "model", shape: "decision", what: "A separate model call for every tap. It sees what the owner already agreed to, so nothing is asked twice.", file: "devices/guard.py" },
+    { id: "d_guard", label: "Guard: does it send, pay, log in, delete?", kind: "model", shape: "decision", what: "A separate model call for every tap, and every PC command. It sees what the owner already agreed to, so nothing is asked twice.", file: "devices/guard.py" },
     { id: "approval", label: "Pause: needs approval", kind: "owner", what: "The run is saved; the owner gets the screenshot and a yes or no. Archangel never decides one for them." },
     { id: "tap", label: "Tap through the relay and bridge", kind: "device", what: "Screen fractions become pixels using the latest screenshot's size.", file: "devices/relay.py" },
     { id: "second", label: "Investigator: second opinion", kind: "model", what: "The pilot asks for it when stuck. Nothing forces it.", file: "devices/investigator.py" },

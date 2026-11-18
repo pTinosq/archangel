@@ -73,11 +73,17 @@ class Unlock(_Command):
     type: Literal["unlock"]
 
 
+class PowerShell(_Command):
+    type: Literal["powershell"]
+    script: str = Field(min_length=1, max_length=6_000)  # encoded, it must fit a command line (32,767)
+
+
 Command = Annotated[
-    Screenshot | Tap | Swipe | Scroll | Type | Key | Launch | Apps | UiTree | Unlock, Field(discriminator="type")
+    Screenshot | Tap | Swipe | Scroll | Type | Key | Launch | Apps | UiTree | Unlock | PowerShell,
+    Field(discriminator="type"),
 ]
 COMMAND = TypeAdapter(Command)
-TYPES = {"screenshot", "tap", "swipe", "scroll", "type", "key", "launch", "apps", "ui_tree", "unlock"}
+TYPES = {"screenshot", "tap", "swipe", "scroll", "type", "key", "launch", "apps", "ui_tree", "unlock", "powershell"}
 
 Message = dict[str, Any]
 

@@ -18,6 +18,7 @@ from agent.devices import phone as phone_module
 from agent.devices import pilot as pilot_module
 from agent.devices.pc import PC
 from agent.devices.phone import PHONE
+from agent.devices.guard import ModelGuard
 from agent.devices.pilot import Kit, Pilot
 from agent.devices.relay import DeviceError
 from agent.devices.vision import Box
@@ -78,6 +79,12 @@ class FakePC(FakePhone):
     async def unlock(self) -> None:
         self.actions.append("unlock")
 
+    async def powershell(self, script: str) -> dict:
+        self.actions.append(f"powershell {script}")
+        if "Start-Sleep" in script:
+            return {"exitCode": None, "stdout": "", "stderr": ""}
+        return {"exitCode": 0, "stdout": "x" * 5000 if "Get-Content" in script else "Notes.txt\n", "stderr": ""}
+
 
 class FakeVision:
     async def find(self, screen: Image, target: str) -> Box | None:
@@ -85,14 +92,16 @@ class FakeVision:
 
 
 class FakeGuard:
-    """Flags anything mentioning "Send"."""
+    """Flags anything mentioning "Send", and deleting files."""
 
     def __init__(self):
         self.checked: list[str] = []
+        self.screens: list[Image | None] = []
 
-    async def check(self, screen: Image, action: str, task: str, said: list[str]) -> str | None:
+    async def check(self, screen: Image | None, action: str, task: str, said: list[str]) -> str | None:
         self.checked.append(action)
-        return "send the message" if "Send" in action else None
+        self.screens.append(screen)
+        return "send the message" if "Send" in action else "delete files" if "Remove-Item" in action else None
 
 
 class FakeInvestigator:
@@ -359,3 +368,46 @@ def test_a_pc_task_that_cant_reach_it_says_which_device():
 
     outcome = run(scripted(), Asleep())
     assert outcome == Outcome("failed", "Couldn't use the PC: The PC has been offline for 150 s")
+
+
+def test_a_command_runs_once_checked_without_the_screen():
+    pc, guard = FakePC(), FakeGuard()
+    outcome = run(scripted(("run_command", {"command": "Get-ChildItem Documents"})), pc, guard)
+    assert pc.actions == ["powershell Get-ChildItem Documents"]
+    assert guard.checked == ["run this PowerShell command on the PC: Get-ChildItem Documents"]
+    assert guard.screens == [None]
+    assert outcome.report == "Exit code 0.\nOutput:\nNotes.txt"
+
+
+def test_a_consequential_command_shows_the_owner_what_would_run():
+    pc, guard = FakePC(), FakeGuard()
+    model = scripted(("run_command", {"command": "Remove-Item Downloads\\old -Recurse"}))
+    waiting = run(model, pc, guard)
+    assert waiting.status == "needs_approval" and pc.actions == []
+    assert waiting.report == "Approve: delete files, running `Remove-Item Downloads\\old -Recurse`?"
+
+    run(model, pc, guard, paused=waiting.run, answer=Answer("yes", approved=True))
+    assert pc.actions == ["powershell Remove-Item Downloads\\old -Recurse"]
+
+
+def test_a_commands_long_output_is_cut_and_a_slow_one_says_it_was_stopped():
+    outcome = run(
+        scripted(("run_command", {"command": "Get-Content big.log"}), ("run_command", {"command": "Start-Sleep 60"})),
+        FakePC(),
+    )
+    long, slow = outcome.report.split(" | ")
+    assert long.endswith("\n… (1000 more characters)") and len(long) < 4100
+    assert slow == "Stopped: still running after the time limit."
+
+
+def test_the_guard_judges_a_command_without_a_screen():
+    seen = []
+
+    def judge(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.extend(part.content for part in messages[0].parts if isinstance(part, UserPromptPart))
+        return ModelResponse(parts=[ToolCallPart("final_result", {"needs_approval": False, "action": "list files"})])
+
+    guard = ModelGuard(FunctionModel(judge))
+    assert asyncio.run(guard.check(None, "run this PowerShell command on the PC: ls", "tidy up", [])) is None
+    [prompt] = seen
+    assert not any(isinstance(part, BinaryContent) for part in prompt)
