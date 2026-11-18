@@ -151,10 +151,26 @@ def test_problems_are_reported_back_to_the_model():
     assert outcome.report.split(" | ") == [
         "Couldn't find a unicorn on the screen.",
         "Failed: No focused input field",
-        "No app called 'Snapchat'. Installed: WhatsApp.",
+        "No app called 'Snapchat'. Nearest: WhatsApp.",
         "Opened whatsapp.",
     ]
     assert phone.actions == ["launch com.whatsapp", "key home"]
+
+
+def test_an_app_is_found_by_part_of_its_name_when_only_one_has_it():
+    phone = FakePhone()
+    phone.apps = lambda: _apps({"Google Chrome": "chrome", "Chrome Remote Desktop": "remote", "Notepad": "notepad"})
+    outcome = run(
+        scripted(("open_app", {"name": "Chrome"}), ("open_app", {"name": "notepad"}), ("open_app", {"name": "Google"})),
+        phone,
+    )
+
+    assert outcome.report.split(" | ")[0] == "No app called 'Chrome'. Nearest: Google Chrome, Chrome Remote Desktop, Notepad."
+    assert phone.actions[:2] == ["launch notepad", "launch chrome"]
+
+
+async def _apps(apps: dict[str, str]) -> dict[str, str]:
+    return apps
 
 
 def test_the_model_can_give_up():

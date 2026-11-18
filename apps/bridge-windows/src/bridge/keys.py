@@ -52,6 +52,8 @@ _NAMED = {
     **{f"f{n}": Key(0x6F + n) for n in range(1, 25)},
 }
 _PUNCTUATION = set("`-=[]\\;',./")
+_SPELLED = {"plus": "=", "minus": "-"}
+"""Models write "ctrl+plus" to zoom in: apps take ctrl+= for it, as "+" is shift+= on the keyboard."""
 LOCK = "lock"
 """Not a key: locks the PC."""
 
@@ -71,6 +73,7 @@ def chord(text: str) -> list[Key]:
 
 
 def _key(name: str, text: str) -> Key:
+    name = _SPELLED.get(name, name)
     if name in _NAMED:
         return _NAMED[name]
     if name in _MODIFIERS:  # pressed alone: "win" opens Start

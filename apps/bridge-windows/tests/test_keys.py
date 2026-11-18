@@ -31,6 +31,11 @@ def test_punctuation_is_left_to_the_layout():
     assert chord("ctrl+/") == [Key(0x11), Key(None, char="/")]
 
 
+def test_plus_and_minus_spelled_out_zoom():
+    assert chord("ctrl+plus") == chord("ctrl+=")
+    assert chord("ctrl+minus") == chord("ctrl+-")
+
+
 @pytest.mark.parametrize("text", ["", "+", "ctrl+", "ctrl++", "a+b", "ctrl+ctrl+a", "hyper", "ctrl+é", "lock"])
 def test_not_keys(text):
     with pytest.raises(CommandError) as raised:
