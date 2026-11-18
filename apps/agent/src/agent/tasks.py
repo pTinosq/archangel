@@ -114,6 +114,21 @@ class Tasks:
             self._settle(task, Status.CANCELLED, "Cancelled.")
         return f"Task #{id} cancelled."
 
+    def pick_up(self, interrupted: list[Task]) -> list[Task]:
+        """At startup, with the tasks Archangel's restart interrupted: a code task's GitHub run carries on regardless
+        (a deploy, often its own merge, doesn't stop it), so it's followed again to its result. Returns the rest, for
+        whoever's waiting on them to hear."""
+        rest = []
+        for task in interrupted:
+            if task.kind == "code" and task.github_run and self._coder:
+                task.status, task.report = Status.QUEUED, ""
+                self._store.save_task(task)
+                self._store.add_step(task.id, "Archangel restarted; following the same run again.")
+                self._launch(task)
+            else:
+                rest.append(task)
+        return rest
+
     def list(self) -> list[Task]:
         """Newest first."""
         return self._store.tasks()
@@ -202,9 +217,14 @@ class Tasks:
         pr = self._carry_on.pop(task.id, None)
         with activity.call("claude code", "service", task.goal) as reply:
             try:
+                # Picked up after a restart, the run is followed as it is, and the branch goes unused.
                 branch = await self._coder.branch(pr) if pr else f"archangel/task-{task.id}"
                 worked, report = await self._coder.change(
-                    task.goal, branch, lambda text: self._store.add_step(task.id, text)
+                    task.goal,
+                    branch,
+                    lambda text: self._store.add_step(task.id, text),
+                    lambda run: self._store.set_github_run(task.id, run),
+                    task.github_run,
                 )
             except Exception as error:  # GitHub: the orchestrator decides whether to retry
                 log.exception("Code task failed")

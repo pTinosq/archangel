@@ -78,6 +78,29 @@ jobs:
           RAN: ${{ steps.claude.outputs.execution_file }}
         run: |
           [ -f "$RAN" ] && jq -c '.[] | select(.type == "result") | .permission_denials[]? | {tool_name, input: (.tool_input | tostring | .[:200])}' "$RAN" || true
+      # Archangel reads the run's `result` artifact; without one, a failure is only a link. Claude's own words say
+      # why (a usage limit, an outage), and zero turns means it never started, which Archangel retries once.
+      - name: Why it failed
+        if: failure()
+        env:
+          RAN: ${{ steps.claude.outputs.execution_file }}
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          mkdir -p result
+          last='[.[] | select(.type == "result")] | last'
+          error=$([ -f "$RAN" ] && jq -r "$last | .result // empty | tostring" "$RAN" || true)
+          turns=$([ -f "$RAN" ] && jq -c "$last | .num_turns // null" "$RAN" || echo null)
+          if [ -n "$TOKEN" ] && grep -qF "$TOKEN" <<< "$error"; then
+            error="(withheld: it contained the Claude token)"
+          fi
+          jq -n --arg error "${error:-Claude Code failed before saying why; see the run.}" \
+            --argjson turns "${turns:-null}" '{error: $error, turns: $turns}' > result/result.json
+          cat result/result.json
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: result
+          path: result/result.json
       - name: Save the change
         run: git add -A && git diff --cached --binary "$START" > change.patch
       - uses: actions/upload-artifact@v4

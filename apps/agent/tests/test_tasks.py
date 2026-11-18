@@ -1,6 +1,6 @@
 import asyncio
 
-from fakes import FakeHelper, FakePilot, FakeReporter, FakeResearcher
+from fakes import FakeCoder, FakeHelper, FakePilot, FakeReporter, FakeResearcher
 
 from agent.messages import Address
 from agent.runs import Answer
@@ -237,3 +237,24 @@ def test_tasks_start_briefed_by_the_context_twin_but_research_doesnt(store):
         assert briefed == ["Uber home"]
 
     asyncio.run(scenario())
+
+
+def test_a_code_task_picks_its_run_up_after_a_restart(store):
+    """A deploy (often its own merge) restarts Archangel, but the GitHub run goes on: follow it, not report it lost."""
+    following = store.add_task("Add a Telegram channel", CLI, "code")
+    store.set_github_run(following.id, 41)
+    unstarted = store.add_task("Add a Discord channel", CLI, "code")  # its run never found: nothing to follow
+    phone = store.add_task("Post hello", CLI)
+    interrupted = store.interrupt_running()
+
+    async def scenario():
+        coder = FakeCoder()
+        tasks = Tasks(store, {"phone": FakePilot()}, FakeResearcher(), FakeReporter(), FakeHelper(), coder=coder)
+        updates = _notified(tasks)
+        assert [t.id for t in tasks.pick_up(interrupted)] == [unstarted.id, phone.id]  # reported as before
+        await tasks.idle()
+        assert coder.changes == [("Add a Telegram channel", "archangel/task-1", 41)]
+        assert updates == ["#1 done: https://github.com/pull/12 (tests pass)\nAdd a Telegram channel"]
+
+    asyncio.run(scenario())
+    assert store.steps(following.id)[0].text == "Archangel restarted; following the same run again."
