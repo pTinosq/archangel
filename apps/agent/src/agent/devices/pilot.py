@@ -3,6 +3,7 @@ checking the result. What's shared lives here; each platform (`phone.py`, `pc.py
 
 import asyncio
 import contextlib
+import difflib
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
@@ -266,11 +267,18 @@ async def open_app(ctx: RunContext[Session], name: str) -> ToolReturn | str:
 async def with_app(
     ctx: RunContext[Session], name: str, action: Callable[[str], Awaitable[None]], note: str
 ) -> ToolReturn | str:
-    apps = await ctx.deps.device.apps()
-    package = next((package for label, package in apps.items() if label.lower() == name.lower()), None)
-    if not package:
-        return ctx.deps.failed(f"No app called {name!r}. Installed: {', '.join(apps)}.")
-    return await ctx.deps.act(action(package), note)
+    apps = {label.lower(): (label, package) for label, package in (await ctx.deps.device.apps()).items()}
+    # Models say "Chrome" for "Google Chrome": a name inside only one app's is that app.
+    found = apps.get(name.lower()) or _only([app for key, app in apps.items() if name.lower() in key])
+    if not found:
+        # The nearest few, not all: a PC has hundreds, and the list would fill the pilot's context.
+        nearest = difflib.get_close_matches(name.lower(), apps, n=5, cutoff=0)
+        return ctx.deps.failed(f"No app called {name!r}. Nearest: {', '.join(apps[key][0] for key in nearest)}.")
+    return await ctx.deps.act(action(found[1]), note)
+
+
+def _only[T](items: list[T]) -> T | None:
+    return items[0] if len(items) == 1 else None
 
 
 async def look(ctx: RunContext[Session], reason: str = "") -> ToolReturn:
