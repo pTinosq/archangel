@@ -15,7 +15,7 @@ Real paths (`route.tsx`); the agent serves the app at each one (`web.PAGES`), so
 | `/twin` | The context twin's graph, editable (below). |
 | `/architecture` | How an event moves through Archangel (below). |
 | `/evals` | The twin's eval runs. Local agent only, never public. |
-| `/prompts` | Every prompt, editable; an edit wins from the agent's next run. |
+| `/prompts` | Every prompt, editable; an edit wins from the agent's next run. The writing styles' texts below them (who each is for stays in its file). |
 | `/connectors` | The connectors, and the quick tools beside them (on or off, their settings). The only page without the chat beside it. |
 
 Web addresses in what's said, task reports, steps and thread summaries are links (`linked.tsx`).

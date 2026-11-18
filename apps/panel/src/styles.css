@@ -150,6 +150,8 @@ main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background
 .task-list li > div:first-child { display: flex; align-items: center; gap: var(--s2); margin-bottom: 2px; }
 .task-list .goal { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .prompt-list p { margin-top: var(--s4); }
+.prompt-list ul + h2 { margin-top: var(--s5); }
+.editor > .quiet { font-size: 12px; }
 /* What's scheduled: above the tasks, not selectable, each with its own Cancel. */
 .scheduled { margin-bottom: var(--s5); }
 .scheduled li { cursor: default; display: flex; flex-direction: column; gap: 2px; }

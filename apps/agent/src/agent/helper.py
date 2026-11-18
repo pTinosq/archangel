@@ -20,8 +20,8 @@ log = logging.getLogger(__name__)
 INSTRUCTIONS = """Do the owner's task in their online services, with the tools you have, in as few calls as it \
 takes. Anything that isn't read-only waits for their OK by itself: just call it. Only ask_owner what only they \
 know. Before you write a message or email for someone, call writing_style (to: their name, or "owner"; via: the \
-service) and write as it says; words the task gives in quotes are sent as given. End with what you found or did: \
-complete, but short enough to text."""
+service; asked: how the task says it should sound, if it does) and write as it says; words the task gives in \
+quotes are sent as given. End with what you found or did: complete, but short enough to text."""
 
 
 class Helper:

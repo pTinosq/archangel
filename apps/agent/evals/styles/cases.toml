@@ -1,0 +1,98 @@
+# The writing styles' evals: a made-up owner's tasks that write to someone (never the real owner's). Each case is a
+# task's goal, as the orchestrator would write it, given to a writer that has `writing_style`.
+#   style      the style it should be given (checks who and where it asked for)
+#   asked      true: the goal carries how the owner wants this one to sound, and it should pass that on
+#   greets     true: opens with a greeting ("Hi Priya,"); false: doesn't; unset: either
+#   emoji      true if one is allowed (default: none)
+#   max_words  at most this many words
+#   contains   what must be there as given (a time, a name, dictated words); any of "a | b" passes
+#   judge      what a model must weigh
+
+[[case]]
+name = "discord-friend"
+goal = "Tell Sam on Discord that Thursday's climbing session has moved to 7pm, same wall."
+style = "discord"
+greets = false
+max_words = 30
+contains = ["7"]
+judge = ["Reads as a quick, informal message between friends on Discord, not an email or an announcement."]
+
+[[case]]
+name = "whatsapp-friend"
+goal = "Ask Tom on WhatsApp whether he still has the owner's drill, and if he could drop it round on Saturday."
+style = "texting"
+greets = false
+max_words = 35
+contains = ["Saturday | sat"]
+judge = ["Casual and warm, like texting a friend.", "Asks for the drill back on Saturday plainly, in one go."]
+
+[[case]]
+name = "email-stranger"
+goal = """Email Priya, the bookings manager at Riverside Hall (the owner hasn't met her), to ask whether the main \
+room is free on 14 March for about 40 people, and what it costs."""
+style = "semi-formal"
+greets = true
+max_words = 120
+contains = ["14 March | 14th March | March 14", "40"]
+judge = [
+    "Polite and direct, as to someone the owner doesn't know; no slang.",
+    "The purpose (the room on 14 March) comes in the first line after the greeting.",
+    "No opener about how she is or why the owner is writing, and no closing summary.",
+]
+
+[[case]]
+name = "slack-colleague"
+goal = "Message Alex on Slack: the report draft is in the shared drive; could he review section 3 by Friday?"
+style = "semi-formal"
+greets = false
+max_words = 45
+contains = ["Friday", "3"]
+judge = ["One to three lines, to the point, as a work chat message: no email-style sign-off."]
+
+[[case]]
+name = "owner-by-text"
+goal = """Text the owner (via sms) that the dentist moved their check-up to 3 December at 10:30 and asked them to \
+confirm by tomorrow."""
+style = "owner"
+max_words = 35
+contains = ["10:30"]
+judge = ["Courteous and brief, never chatty or servile.", "Plain text: no markdown and no exclamation marks."]
+
+[[case]]
+name = "unknown-seller"
+goal = "Reply to the seller on Vinted: is the green jacket still available, and would they take £30 for it?"
+style = "default"
+max_words = 40
+contains = ["£30"]
+judge = ["Friendly, neutral and brief, as to a stranger: no slang, no ceremony."]
+
+[[case]]
+name = "dictated-words"
+goal = "Send Sam on Discord, in the owner's words: \"running late, start without me\""
+style = "discord"
+max_words = 12
+contains = ["running late, start without me"]
+judge = ["The message is the owner's words as given, not reworded or added to."]
+
+[[case]]
+name = "asked-casual"
+goal = """Email Priya, a colleague the owner gets on well with, to ask if she wants to grab lunch on Friday. The \
+owner said: "make it casual"."""
+style = "semi-formal"
+asked = true
+max_words = 60
+contains = ["Friday | fri"]
+judge = ["Clearly casual and relaxed, like a note to a friendly colleague, not a formal email."]
+
+[[case]]
+name = "asked-formal"
+goal = """Tell Tom on WhatsApp that the owner can't make his dad's 60th on Saturday, and is sorry to miss it. The \
+owner said: "make this one a bit more formal"."""
+style = "texting"
+asked = true
+max_words = 60
+contains = ["Saturday"]
+judge = [
+    "More formal than a casual text: full sentences, capital letters, no slang, while still a short message.",
+    "Says sorry once, without gushing.",
+]

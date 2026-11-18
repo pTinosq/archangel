@@ -9,6 +9,7 @@ from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
 from agent.orchestrator import Orchestrator
+from agent.prompts import Prompts
 from agent.styles import Audience, Style, Styles, parse
 from agent.tasks import Tasks
 from agent.twin.graph import Graph
@@ -171,6 +172,37 @@ def test_the_owners_own_folder_adds_styles_and_replaces_built_in_ones(tmp_path):
     assert chosen(Styles(built_in, tmp_path / "none"), "Sam", "discord") == "discord"  # no folder: fine
 
 
+def test_a_style_s_text_is_edited_among_the_prompts_and_its_file_stays_the_default(tmp_path, store):
+    built_in = folder(tmp_path / "built-in", discord='about = "Friends"\nvia = ["discord"]\n+++\nBuilt-in')
+    own = tmp_path / "own"
+    own.mkdir()
+    (own / "discord.md").write_text('+++\nabout = "Mine"\nvia = ["discord"]\n+++\nMy file\n')
+    styles = Styles(built_in, own, prompts=(prompts := Prompts(store)))
+    sam = Audience.of("Sam", "discord")
+    assert "My file" in styles.guidance(sam)
+
+    prompts.edit("style discord", "Edited")  # as the panel does: it applies from the next message
+    prompts.edit("style base", "Edited base")
+    assert styles.guidance(sam).endswith("Edited base\n\nEdited") and chosen(styles, "Sam", "discord") == "discord"
+    restarted = Styles(built_in, own, prompts=Prompts(store))
+    assert restarted.guidance(sam).endswith("Edited base\n\nEdited")
+    edited = prompts.get("style discord")
+    assert (edited.default, edited.about, edited.edited) == ("My file", "Mine (via discord)", True)
+    assert prompts.get("style base").about == "b (under all of them)"
+    assert [p.name for p in prompts.all()][-3:] == ["style base", "style discord", "style default"]
+
+    prompts.edit("style discord", None)
+    assert styles.guidance(sam).endswith("Edited base\n\nMy file")
+
+
+def test_the_owner_can_ask_for_one_message_to_sound_different():
+    styles = Styles()
+    asked = styles.guidance(Audience.of("Priya", "email"), " make it casual ")
+    assert asked.startswith(styles.guidance(Audience.of("Priya", "email")))
+    assert asked.endswith('For this message only, the owner asked: "make it casual". Where that differs, do as asked.')
+    assert "the owner asked" not in styles.guidance(Audience.of("Priya", "email"), "  ")
+
+
 def test_the_base_and_default_are_required(tmp_path):
     (tmp_path / "default.md").write_text('+++\nabout = "d"\n+++\nD\n')
     with pytest.raises(ValueError, match="base.md is missing"):
@@ -202,6 +234,7 @@ def test_agents_ask_for_a_style_by_who_and_where():
     ask = Styles().tools.tools["writing_style"].function
     assert '"discord", for Sam via Discord' in asyncio.run(ask(to="Sam", via="Discord"))
     assert '"default", for someone' in asyncio.run(ask())
+    assert 'the owner asked: "more formal".' in asyncio.run(ask(to="Priya", via="email", asked="more formal"))
 
 
 def test_the_orchestrator_is_given_the_style_for_where_its_reply_goes(store):

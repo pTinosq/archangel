@@ -88,6 +88,10 @@ twin-eval *args:
 threads-eval *args:
     cd {{agent}} && uv run python -m evals.threads.run {{args}}
 
+# The writing styles' evals on a real model (costs a little): `just styles-eval [name filter] [--runs N]`
+styles-eval *args:
+    cd {{agent}} && uv run python -m evals.styles.run {{args}}
+
 test:
     cd {{agent}} && uv run pytest -q
     cd {{relay}} && uv run pytest -q

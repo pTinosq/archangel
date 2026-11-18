@@ -65,7 +65,7 @@ Archangel learns what lasts about you ("I hate morning flights", "Mum is Helen")
 
 ### How it writes
 
-Short and polite to you, informal on Discord and WhatsApp, semi-formal in email and work chat, plain anywhere else. Each is a small file in `apps/agent/src/agent/styles/` (who it is for, then the style in prose) over a shared base: plain words, no padding, each thing said once. A style can be for a group of your people (`groups = ["uni friends"]`): tell Archangel "Sam and Priya are my uni lot" and the twin remembers who's in it, so they get that style wherever you message them. Adding one is adding a file; `just style Sam discord` shows which one an audience gets. Styles that name real people go in `apps/agent/data/styles/` on the volume, not the repo ([docs/styles.md](docs/styles.md)).
+Short and polite to you, informal on Discord and WhatsApp, semi-formal in email and work chat, plain anywhere else. Each is a small file in `apps/agent/src/agent/styles/` (who it is for, then the style in prose) over a shared base: plain words, no padding, each thing said once. A style can be for a group of your people (`groups = ["uni friends"]`): tell Archangel "Sam and Priya are my uni lot" and the twin remembers who's in it, so they get that style wherever you message them. Adding one is adding a file; its text can be tuned on the panel's Prompts tab, and "make it casual" changes one message only. `just style Sam discord` shows which one an audience gets. Styles that name real people go in `apps/agent/data/styles/` on the volume, not the repo ([docs/styles.md](docs/styles.md)).
 
 ### Improving itself
 
@@ -94,7 +94,7 @@ The Cockpit shows requests travelling between the parts of Archangel as it works
 
 The Architecture tab is a flowchart of how Archangel handles anything it's told, every decision on the way; click a part for what it does, or play a scenario (a thanks in a thread, a question on a call, an Uber in 15 minutes) through it a step at a time.
 
-The twin has its own evals on a real model: `just twin-eval`, or the panel's Evals tab when running locally, to run them and see each run's graph (and `just twin` to try it by hand). The thread router's evals are `just threads-eval`.
+The twin has its own evals on a real model: `just twin-eval`, or the panel's Evals tab when running locally, to run them and see each run's graph (and `just twin` to try it by hand). The thread router's evals are `just threads-eval`, the writing styles' `just styles-eval`.
 
 ## Drive the phone
 
