@@ -38,7 +38,12 @@ class Gateway:
     def owner(self, channel: str) -> Address | None:
         """The owner's address on `channel`, if Archangel has that channel."""
         found = self._channels.get(channel)
-        return found and found.owner
+        return found.owner if found and found.owner.id else None  # email has none until the owner lists an address
+
+    def is_owner(self, address: Address) -> bool:
+        """Whether `address` is the owner's own, so a message to it needs no one's approval."""
+        found = self._channels.get(address.channel)
+        return bool(found and found.is_owner(address))
 
     async def run(self, handle: Handle) -> None:
         """Run until every channel closes, then finish the messages already received."""

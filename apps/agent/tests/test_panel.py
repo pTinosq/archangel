@@ -195,7 +195,7 @@ def test_a_report_opens_for_anyone_only_once_made_public(store):
 def test_quick_tools_are_listed_switched_and_set_from_the_panel(store):
     panel = Panel(store)
     listed = {t["name"]: t for t in panel.call("GET", "/api/tools").json()}
-    assert list(listed) == ["tfl", "weather", "currency", "dates"]
+    assert list(listed) == ["tfl", "weather", "currency", "dates", "email"]
     assert listed["tfl"]["enabled"] and listed["tfl"]["active"] and listed["tfl"]["about"]
 
     changed = panel.call("PUT", "/api/tools/tfl", json={"enabled": False, "settings": {"app_key": "k3y"}})
@@ -203,6 +203,7 @@ def test_quick_tools_are_listed_switched_and_set_from_the_panel(store):
     assert (tfl["enabled"], tfl["active"]) == (False, False)
     assert tfl["settings"][0] | {"label": ""} == {
         "key": "app_key", "label": "", "secret": True, "required": False, "set": True, "value": "",
+        "items": False, "list": [],
     }
     assert "k3y" not in changed.text
     assert store.tools()["tfl"]["settings"] == {"app_key": "k3y"}
@@ -212,6 +213,16 @@ def test_quick_tools_are_listed_switched_and_set_from_the_panel(store):
 
     assert panel.call("PUT", "/api/tools/nothing", json={"enabled": True}).status_code == 404
     assert panel.call("PUT", "/api/tools/tfl", json={"settings": {"colour": "red"}}).status_code == 400
+
+
+def test_the_email_allow_list_is_edited_as_a_list_from_the_panel(store):
+    panel = Panel(store)
+    found = panel.call("PUT", "/api/tools/email", json={"settings": {"allowed": [" Owner@Example.com ", ""]}}).json()
+    (setting,) = [s for t in found if t["name"] == "email" for s in t["settings"]]
+    assert setting["items"] and setting["list"] == ["Owner@Example.com"]
+    assert store.tools()["email"]["settings"] == {"allowed": ["Owner@Example.com"]}
+    assert panel.call("PUT", "/api/tools/email", json={"settings": {"allowed": "owner@example.com"}}).status_code == 400
+    assert panel.call("PUT", "/api/tools/tfl", json={"settings": {"app_key": ["k"]}}).status_code == 400
 
 
 def test_connectors_are_added_and_listed_without_their_secrets(store):

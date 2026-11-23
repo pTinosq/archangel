@@ -79,7 +79,17 @@ export type QuickTool = {
   enabled: boolean;
   /** On and set up: what the orchestrator actually has. */
   active: boolean;
-  settings: { key: string; label: string; secret: boolean; required: boolean; set: boolean; value: string }[];
+  settings: {
+    key: string;
+    label: string;
+    secret: boolean;
+    required: boolean;
+    set: boolean;
+    value: string;
+    /** A list setting (email's allowed senders): its entries are in `list`, and it's saved whole. */
+    items: boolean;
+    list: string[];
+  }[];
 };
 /** The context twin's graph: every node (an empty page makes it a router) and link, without the pages. */
 export type TwinGraph = {
@@ -193,7 +203,7 @@ export const api = {
   removeConnector: (name: string) => call<null>("DELETE", `/connectors/${name}`),
   tools: () => call<QuickTool[]>("GET", "/tools"),
   /** Only what's given changes; an empty setting clears it. */
-  setTool: (name: string, change: { enabled?: boolean; settings?: Record<string, string> }) =>
+  setTool: (name: string, change: { enabled?: boolean; settings?: Record<string, string | string[]> }) =>
     call<QuickTool[]>("PUT", `/tools/${name}`, change),
   evals: () => call<{ cases: string[]; results: EvalSummary[] }>("GET", "/evals"),
   evalReport: (id: string) => call<EvalReport>("GET", `/evals/${id}`),

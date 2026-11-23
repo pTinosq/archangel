@@ -27,7 +27,8 @@ from agent.devices.relay import Device, DeviceError
 from agent.events import Event, OwnerMessage, Scheduled
 from agent.gateway import Gateway
 from agent.location import Whereabouts
-from agent.messages import Message, Text
+from agent.mail import address_of
+from agent.messages import Address, Message, Text
 from agent.models import Instructions, describe, prompt
 from agent.research import Researcher
 from agent.runs import Answer
@@ -339,6 +340,39 @@ class Orchestrator:
                 return "There's no screenshot to send."
             await gateway.send(Message(to, (Text(text), *images), thread=self._thread.id))
             return f"Sent via {channel}."
+
+        @self._agent.tool
+        async def send_email(
+            ctx: RunContext[Event],
+            to: str,
+            subject: str,
+            text: str,
+            in_reply_to: str = "",
+            approved: bool = False,
+        ) -> str:
+            """Email someone from Archangel's own address: "email Sam the details", or an answer to a mail the owner
+            forwarded (its reply address and mail id are in the mail; pass the id as `in_reply_to`). Ask
+            `writing_style` (via email) how to write to them first. Mail to anyone but the owner is sent only once
+            they've approved it: show them who it's to, the subject and the words, and when they say yes in their own
+            message call this again with `approved` (also if they said earlier to send to this person without
+            asking). Mail to the owner needs no approval; use it, not `send`, to write to someone else."""
+            if "email" not in gateway.channels:
+                return no_channel("email")
+            if not (address := address_of(to)):
+                return f"{to!r} isn't an email address: ask the owner who it's to; never guess."
+            recipient = Address("email", address)
+            if not gateway.is_owner(recipient):
+                if approved and not ctx.deps.from_owner:
+                    return "Only the owner can approve sending mail to someone else. Ask them."
+                if not approved:
+                    return (
+                        f"Not sent. Mail to {address} needs the owner's approval: show them the address, subject and "
+                        "words and ask. When they say yes, call this again with approved=True."
+                    )
+            await gateway.send(
+                Message(recipient, (Text(text),), thread=self._thread.id, subject=subject, in_reply_to=in_reply_to)
+            )
+            return f"Emailed {address}."
 
         if twin:
 

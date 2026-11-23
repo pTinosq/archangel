@@ -8,7 +8,7 @@ export function QuickTools() {
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
   const [error, setError] = useState("");
 
-  const change = (tool: QuickTool, body: { enabled?: boolean; settings?: Record<string, string> }) => {
+  const change = (tool: QuickTool, body: { enabled?: boolean; settings?: Record<string, string | string[]> }) => {
     setError("");
     api
       .setTool(tool.name, body)
@@ -32,7 +32,8 @@ export function QuickTools() {
         {tools.map((tool) => {
           const draft = drafts[tool.name] ?? {};
           // A secret left blank is unchanged; anything else is sent, an emptied field clearing it.
-          const edits = tool.settings.filter((s) => (s.secret ? !!draft[s.key] : (draft[s.key] ?? s.value) !== s.value));
+          const single = tool.settings.filter((s) => !s.items);
+          const edits = single.filter((s) => (s.secret ? !!draft[s.key] : (draft[s.key] ?? s.value) !== s.value));
           const missing = tool.settings.some((s) => s.required && !s.set);
           return (
             <li key={tool.name}>
@@ -42,7 +43,37 @@ export function QuickTools() {
               <span className={`status ${tool.active ? "done" : missing && tool.enabled ? "needs-answer" : ""}`}>
                 {tool.active ? "on" : missing && tool.enabled ? "needs setup" : "off"}
               </span>
-              {tool.settings.map((s) => (
+              {tool.settings
+                .filter((s) => s.items)
+                .map((s) => (
+                  <div key={s.key} className="items">
+                    <span>{s.label}</span>
+                    <ul>
+                      {s.list.map((item) => (
+                        <li key={item}>
+                          {item}{" "}
+                          <button
+                            onClick={() => change(tool, { settings: { [s.key]: s.list.filter((i) => i !== item) } })}
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <input
+                      type="text"
+                      placeholder="Add an address, press Enter"
+                      value={draft[s.key] ?? ""}
+                      onChange={(e) => setDrafts({ ...drafts, [tool.name]: { ...draft, [s.key]: e.target.value } })}
+                      onKeyDown={(e) => {
+                        const added = (draft[s.key] ?? "").trim();
+                        if (e.key === "Enter" && added) change(tool, { settings: { [s.key]: [...s.list, added] } });
+                      }}
+                      autoComplete="off"
+                    />
+                  </div>
+                ))}
+              {single.map((s) => (
                 <label key={s.key}>
                   {s.label}
                   <input

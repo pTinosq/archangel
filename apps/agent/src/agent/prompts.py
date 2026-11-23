@@ -5,7 +5,7 @@ control panel live in the store and win. An edit applies from the agent's next r
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from agent import helper, orchestrator, reports
+from agent import helper, mail, orchestrator, reports
 from agent.devices import guard, investigator, pc, phone, vision
 from agent.store import Store
 from agent.threads import router, summariser
@@ -24,6 +24,7 @@ DEFAULTS = {
     "twin writer": writer.INSTRUCTIONS,
     "thread router": router.INSTRUCTIONS,
     "thread summariser": summariser.INSTRUCTIONS,
+    "mail reader": mail.INSTRUCTIONS,
 }
 
 

@@ -7,6 +7,7 @@ import pydantic_ai
 
 from agent import config, logs
 from agent.channels.cli import CliChannel
+from agent.channels.email import EmailChannel
 from agent.channels.panel import PanelChannel
 from agent.channels.twilio import SmsChannel, Twilio, VoiceChannel
 from agent.coder import Coder, github
@@ -16,6 +17,7 @@ from agent.gateway import Gateway
 from agent.helper import Helper
 from agent.links import Links
 from agent.location import Whereabouts
+from agent.mail import Reader as MailReader
 from agent.models import openrouter
 from agent.orchestrator import Orchestrator
 from agent.devices.guard import ModelGuard
@@ -120,6 +122,10 @@ def main() -> None:
         channels.append(SmsChannel(twilio, web, links))
         if public_url:
             channels.append(VoiceChannel(twilio, web, public_url, links))
+    if mailbox := config.email():
+        channels.append(
+            EmailChannel(mailbox, web, lambda: tools.items("email", "allowed"), MailReader(quick, prompts.live("mail reader")))
+        )
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)

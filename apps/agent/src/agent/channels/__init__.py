@@ -20,6 +20,10 @@ class Channel(ABC):
     owner: Address
     """Where the owner is reached on this channel, for messages Archangel starts rather than answers."""
 
+    def is_owner(self, address: Address) -> bool:
+        """Whether `address` is the owner's here: writing to it is writing to themselves."""
+        return address == self.owner
+
     @abstractmethod
     async def start(self, deliver: Deliver) -> None:
         """Receive the owner's messages (and any notices), passing each to `deliver`, until the medium closes."""

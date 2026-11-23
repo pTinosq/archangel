@@ -100,7 +100,7 @@ def _one_address(app: FastAPI, address: str) -> None:
 
     @app.middleware("http")
     async def at_one_address(request: Request, call_next) -> Response:
-        stays = request.url.path.startswith(("/health", "/twilio/"))
+        stays = request.url.path.startswith(("/health", "/twilio/", "/email/"))
         if request.url.hostname != host and request.method in ("GET", "HEAD") and not stays:
             query = f"?{request.url.query}" if request.url.query else ""
             return RedirectResponse(f"{address}{request.url.path}{query}")  # temporary: a move can be undone

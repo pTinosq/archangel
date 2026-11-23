@@ -36,6 +36,11 @@ class Message:
     thread: int | None = None
     """The conversation thread it belongs to, for the transcript: the orchestrator's replies are in one."""
 
+    subject: str = ""
+    """Email only: the subject line."""
+    in_reply_to: str = ""
+    """Email only: the id of the mail this answers, so the recipient's client threads it."""
+
     @property
     def text(self) -> str:
         return "\n".join(part.text for part in self.parts if isinstance(part, Text))

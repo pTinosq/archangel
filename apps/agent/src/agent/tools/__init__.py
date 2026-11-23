@@ -20,13 +20,14 @@ from agent import activity
 from agent.store import Store
 from agent.tools.currency import Currency
 from agent.tools.dates import Dates
+from agent.tools.email import Email
 from agent.tools.tfl import TfL
 from agent.tools.tool import Setting, Tool, ToolError
 from agent.tools.weather import Weather
 
 log = logging.getLogger(__name__)
 
-BUILT_IN: Sequence[type[Tool]] = (TfL, Weather, Currency, Dates)
+BUILT_IN: Sequence[type[Tool]] = (TfL, Weather, Currency, Dates, Email)
 TIMEOUT = 15  # seconds: a quick tool that is slow is no quicker than the web
 
 
@@ -60,8 +61,10 @@ class Tools:
                         "label": s.label,
                         "secret": s.secret,
                         "required": s.required,
+                        "items": s.items,
                         "set": bool(self._values(tool.name).get(s.key)),
-                        "value": "" if s.secret else self._values(tool.name).get(s.key, ""),
+                        "value": "" if s.secret or s.items else tool.setting(s.key),
+                        "list": tool.items(s.key) if s.items else [],
                     }
                     for s in tool.settings
                 ],
@@ -69,18 +72,32 @@ class Tools:
             for tool in self._tools.values()
         ]
 
-    def configure(self, name: str, enabled: bool | None = None, settings: dict[str, str] | None = None) -> None:
-        """Switch a tool on or off and/or change its settings (only those given; an empty value clears one)."""
+    def configure(
+        self, name: str, enabled: bool | None = None, settings: dict[str, str | list[str]] | None = None
+    ) -> None:
+        """Switch a tool on or off and/or change its settings (only those given; an empty value clears one; a list
+        setting is given whole)."""
         tool = self._get(name)
-        if unknown := set(settings or {}) - {s.key for s in tool.settings}:
+        known = {s.key: s for s in tool.settings}
+        if unknown := set(settings or {}) - set(known):
             raise ValueError(f"{tool.title} has no setting {', '.join(sorted(unknown))}")
+        given = {}
+        for key, value in (settings or {}).items():
+            if known[key].items != isinstance(value, list):
+                raise ValueError(f"{known[key].label} is {'a list' if known[key].items else 'one value'}")
+            given[key] = _tidy(value)
         state = self._store.tools().get(name, {})
-        values = {**state.get("settings", {}), **{k: v.strip() for k, v in (settings or {}).items()}}
+        values = {**state.get("settings", {}), **given}
         state = {
             "enabled": self._enabled(tool) if enabled is None else enabled,
             "settings": {k: v for k, v in values.items() if v},
         }
         self._store.save_tool(name, state)
+
+    def items(self, name: str, key: str) -> list[str]:
+        """A list setting of a tool that's on (an off tool has nothing: it reads and allows nothing)."""
+        tool = self._get(name)
+        return tool.items(key) if self._enabled(tool) else []
 
     def active(self, tool: Tool) -> bool:
         """On, and set up: what the orchestrator gets."""
@@ -89,18 +106,30 @@ class Tools:
 
     def describe(self) -> str:
         """What's there to answer from, for the orchestrator: empty if nothing is."""
-        return "; ".join(f"{tool.title} ({tool.about})" for tool in self._tools.values() if self.active(tool))
+        answering = {id(tool) for tool in self._owner.values()}  # a tool with no functions answers nothing
+        return "; ".join(
+            f"{tool.title} ({tool.about})"
+            for tool in self._tools.values()
+            if self.active(tool) and id(tool) in answering
+        )
 
     def _enabled(self, tool: Tool) -> bool:
         return self._store.tools().get(tool.name, {}).get("enabled", True)
 
-    def _values(self, name: str) -> dict[str, str]:
+    def _values(self, name: str) -> dict[str, str | list[str]]:
         return self._store.tools().get(name, {}).get("settings", {})
 
     def _get(self, name: str) -> Tool:
         if name not in self._tools:
             raise KeyError(f"No quick tool called {name!r}")
         return self._tools[name]
+
+
+def _tidy(value: str | list[str]) -> str | list[str]:
+    if isinstance(value, str):
+        return value.strip()
+    kept = (item.strip() for item in value)
+    return list(dict.fromkeys(item for item in kept if item))  # no blanks or repeats, in the owner's order
 
 
 class _Quick(WrapperToolset):

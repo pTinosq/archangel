@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 import httpx
 
-Config = Callable[[], Mapping[str, str]]
+Config = Callable[[], Mapping[str, str | list[str]]]
 """A tool's settings as the owner has them now (read at each call: they change from the panel while it runs)."""
 
 
@@ -25,6 +25,8 @@ class Setting:
     secret: bool = False
     required: bool = False
     """The tool is off until it's set; otherwise it works without."""
+    items: bool = False
+    """A list of strings (addresses, say) the owner adds to and removes from, not one value."""
 
 
 class Tool(ABC):
@@ -52,7 +54,13 @@ class Tool(ABC):
         """The orchestrator's tools."""
 
     def setting(self, key: str) -> str:
-        return self._config().get(key, "")
+        value = self._config().get(key, "")
+        return value if isinstance(value, str) else ""
+
+    def items(self, key: str) -> list[str]:
+        """A list setting, in the order the owner keeps it."""
+        value = self._config().get(key, [])
+        return list(value) if isinstance(value, list) else []
 
     async def get(self, url: str, *, accept: tuple[int, ...] = (), **params: Any) -> Any:
         """The JSON at `url`; a source that errors raises, which the caller turns into an answer. `accept`: statuses

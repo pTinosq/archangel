@@ -337,8 +337,8 @@ def test_the_owner_sets_tools_and_their_secrets_never_leave(store):
     all_tools.configure("echo", settings={"greeting": "Hey"})  # changing one leaves the other
     echo = all_tools.all()[0]
     assert echo["settings"] == [
-        {"key": "key", "label": "Key", "secret": True, "required": True, "set": True, "value": ""},
-        {"key": "greeting", "label": "Greeting", "secret": False, "required": False, "set": True, "value": "Hey"},
+        {"key": "key", "label": "Key", "secret": True, "required": True, "items": False, "set": True, "value": "", "list": []},
+        {"key": "greeting", "label": "Greeting", "secret": False, "required": False, "items": False, "set": True, "value": "Hey", "list": []},
     ]
     assert "s3cret" not in json.dumps(all_tools.all())
     assert store.tools()["echo"]["settings"]["key"] == "s3cret"

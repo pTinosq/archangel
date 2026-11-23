@@ -112,7 +112,7 @@ STARTED = time.time()
 
 class ToolChange(BaseModel):
     enabled: bool | None = None
-    settings: dict[str, str] | None = None
+    settings: dict[str, str | list[str]] | None = None
 
 
 class NewConnector(BaseModel):

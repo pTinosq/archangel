@@ -25,7 +25,7 @@ To use another model: `ARCHANGEL_MODEL=google/gemini-3.5-flash just agent`. Othe
 
 It's one conversation whichever way you talk to it (terminal, control panel), and it can send things to a different channel when you ask.
 
-Planned: an email channel, an inbox of Archangel's own to forward things to and send mail from (M21 in the [roadmap](docs/roadmap.md)).
+Email is a channel too: an address of Archangel's own to write to or forward things to, and to send mail from (M21, below).
 
 The conversation is kept as threads, one per topic. Each message goes to the thread it carries on, or to a new one, so Archangel answers with that topic in mind ("how much were those flights again?" a week later finds them). A thread you wrap up, or leave for a few hours, is summarised ([docs/threads.md](docs/threads.md)). You can also open a thread yourself from the panel's chat and keep a topic apart from the rest.
 
@@ -53,9 +53,11 @@ Reports are private (you, signed in) until you make one public to share it: ask 
 
 Your email, calendar, Notion and Slack (several accounts each, in profiles like work and personal), once connected, are reached directly (by a helper agent, beside phone tasks) rather than through the phone.
 
-### Email (planned, M21)
+### Email (M21)
 
-Archangel will get an email address of its own: write to it or forward it something and it reads it, and it can email people from there. It reads mail only from sender addresses you allow (a list you edit on the Connectors page) and ignores the rest; replies go back to the address a mail came from, for a forward its original sender. Not built yet; see [docs/roadmap.md](docs/roadmap.md).
+Archangel has an email address of its own: write to it or forward it something and it reads it, and it can email people from there. It reads mail only from sender addresses you allow (a list you edit on the Connectors page, under Email) and ignores the rest; your mail is a message like a text. A reply goes back to the address a mail came from, for a forward its original sender (if that can't be found it asks you). Mail to anyone but you is sent only after you've said yes.
+
+Any provider that sends over SMTP and can post a received mail (raw, RFC 822) to a URL will do. Set `ARCHANGEL_EMAIL_ADDRESS`, `ARCHANGEL_EMAIL_SMTP` (`smtp://user:pass@host:587` or `smtps://…:465`) and `ARCHANGEL_EMAIL_SECRET`, and point the provider's inbound webhook at `<agent-domain>/email/inbound` with that secret (`Authorization: Bearer …`, or `?token=…`). A From header can be forged: have the provider reject mail that fails SPF/DKIM. Details and what's open: [docs/roadmap.md](docs/roadmap.md).
 
 ### Approvals and history
 

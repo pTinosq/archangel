@@ -1,6 +1,7 @@
 import os
 
 from agent.channels.login import GitHub
+from agent.channels.mailbox import Mailbox
 from agent.channels.twilio import Account
 
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
@@ -43,6 +44,15 @@ def twilio() -> Account | None:
     if not (sid := os.environ.get("TWILIO_ACCOUNT_SID")):
         return None
     return Account(sid, _required("TWILIO_AUTH_TOKEN"), _required("TWILIO_NUMBER"), _required("ARCHANGEL_PHONE"))
+
+
+def email() -> Mailbox | None:
+    """Archangel's own mailbox: its address, an SMTP server to send through (`smtp://user:pass@host:587` starts TLS
+    after connecting, `smtps://…:465` is TLS throughout), and a secret the inbound webhook must present. Any provider
+    that speaks SMTP and can post a received mail to a URL will do. None: no email."""
+    if not (address := os.environ.get("ARCHANGEL_EMAIL_ADDRESS")):
+        return None
+    return Mailbox(address, _required("ARCHANGEL_EMAIL_SMTP"), _required("ARCHANGEL_EMAIL_SECRET"))
 
 
 def public_url() -> str | None:
