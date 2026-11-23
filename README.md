@@ -55,7 +55,7 @@ Your email, calendar, Notion and Slack (several accounts each, in profiles like 
 
 ### Email (planned, M21)
 
-Archangel will get an email address of its own: write to it or forward it something and it reads it, and it can email people from there. Not built yet; see [docs/roadmap.md](docs/roadmap.md).
+Archangel will get an email address of its own: write to it or forward it something and it reads it, and it can email people from there. It reads mail only from sender addresses you allow (a list you edit on the Connectors page) and ignores the rest; replies go back to the address a mail came from, for a forward its original sender. Not built yet; see [docs/roadmap.md](docs/roadmap.md).
 
 ### Approvals and history
 
