@@ -10,6 +10,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from agent.schedule import TIMEZONE
 from agent.tools import BUILT_IN, Setting, Tool, ToolError, Tools
 from agent.tools.dates import Dates
+from agent.tools.inbox import Inbox, addresses
 from agent.tools.currency import Currency
 from agent.tools.tfl import TfL
 from agent.tools.weather import Weather
@@ -401,3 +402,14 @@ def test_a_source_that_is_down_is_told_to_the_model_plainly(store):
     sources = Sources(**{"Line__Mode__tube,overground,dlr,elizabeth-line,tram__Status": 503})
     _, returned = drive(tools(store, sources, [TfL]), ("tfl_status", {}))
     assert returned == ["TfL isn't answering (HTTPStatusError): try the web instead."]
+
+
+def test_the_email_senders_setting_is_a_quick_tool_with_no_functions_of_its_own(store):
+    quick = Tools(store, httpx.AsyncClient(), [Inbox])
+    assert quick.setting("inbox", "senders") == "" and quick.describe() == ""  # nothing set: no one is read
+    quick.configure("inbox", settings={"senders": "Sam@Example.com, priya@example.net;\n<Tom@example.org>"})
+    assert addresses(quick.setting("inbox", "senders")) == {"sam@example.com", "priya@example.net", "tom@example.org"}
+    assert quick.describe() == ""  # nothing for the orchestrator to call
+    quick.configure("inbox", enabled=False)
+    assert quick.setting("inbox", "senders") == ""  # off reads no one
+    assert addresses("") == frozenset()

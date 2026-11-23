@@ -220,7 +220,7 @@ def test_a_report_opens_for_anyone_only_once_made_public(store):
 def test_quick_tools_are_listed_switched_and_set_from_the_panel(store):
     panel = Panel(store)
     listed = {t["name"]: t for t in panel.call("GET", "/api/tools").json()}
-    assert list(listed) == ["tfl", "weather", "currency", "dates"]
+    assert list(listed) == ["tfl", "weather", "currency", "dates", "inbox"]
     assert listed["tfl"]["enabled"] and listed["tfl"]["active"] and listed["tfl"]["about"]
 
     changed = panel.call("PUT", "/api/tools/tfl", json={"enabled": False, "settings": {"app_key": "k3y"}})
