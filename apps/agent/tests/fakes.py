@@ -73,7 +73,11 @@ class FakeResearcher:
 
 
 class FakeReporter:
-    async def write(self, topic: str, material: str) -> Report:
+    def __init__(self):
+        self.supplied: list = []
+
+    async def write(self, topic: str, material: str, supplied=()) -> Report:
+        self.supplied = list(supplied)
         return Report(tldr=f"{topic}: the gist.", title=topic, pages=[f"<p>{material}</p>"])
 
 

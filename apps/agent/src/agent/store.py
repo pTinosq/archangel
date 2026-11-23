@@ -28,6 +28,7 @@ from agent.messages import Address, Image, Message
 DATA = Path("data")
 IMAGES_KEPT = timedelta(days=3)
 _IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z]+")
+_PAGE_IMAGE_NAME = re.compile(r"img[0-9]{1,3}\.(?:jpg|png|webp|gif)")
 
 Kind = Literal["phone", "pc", "research", "deep research", "connectors", "code"]
 
@@ -265,8 +266,23 @@ class Store:
 
     # Pages: research reports as web pages, kept (they're small)
 
-    def save_page(self, task: int, html: str) -> None:
+    def save_page(self, task: int, html: str, images: dict[str, Image] | None = None) -> None:
+        """`images`: the pictures in it by name, kept with it (never expiring, unlike chat images) and as private
+        or public as it is."""
+        if images:
+            folder = self._page_images(task)
+            folder.mkdir(exist_ok=True)
+            for name, image in images.items():
+                if _PAGE_IMAGE_NAME.fullmatch(name):
+                    (folder / name).write_bytes(image.data)
         self._page(task).write_text(html)
+
+    def page_image(self, task: int, name: str) -> Image | None:
+        """None if the report has no such picture. Safe with untrusted names."""
+        path = self._page_images(task) / name
+        if not _PAGE_IMAGE_NAME.fullmatch(name) or not path.exists():
+            return None
+        return Image(path.read_bytes(), mimetypes.guess_type(name)[0] or "application/octet-stream")
 
     def make_public(self, task: int, public: bool) -> None:
         with self._db:
@@ -281,6 +297,9 @@ class Store:
 
     def _page(self, task: int) -> Path:
         return self._pages / f"{task}.html"
+
+    def _page_images(self, task: int) -> Path:
+        return self._pages / f"{task}-images"
 
     # Images
 

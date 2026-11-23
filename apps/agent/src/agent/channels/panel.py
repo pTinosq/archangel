@@ -18,6 +18,7 @@ goes through the one conversation and the orchestrator knows about it.
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import aclosing
@@ -45,6 +46,7 @@ from agent.web import Web
 log = logging.getLogger(__name__)
 
 FOREVER = "max-age=31536000, immutable"  # an image never changes under its name
+_REPORT_PATH = re.compile(r"/reports/([0-9]+)(?:/images/[^/]+)?")
 HEARTBEAT_SECONDS = 1
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # what the models take; the panel shrinks a bigger photo before sending it
 MAX_IMAGES = 4
@@ -189,7 +191,22 @@ def _routes(app: FastAPI, channel: PanelChannel, store: Store, prompts: Prompts,
         if (page := store.page(id)) is None:
             raise HTTPException(404, "No such report")
         # Written by a model from what the web said: show it, but let nothing in it run or load.
-        return HTMLResponse(page, headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
+        # Only its own pictures (`img-src 'self'`, which the sign-in or public rules cover as the page's own).
+        return HTMLResponse(
+            page,
+            headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'"},
+        )
+
+    @app.get("/reports/{id}/images/{name}")
+    async def report_image(id: int, name: str) -> Response:
+        if not (found := store.page_image(id, name)):
+            raise HTTPException(404, "No such picture")
+        return Response(
+            found.data,
+            media_type=found.media_type,
+            # `private`: a proxy in front mustn't keep a picture that may be made private later.
+            headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"},
+        )
 
     @app.get("/api/activity")
     async def live() -> StreamingResponse:
@@ -407,8 +424,10 @@ def _link(link: Link, stale: bool) -> dict:
 
 
 def _public_report(store: Store, path: str) -> bool:
-    id = path.removeprefix("/reports/")
-    return path != id and id.isdigit() and bool((task := store.task(int(id))) and task.public)
+    """A report's page and its pictures open together, or neither does."""
+    if not (found := _REPORT_PATH.fullmatch(path)):
+        return False
+    return bool((task := store.task(int(found[1]))) and task.public)
 
 
 def _task(task: Task, page: bool) -> dict:
