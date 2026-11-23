@@ -429,6 +429,24 @@ def test_a_change_the_owner_scheduled_is_theirs(store):
     assert len(owner.coder.changes) == 1
 
 
+def test_a_report_is_read_by_link_and_a_private_one_only_for_the_owner(store):
+    def respond(prompt: str) -> ModelResponse:
+        if prompt.startswith("[Update"):
+            return say("ok")
+        if "research" in prompt:
+            return call("research", question="Hunting dogs")
+        return call("read_report", report="https://archangel.example/reports/1")
+
+    owner = Owner(store, tool_result_or(respond))
+    owner.says(Text("research dogs"))
+    store.save_page(1, "<section><p>Dachshunds hunt badgers.</p></section>")
+    owner.says(Text("what did it say?"))
+    assert "Dachshunds hunt badgers." in owner.cli.sent[-1].text
+    theirs = owner.schedule.add(time.time(), "Read it", "", owner.cli.owner, None)
+    asyncio.run(owner.orchestrator.handle(Scheduled(theirs)))
+    assert "private" in owner.cli.sent[-1].text
+
+
 def test_reports_are_private_until_the_owner_shares_one(store):
     def respond(prompt: str) -> ModelResponse:
         if prompt.startswith("[Update"):

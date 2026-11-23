@@ -29,6 +29,7 @@ from agent.gateway import Gateway
 from agent.location import Whereabouts
 from agent.messages import Message, Text
 from agent.models import Instructions, describe, prompt
+from agent.reports import text_of
 from agent.research import Researcher
 from agent.runs import Answer
 from agent.schedule import DEFAULT_RUNS, TIMEZONE, Job, Schedule, parse, when
@@ -229,6 +230,18 @@ class Orchestrator:
             if store.task(id).public:
                 return f"Report #{id} is public: anyone with its link can read it."
             return f"Report #{id} is private: only the owner can open it, signed in."
+
+        @self._agent.tool
+        async def read_report(ctx: RunContext[Event], report: str) -> str:
+            """The full text of a finished research report, to summarise, quote or act on. `report` is its id (the
+            task's) or its link: research's answer carries only the link and a tldr. A private report opens only
+            for the owner's own request."""
+            digits = report.strip().rstrip("/").rpartition("/")[2].removeprefix("#")
+            if not digits.isdigit() or not (html := store.page(int(digits))):
+                return f"No report {report}."
+            if not store.task(int(digits)).public and not ctx.deps.owner_asked:
+                return "That report is private: only the owner can have it read. Ask them."
+            return text_of(html)
 
         @self._agent.tool_plain
         async def redirect_task(id: int, channel: str) -> str:

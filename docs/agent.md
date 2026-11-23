@@ -51,6 +51,7 @@ What `apps/agent/` does, beyond the one-line roles in CLAUDE.md. Threads, the co
 - `installed_apps(on?)`: what's installed, to choose between the web and an app.
 - `answer_task`: a waiting task's answer, or the owner's word to a running one. `redirect_task(id, channel)` ("text me when it's done"), `cancel_task`.
 - `report_visibility(id, public?)`: says whether a report is public, or changes it; public only when the owner asked (`owner_asked`).
+- `read_report(report)`: a finished report's full text, by id or link (`reports.text_of` reads it back from the stored HTML, so every existing report works). A private report only for the owner's own request (`owner_asked`).
 - `send(channel, text, screenshot?)`; `hang_up` (on a call, after this reply).
 - `owner_location`: for "near me"; tasks get the address typed.
 - `do_later`, `cancel_later`, `note_progress`: below.
