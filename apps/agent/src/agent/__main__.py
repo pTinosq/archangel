@@ -108,7 +108,7 @@ def main() -> None:
         store,
         pilots,
         researcher,
-        Reporter(model, prompts.live("reporter")),
+        Reporter(model, prompts.live("reporter"), researcher),
         Helper(model, connectors, prompts.live("helper"), [twin.tools, styles.tools, *mail], own),
         site,
         twin.brief,

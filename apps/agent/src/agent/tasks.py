@@ -16,7 +16,7 @@ import pydantic_ai
 from agent import activity
 from agent.coder import Coder
 from agent.events import Event, TaskUpdate
-from agent.messages import Address
+from agent.messages import Address, Image
 from agent.helper import Helper
 from agent.devices.pilot import Pilot
 from agent.reports import Reporter
@@ -25,6 +25,8 @@ from agent.runs import Answer, Outcome, Record
 from agent.store import Kind, Status, Store, Task
 
 log = logging.getLogger(__name__)
+
+MAX_SUPPLIED = 4  # the owner's latest pictures offered to a report
 
 _STATUSES = {
     "done": Status.DONE,
@@ -203,13 +205,21 @@ class Tasks:
         self._store.add_step(task.id, "Writing the report.")
         try:
             with activity.call("reporter", "agent", task.goal) as reply:
-                report = await self._reporter.write(task.goal, found)
+                report = await self._reporter.write(task.goal, found, self._supplied(task))
                 reply(report.tldr)
         except Exception:  # the research is what matters; pass it on as it is
             log.exception("Couldn't write the report")
             return Outcome("done", found)
-        self._store.save_page(task.id, report.html)
+        self._store.save_page(task.id, report.page(f"/reports/{task.id}/images/"), report.images)
         return Outcome("done", f"Report: {self._site}/reports/{task.id}\ntldr: {report.tldr}")
+
+    def _supplied(self, task: Task) -> tuple[Image, ...]:
+        """The latest pictures the owner sent in the task's thread (until they expire): the reporter may use them."""
+        if task.thread is None:
+            return ()
+        names = [n for line in self._store.lines(thread=task.thread) if line.sender == "owner" for n in line.images]
+        found = (self._store.image(name) for name in names[-MAX_SUPPLIED:])
+        return tuple(image for image in found if image)
 
     async def _code(self, task: Task) -> Outcome:
         """Not briefed from the twin: the request goes to a public repo, and the owner's life mustn't."""
