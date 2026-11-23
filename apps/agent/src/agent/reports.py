@@ -5,6 +5,7 @@ time: portrait pages like a PDF's, phone-shaped (9:16).
 
 from datetime import date
 from html import escape
+from html.parser import HTMLParser
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -50,6 +51,49 @@ class Reporter:
 
     async def write(self, topic: str, material: str) -> Report:
         return (await logs.run(self._agent, f"Topic: {topic}\n\nMaterial:\n{material}")).output
+
+
+def text_of(html: str) -> str:
+    """A saved report's words, for Archangel to read: one line per paragraph, list item or table row, links with
+    their address. Only the finished HTML is kept, so this is what makes every stored report readable."""
+    reader = _Text()
+    reader.feed(html)
+    lines = ("".join(reader.out).split("\n"))
+    return "\n".join(line for line in (" ".join(line.split()) for line in lines) if line)
+
+
+class _Text(HTMLParser):
+    BLOCKS = {"p", "h1", "h2", "h3", "li", "tr", "section", "table"}
+    LAYOUT = {"style", "title", "footer"}  # and the running head: not the report's content
+
+    def __init__(self):
+        super().__init__()
+        self.out: list[str] = []
+        self._skipping: str | None = None  # the tag being skipped; its own kind nests no deeper in our pages
+        self._hrefs: list[str | None] = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if not self._skipping and (tag in self.LAYOUT or "running" in (attrs.get("class") or "").split()):
+            self._skipping = tag
+        if tag == "a":
+            self._hrefs.append(attrs.get("href"))
+        if tag in self.BLOCKS:
+            self.out.append("\n")
+        if tag in ("td", "th"):
+            self.out.append(" | ")
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._hrefs and (href := self._hrefs.pop()) and not self._skipping:
+            self.out.append(f" ({href})")
+        if tag == self._skipping:
+            self._skipping = None
+        if tag in self.BLOCKS:
+            self.out.append("\n")
+
+    def handle_data(self, data):
+        if not self._skipping:
+            self.out.append(data)
 
 
 def _footer(n: int, total: int) -> str:
