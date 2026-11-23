@@ -38,6 +38,7 @@ from agent.threads.router import Router
 from agent.threads.store import ThreadStore
 from agent.threads.summariser import Summariser
 from agent.tools import Tools
+from agent.tools.inbox import addresses
 from agent.twin import Twin
 from agent.twin.graph import Graph
 from agent.twin.reader import Reader
@@ -125,7 +126,7 @@ def main() -> None:
         if public_url:
             channels.append(VoiceChannel(twilio, web, public_url, links))
     if resend:
-        channels.append(EmailChannel(resend, web, store.db))
+        channels.append(EmailChannel(resend, web, store.db, lambda: addresses(tools.setting("inbox", "senders"))))
     if sys.stdin.isatty():  # not when deployed
         channels.insert(0, CliChannel())
     gateway = Gateway(channels, store)

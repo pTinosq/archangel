@@ -316,6 +316,12 @@ A new channel, email, with an inbox and address of its own. Not the owner's Gmai
 - **Out to others:** the helper's `send_email`, after the owner's OK with the draft; the orchestrator uses `use_connectors`. Always asked for now: no one is exempt.
 - **Attachments:** the owner's pictures to the model; other files named (M19 reads them).
 
+**Follow-up (from the owner, after trying it): who is read, and who is answered.** Built; not yet tried live.
+
+- [x] **Only listed senders are read.** An "Email senders" setting (a quick tool on the Connectors page: a string of addresses, commas or new lines), matched on the address alone, any case. Empty reads nothing; anyone else's mail is dropped before it is stored, routed or read by a model. The owner adds their own addresses (personal and work) there; none are in the repo.
+- [x] **A forward is answered to its original sender**, read from the forwarded content (Gmail, Apple Mail, Outlook and Yahoo shapes, no one format hard-coded); when it can't be read, to whoever forwarded it.
+- [ ] Still open: an OK step before the answer goes to a third party (today a forward counts as the owner asking for it); trying it live with Resend, the checks on a work address (DKIM/DMARC) and a real forward from each mail client.
+
 **Plan (as sketched before it was built)**
 - **A `Channel` subclass** registered in `__main__.py`: `send` out, inbound mail through `start(deliver)`, with its own `Address` kind; `shows` says what an email can carry.
 - **Only the owner's mail is a message.** Mail proved to be from the owner becomes an `OwnerMessage`; anything else is a `Notice` the orchestrator judges, never an instruction: an email can't approve, `improve` or `merge`.

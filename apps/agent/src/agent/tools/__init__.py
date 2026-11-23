@@ -20,13 +20,14 @@ from agent import activity
 from agent.store import Store
 from agent.tools.currency import Currency
 from agent.tools.dates import Dates
+from agent.tools.inbox import Inbox
 from agent.tools.tfl import TfL
 from agent.tools.tool import Setting, Tool, ToolError
 from agent.tools.weather import Weather
 
 log = logging.getLogger(__name__)
 
-BUILT_IN: Sequence[type[Tool]] = (TfL, Weather, Currency, Dates)
+BUILT_IN: Sequence[type[Tool]] = (TfL, Weather, Currency, Dates, Inbox)
 TIMEOUT = 15  # seconds: a quick tool that is slow is no quicker than the web
 
 
@@ -89,7 +90,15 @@ class Tools:
 
     def describe(self) -> str:
         """What's there to answer from, for the orchestrator: empty if nothing is."""
-        return "; ".join(f"{tool.title} ({tool.about})" for tool in self._tools.values() if self.active(tool))
+        return "; ".join(
+            f"{tool.title} ({tool.about})" for tool in self._tools.values() if tool.functions() and self.active(tool)
+        )
+
+    def setting(self, name: str, key: str) -> str:
+        """One setting's text now, for code that isn't the orchestrator (the email channel's senders). Empty while
+        the tool is off."""
+        tool = self._get(name)
+        return self._values(name).get(key, "") if self._enabled(tool) else ""
 
     def _enabled(self, tool: Tool) -> bool:
         return self._store.tools().get(tool.name, {}).get("enabled", True)
