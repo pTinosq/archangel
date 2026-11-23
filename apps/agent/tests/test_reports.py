@@ -22,3 +22,22 @@ def test_a_report_is_a_cover_then_numbered_phone_shaped_pages():
     assert "<h1>Dogs &amp; cats</h1>" in html and "<p>Both &lt;3</p>" in html  # the cover
     assert "<p>Two</p><footer><span>Archangel</span><span>3 / 3</span></footer>" in html
     assert "aspect-ratio:9/16" in html
+
+
+def test_a_stored_report_reads_back_as_text():
+    from agent.reports import text_of
+
+    report = Report(
+        tldr="Dachshunds.",
+        title="Hunting dogs",
+        pages=[
+            "<h2>Why</h2><p>Low &amp; <strong>long</strong>.</p><table><tr><th>Dog</th><td>Tan</td></tr></table>"
+            '<ul><li><a href="https://example.com/a">Source</a></li></ul>'
+        ],
+    )
+    text = text_of(report.html)
+    assert "Dachshunds." in text and "Low & long." in text
+    assert "| Dog | Tan" in text
+    assert "Source (https://example.com/a)" in text
+    assert "9:16" not in text and "1 / 2" not in text and "font" not in text
+    assert text.count("Hunting dogs") == 1  # the running head is layout
