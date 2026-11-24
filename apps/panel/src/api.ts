@@ -153,6 +153,16 @@ export type EvalReport = {
   graphs: Record<string, EvalGraph>;
   results: EvalRun[];
 };
+/** docs/roadmap.md, parsed (apps/agent/src/agent/roadmap.py). */
+export type RoadmapMilestone = {
+  id: string;
+  name: string;
+  status: "done" | "open" | "later";
+  can: string;
+  proves: string;
+  items: { text: string; group: string }[];
+};
+export type RoadmapDoc = { milestones: RoadmapMilestone[]; notes: string[] };
 /** What's running: `commit` "" when not deployed from GitHub; `started`, in seconds, when the deploy went live. */
 export type Version = { commit: string; message: string; started: number };
 /** A picture the owner attaches in the chat: base64 data, and a type every model reads. */
@@ -179,6 +189,7 @@ export const api = {
   /** Everything the owner does here, buttons included, is a message in the one conversation. */
   say: (text: string, thread?: number, images: Picture[] = []) => call<null>("POST", "/messages", { text, thread, images }),
   tasks: () => call<Task[]>("GET", "/tasks"),
+  roadmap: () => call<RoadmapDoc>("GET", "/roadmap"),
   version: () => call<Version>("GET", "/version"),
   /** Not a message: who can open a report is the owner's own setting. */
   makePublic: (task: number, isPublic: boolean) => call<{ public: boolean }>("PUT", `/tasks/${task}/public`, { public: isPublic }),

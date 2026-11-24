@@ -16,6 +16,8 @@ COPY apps/agent ./
 RUN uv sync --frozen --no-dev
 # The Google connector (Gmail and Calendar) runs as its own process; fetched now rather than on first use.
 RUN uvx workspace-mcp@2.1.0 --help > /dev/null
+# The Roadmap page is this document, parsed on each request (agent/roadmap.py looks for it here).
+COPY docs/roadmap.md /app/docs/roadmap.md
 COPY --from=panel /app/apps/panel/dist /app/apps/panel/dist
 # data/ is the volume: the store and its images outlive deploys.
 CMD ["uv", "run", "--no-sync", "python", "-m", "agent"]

@@ -53,7 +53,7 @@ a.linked { overflow-wrap: anywhere; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* Labels: the pixel face, uppercase. */
-h2, .brand, nav a, .status, .line .via, .connector-list h3, .part .name, .thought .name, .twin-page h3, .timeline .follow button, .screen p {
+h2, .brand, nav a, .status, .milestone .id, .milestone h4, .roadmap-filters button, .line .via, .connector-list h3, .part .name, .thought .name, .twin-page h3, .timeline .follow button, .screen p {
   font-family: var(--pixel); font-weight: 400; text-transform: uppercase; letter-spacing: 0.04em;
 }
 h2 { font-size: 12px; line-height: 16px; color: var(--text); margin-bottom: var(--s4); }
@@ -127,6 +127,7 @@ main.connectors { grid-template-columns: 1fr 1fr 360px; }
 main.twin { grid-template-columns: 1fr 380px 320px; }
 main.evals { grid-template-columns: 260px 1fr 320px; }
 main.architecture { grid-template-columns: 1fr 360px 320px; }
+main.roadmap { grid-template-columns: 1fr; }
 main > section { padding: var(--s4); overflow-y: auto; min-height: 0; background: var(--pane); border: 1px solid var(--line); }
 
 /* Status: a pixel tag in its colour; amber when it waits for the owner. */
@@ -413,6 +414,33 @@ button.to:hover:not(:disabled) { color: var(--accent); }
 }
 .timeline li.detail p { margin-bottom: var(--s1); font: 8px/12px var(--pixel); text-transform: uppercase; color: var(--quiet); }
 
+/* Roadmap: docs/roadmap.md as cards. A status is a colour and a word, never a size. */
+.roadmap-page { display: flex; flex-direction: column; gap: var(--s4); }
+.roadmap-page h2 { margin-bottom: 0; }
+.roadmap-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5); }
+.roadmap-meter { flex: 1 1 240px; height: 8px; background: var(--raised); border: 1px solid var(--line-strong); }
+.roadmap-meter span { display: block; height: 100%; background: var(--accent); }
+.roadmap-summary p b { color: var(--accent); }
+.roadmap-filters { display: flex; gap: var(--s2); }
+.roadmap-filters button { font-size: 8px; padding: 5px 10px; }
+.roadmap-filters button[aria-pressed="true"] { color: #000; background: var(--accent); border-color: var(--accent); box-shadow: 2px 2px 0 var(--accent-deep); }
+.roadmap-notes { display: grid; gap: var(--s1); padding: var(--s2) var(--s3); border: 1px solid var(--bad); }
+.roadmap-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--s3); align-items: start; }
+.milestone { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); min-width: 0; background: var(--raised); border: 1px solid var(--line); border-left: 2px solid var(--text); overflow-wrap: anywhere; }
+.milestone.done { border-left-color: var(--accent); }
+.milestone.later { border-left-color: var(--line-strong); border-left-style: dashed; }
+.milestone .head { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); }
+.milestone .id { font-size: 12px; line-height: 16px; color: var(--quiet); }
+.milestone .status.open { --tone: var(--text); }
+.milestone h3 { font-size: 14px; line-height: 20px; font-weight: 600; }
+.milestone code { color: var(--accent); }
+.milestone summary { cursor: pointer; color: var(--quiet); min-height: 24px; }
+.milestone summary:hover { color: var(--text); }
+.milestone details h4 { font-size: 8px; line-height: 12px; color: var(--quiet); margin: var(--s3) 0 var(--s1); }
+.milestone details ul { display: grid; gap: var(--s2); margin-top: var(--s2); }
+.milestone details li { position: relative; padding-left: var(--s3); }
+.milestone details li::before { content: "·"; position: absolute; left: 0; color: var(--accent); }
+
 /* Phones (as in narrow.ts): one column, the page's own, edge to edge; the page never scrolls sideways, only the
    column does. Text fields are 16px so iOS doesn't zoom in on focus; anything tappable is at least 44px. */
 @media (max-width: 760px) {
@@ -433,7 +461,7 @@ button.to:hover:not(:disabled) { color: var(--accent); }
   button { min-height: 44px; padding: var(--s2) var(--s4); }
   input, textarea, select { font-size: 16px; min-height: 44px; }
 
-  main, main.tasks, main.threads, main.prompts, main.cockpit, main.connectors, main.twin, main.evals, main.architecture { display: flex; flex-direction: column; padding: 0; gap: 0; }
+  main, main.tasks, main.threads, main.prompts, main.cockpit, main.connectors, main.twin, main.evals, main.architecture, main.roadmap { display: flex; flex-direction: column; padding: 0; gap: 0; }
   .connector-list, .add-connector { flex: none !important; }
   main > section {
     flex: 1; border: none; border-bottom: 1px solid var(--line); background: var(--bg);
