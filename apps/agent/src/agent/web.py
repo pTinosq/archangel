@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 PORT = 8765
 DIST = Path("../panel/dist")  # from apps/agent
 HOSTS = ["localhost", "127.0.0.1"]
-PAGES = ["/chat", "/tasks", "/tasks/{id}", "/threads", "/threads/{id}", "/cockpit", "/prompts", "/connectors", "/twin", "/architecture"]  # the panel's, as in its route.tsx
+PAGES = ["/chat", "/tasks", "/tasks/{id}", "/threads", "/threads/{id}", "/cockpit", "/prompts", "/connectors", "/roadmap", "/twin", "/architecture"]  # the panel's, as in its route.tsx
 
 
 class Web:

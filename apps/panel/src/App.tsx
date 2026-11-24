@@ -8,6 +8,7 @@ import { Connectors } from "./Connectors";
 import { useNarrow } from "./narrow";
 import { usePoll } from "./poll";
 import { Prompts } from "./Prompts";
+import { Roadmap } from "./Roadmap";
 import { play, setSoundOn, soundOn, subscribeSound } from "./sounds";
 import { go, Link, type Page, useRoute } from "./route";
 import { Tasks } from "./Tasks";
@@ -24,13 +25,13 @@ export function App() {
   const narrow = useNarrow();
   const route = useRoute();
   // On a phone the conversation is a page of its own, and the one it opens on; on a desktop it's beside every page
-  // but Connectors, whose three columns are its own.
+  // but Connectors, whose three columns are its own, and Roadmap, a page to read.
   // Evals only locally: they're for working on the twin, run on this machine, and the agent serves them nowhere else.
   const pages: Page[] = [
     ...(narrow ? ["chat" as Page] : []),
     ...(["tasks", "threads", "cockpit", "twin", "architecture"] as Page[]),
     ...(PUBLIC ? [] : ["evals" as Page]),
-    ...(["prompts", "connectors"] as Page[]),
+    ...(["prompts", "connectors", "roadmap"] as Page[]),
   ];
   const home = narrow ? "chat" : "tasks";
   const shown = route.page && pages.includes(route.page) ? route.page : home;
@@ -69,8 +70,9 @@ export function App() {
             evals: <Evals />,
             prompts: <Prompts />,
             connectors: <Connectors />,
+            roadmap: <Roadmap />,
           }[shown]}
-        <Chat visible={narrow ? shown === "chat" : shown !== "connectors"} />
+        <Chat visible={narrow ? shown === "chat" : shown !== "connectors" && shown !== "roadmap"} />
       </main>
     </div>
   );

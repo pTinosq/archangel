@@ -87,6 +87,7 @@ The panel is local until you deploy it. In it you can:
 - Edit the prompts.
 - See and shape what Archangel has learned about you (Context twin: a graph of linked pages; add nodes, drag to link them, edit any of it).
 - Connect services (Connectors: Gmail and Calendar, Notion, Slack, any MCP server; sign in again there when one expires), and switch the quick tools on and off.
+- Read the roadmap (Roadmap: `docs/roadmap.md` itself, parsed on each request, so the page can't drift from it).
 
 Each page has its own address (`/tasks/12`, `/connectors`). Small sounds play for presses, messages, approvals and the cockpit's traffic; "Sound off" in the header silences them.
 

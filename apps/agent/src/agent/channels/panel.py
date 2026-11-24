@@ -6,6 +6,8 @@ The Twin page shows the context twin's graph, and lets the owner edit or delete 
 
 The Threads page shows the conversation's threads: each one's summary, size, what was said in it and its tasks.
 
+The Roadmap page is docs/roadmap.md parsed per request (`roadmap.py`).
+
 The Tasks page shows what's scheduled too (`Schedule`), above the tasks.
 
 The Connectors page adds the owner's online services and signs in to them (`Connectors`); services send the owner
@@ -30,7 +32,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import Base64Bytes, BaseModel, Field
 
-from agent import activity, evals_tab
+from agent import activity, evals_tab, roadmap
 from agent.channels import Channel, Deliver
 from agent.connectors import Connector, Connectors, Kind
 from agent.messages import Address, Image, Message, Part, Text
@@ -79,6 +81,11 @@ class PanelChannel(Channel):
         @web.app.get("/api/schedule")
         async def scheduled() -> list[dict]:
             return [_job(job) for job in schedule.upcoming()]
+
+        @web.app.get("/api/roadmap")
+        async def roadmap_() -> dict:
+            """docs/roadmap.md, parsed now: the page is a view of the document and never a copy."""
+            return roadmap.read().as_json()
 
         if not web.public:  # the twin's evals: for working on it locally, never on the internet
             evals_tab.routes(web.app)
